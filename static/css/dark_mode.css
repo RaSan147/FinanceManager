@@ -1,0 +1,94 @@
+:root {
+    /* Light Mode Defaults */
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --text-primary: #212529;
+    --text-secondary: #495057;
+    --accent-primary: #0d6efd;
+    --accent-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --success-bg: #d1e7dd;
+    --danger-bg: #f8d7da;
+}
+
+[data-theme="dark"] {
+    /* Dark Mode Overrides */
+    --bg-primary: #121212;
+    --bg-secondary: #1e1e1e;
+    --text-primary: #f8f9fa;
+    --text-secondary: #adb5bd;
+    --accent-primary: #3a86ff;
+    --accent-secondary: #6c757d;
+    --border-color: #2d2d2d;
+    --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --success-bg: #0f5132;
+    --danger-bg: #842029;
+}
+
+/* Dark Mode Toggle Styles */
+.dark-mode-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.toggle-checkbox {
+    display: none;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 60px;
+    height: 30px;
+    background: var(--bg-secondary);
+    border-radius: 50px;
+    padding: 5px;
+    position: relative;
+    cursor: pointer;
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--border-color);
+}
+
+.toggle-icon {
+    font-size: 14px;
+    z-index: 1;
+}
+
+.toggle-ball {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    transition: transform 0.2s linear;
+    left: 5px;
+}
+
+.toggle-checkbox:checked + .toggle-label .toggle-ball {
+    transform: translateX(30px);
+}
+
+/* Apply dark mode styles */
+body.dark-mode {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.dark-mode .card {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+.dark-mode .table {
+    color: var(--text-primary);
+}
+
+.dark-mode .modal-content {
+    background-color: var(--bg-secondary);
+}
+
+/* Add other component-specific dark mode styles as needed */

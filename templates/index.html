@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Monthly Summary - {{ summary.month }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="card bg-success bg-opacity-10 mb-3">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">Income</h6>
+                                <h4 class="card-text text-success">${{ "%.2f"|format(summary.total_income) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-danger bg-opacity-10 mb-3">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">Expenses</h6>
+                                <h4 class="card-text text-danger">${{ "%.2f"|format(summary.total_expenses) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-info bg-opacity-10 mb-3">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">Savings</h6>
+                                <h4 class="card-text text-info">${{ "%.2f"|format(summary.savings) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Recent Transactions</h5>
+                <a href="{{ url_for('add_transaction') }}" class="btn btn-sm btn-light">
+                    <i class="bi bi-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if transactions %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in transactions %}
+                            <tr>
+                                <td>{{ t.date.strftime('%b %d') }}</td>
+                                <td>{{ t.description }}</td>
+                                <td>{{ t.category }}</td>
+                                <td class="{{ 'text-success' if t.type == 'income' else 'text-danger' }}">
+                                    {{ '+' if t.type == 'income' else '-' }}${{ "%.2f"|format(t.amount) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-end">
+                    <a href="{{ url_for('transactions') }}" class="btn btn-primary">View All</a>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">No transactions yet.</p>
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Add Your First Transaction</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Active Goals</h5>
+                <a href="{{ url_for('goals') }}" class="btn btn-sm btn-light">
+                    <i class="bi bi-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if goals %}
+                    {% for goal in goals %}
+                    <div class="mb-3">
+                        <h6>{{ goal.description }}</h6>
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Target: ${{ "%.2f"|format(goal.target_amount) }}</small>
+                            <small>{{ goal.target_date.strftime('%b %d, %Y') }}</small>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" 
+                                 style="width: {{ goal.progress.progress_percent }}%">
+                                {{ goal.progress.progress_percent }}%
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted">No active goals.</p>
+                        <a href="{{ url_for('goals') }}" class="btn btn-primary">Set a Goal</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-circle"></i> Add Transaction
+                    </a>
+                    <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-graph-up"></i> View Analysis
+                    </a>
+                    <a href="{{ url_for('goals') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-bullseye"></i> Manage Goals
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% if days_until_income is not none %}
+<div class="alert alert-info">
+  Next income in {{ days_until_income }} day{{ 's' if days_until_income != 1 else '' }}.
+</div>
+{% endif %}

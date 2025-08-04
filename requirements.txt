@@ -1,0 +1,8 @@
+flask
+flask-pymongo
+python-dotenv
+google-genai
+flask-bcrypt
+flask-login
+datetime
+aiohttp
