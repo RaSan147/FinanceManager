@@ -13,6 +13,7 @@ class AIDashboard {
             if (element) {
                 element.style.order = 100 - goal.ai_priority;
                 element.dataset.priority = goal.ai_priority;
+				element.style.setProperty('--priority', goal.ai_priority);
             }
         });
     }

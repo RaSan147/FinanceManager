@@ -4,12 +4,15 @@ def calculate_monthly_summary(user_id, db):
     # Get the first and last day of the current month
     today = datetime.utcnow()
     first_day = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    last_day = (first_day + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-    
-    # Query transactions for this month
+    # First day of next month
+    if first_day.month == 12:
+        first_day_next_month = first_day.replace(year=first_day.year + 1, month=1)
+    else:
+        first_day_next_month = first_day.replace(month=first_day.month + 1)
+    # Query using $gte and $lt
     transactions = list(db.transactions.find({
         'user_id': user_id,
-        'date': {'$gte': first_day, '$lte': last_day}
+        'date': {'$gte': first_day, '$lt': first_day_next_month}
     }))
     
     # Calculate totals

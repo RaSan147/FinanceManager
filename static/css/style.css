@@ -1,54 +1,427 @@
+/* =======================
+   CSS Variables - Light Mode
+   ======================= */
+:root {
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f0f0;
+    --text-primary: #212529;
+    --text-secondary: #495057;
+    --accent-primary: #0d6efd;
+    --accent-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --card-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    --success-bg: #d1e7dd;
+    --danger-bg: #f8d7da;
+    --border-radius: 6px;
+    --hover-bg: rgba(13,110,253,0.1);
+}
+
+/* =======================
+   CSS Variables - Dark Mode Overrides
+   ======================= */
+[data-theme="dark"] {
+    --bg-primary: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-tertiary: #2a2a2a;
+    --text-primary: #e4e6eb;
+    --text-secondary: #b0b3b8;
+    --accent-primary: #88b6ff;
+    --accent-secondary: #6c757d;
+    --border-color: #3a3a3a;
+    --card-shadow: 0 6px 12px rgba(0,0,0,0.5);
+    --success-bg: #0f5132;
+    --danger-bg: #842029;
+    --hover-bg: rgba(58,134,255,0.3);
+}
+
+/* =======================
+   Base Styles & Layout
+   ======================= */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    scroll-behavior: smooth;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
 body {
-    background-color: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
     padding-top: 20px;
 }
 
+main {
+    flex: 1;
+}
+
+/* =======================
+   Card Component
+   ======================= */
 .card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--card-shadow);
     margin-bottom: 20px;
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .card-header {
     border-radius: 10px 10px 0 0 !important;
 }
 
-.table th {
-    border-top: none;
+/* =======================
+   List Group Items (with fix)
+   ======================= */
+.list-group-item {
+    position: relative;
+    display: block;
+    padding: 1rem 1.25rem;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: 0.75rem;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+.list-group-item > * {
+    margin-bottom: 0.5rem;
+}
+
+.list-group-item .accordion-button {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: var(--border-radius);
+    transition: background-color 0.3s ease;
+}
+
+.list-group-item:hover {
+    background-color: var(--hover-bg);
+    cursor: pointer;
+}
+
+.list-group-item .progress {
+    background-color: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    height: 20px;
+}
+
+.list-group-item .progress-bar {
+    background-color: var(--accent-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Buttons inside list-group-item actions */
+.list-group-item .d-flex.justify-content-end.gap-2 > form {
+    margin: 0;
+}
+
+.list-group-item .d-flex {
+    gap: 0.5rem;
+}
+
+/* =======================
+   Tables
+   ======================= */
+.table {
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border-collapse: separate !important;
+    border-spacing: 0 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: none;
+    transition: background-color 0.3s ease;
+}
+
+.table th {
+    border-top: none;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 12px 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table tbody tr {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: 6px;
+    transition: background-color 0.3s ease;
+}
+
+.table tbody tr > * {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.table tbody tr:hover {
+    background-color: var(--hover-bg) !important;
+    cursor: pointer;
+}
+
+.table td, 
+.table th {
+    border: none !important;
+    padding: 12px 16px !important;
+}
+
+/* Table rounded corners */
+tr:first-child td:first-child { border-top-left-radius: var(--border-radius); }
+tr:first-child td:last-child { border-top-right-radius: var(--border-radius); }
+tr:last-child td:first-child { border-bottom-left-radius: var(--border-radius); }
+tr:last-child td:last-child { border-bottom-right-radius: var(--border-radius); }
+
+/* =======================
+   Progress Bars & Lists
+   ======================= */
 .progress {
     height: 25px;
     border-radius: 5px;
+    background-color: var(--bg-tertiary);
 }
 
 .progress-bar {
+    background-color: var(--accent-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* =======================
+   Alerts
+   ======================= */
+.alert-success {
+    background-color: var(--success-bg);
+}
+
+.alert-danger {
+    background-color: var(--danger-bg);
+}
+
+/* =======================
+   Forms: Inputs, Selects, Textareas
+   ======================= */
+input,
+select,
+textarea {
+    background-color: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    padding: 8px 12px;
+    border-radius: var(--border-radius);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+	appearance: none; /* Removes default arrow for custom styling on some browsers */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 6px var(--accent-primary);
+}
+
+/* Optional: custom dropdown arrow */
+select {
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-primary) 50%),
+        linear-gradient(135deg, var(--text-primary) 50%, transparent 50%),
+        linear-gradient(to right, var(--bg-tertiary), var(--bg-tertiary));
+    background-position:
+        calc(100% - 20px) calc(1em + 2px),
+        calc(100% - 15px) calc(1em + 2px),
+        100% 0;
+    background-size: 5px 5px, 5px 5px, 2.5em 2.5em;
+    background-repeat: no-repeat;
+    padding-right: 2.5em;
+}
+
+
+
+/* =======================
+   Buttons
+   ======================= */
+.btn-primary {
+    background-color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #2b75ff;
+    border-color: #2b75ff;
+    color: #fff;
+}
+
+.btn-secondary {
+    background-color: var(--accent-secondary);
+    border-color: var(--accent-secondary);
+    color: #fff;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #545b62;
+    color: #fff;
+}
+
+/* =======================
+   Footer
+   ======================= */
+footer {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: var(--card-shadow);
+    padding: 1rem 0;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* =======================
+   Scrollbars (Webkit-based browsers)
+   ======================= */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 10px;
+    border: 3px solid var(--bg-secondary);
+}
+
+/* =======================
+   Dark Mode Toggle Styles
+   ======================= */
+.dark-mode-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.toggle-checkbox {
+    display: none;
+}
+
+.toggle-label {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-weight: bold;
+    justify-content: space-between;
+    width: 60px;
+    height: 30px;
+    background: var(--bg-secondary);
+    border-radius: 50px;
+    padding: 5px;
+    position: relative;
+    cursor: pointer;
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--border-color);
 }
 
-.list-group-item {
-    margin-bottom: 10px;
-    border-radius: 5px;
+.toggle-icon {
+    font-size: 14px;
+    z-index: 1;
 }
 
-.accordion-button:not(.collapsed) {
-    background-color: rgba(13, 110, 253, 0.1);
-    color: #0d6efd;
+.toggle-ball {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+    left: 5px;
 }
 
-.ai-analysis {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 5px;
-    border-left: 4px solid #0d6efd;
+.toggle-checkbox:checked + .toggle-label .toggle-ball {
+    transform: translateX(30px);
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .card-body {
-        padding: 15px;
-    }
+/* =======================
+   Extra Dark Mode Styles
+   ======================= */
+
+body.dark-mode .text-muted,
+[data-theme="dark"] .text-muted {
+	color: var(--text-secondary) !important;
+}
+
+body.dark-mode .input-group-text,
+[data-theme="dark"] .input-group-text {
+	background-color: var(--bg-tertiary) !important;
+	color: var(--text-primary) !important;
+	border-color: var(--border-color) !important;
+}
+
+/* Make .btn-light dark in dark mode while leaving it untouched in light mode */
+body.dark-mode .btn-light,
+[data-theme="dark"] .btn-light {
+    background-color: var(--bg-tertiary) !important; /* or pick a dark neutral */
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+body.dark-mode,
+[data-theme="dark"] {
+    --btn-hover-bg: var(--border-color);
+    --btn-hover-color: var(--accent-primary);
+    --btn-hover-border: var(--accent-primary);
+
+    --dropdown-bg: var(--bg-tertiary);
+    --dropdown-border: var(--border-color);
+
+    --nav-color: var(--text-primary);
+    --nav-bg: var(--bg-secondary);
+    --nav-hover-color: var(--accent-primary);
+    --nav-hover-bg: var(--hover-bg);
+}
+
+/* Light buttons hover in dark mode */
+body.dark-mode .btn-light:hover,
+[data-theme="dark"] .btn-light:hover {
+    background-color: var(--btn-hover-bg) !important;
+    color: var(--btn-hover-color) !important;
+    border-color: var(--btn-hover-border) !important;
+}
+
+/* Dropdown menu in dark mode */
+body.dark-mode .dropdown-menu,
+[data-theme="dark"] .dropdown-menu {
+    background-color: var(--dropdown-bg) !important;
+    border-color: var(--dropdown-border) !important;
+}
+
+/* Navigation and dropdown items */
+body.dark-mode .nav-link,
+[data-theme="dark"] .nav-link,
+[data-theme="dark"] .dropdown-item {
+    color: var(--nav-color) !important;
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Hover states */
+body.dark-mode .nav-link:hover,
+[data-theme="dark"] .nav-link:hover,
+[data-theme="dark"] .dropdown-item:hover {
+    color: var(--nav-hover-color) !important;
+    background-color: var(--nav-hover-bg) !important;
 }

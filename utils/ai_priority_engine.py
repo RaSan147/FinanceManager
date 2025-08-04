@@ -6,7 +6,7 @@ from datetime import datetime
 class FinancialBrain:
     def __init__(self, api_key):
         self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-1.5-pro"
+        self.model = "gemini-2.5-pro"
         
     async def _get_ai_response(self, prompt):
         max_retries = 3

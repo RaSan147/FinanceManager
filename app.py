@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_pymongo import PyMongo
 from flask_bcrypt import Bcrypt
@@ -19,6 +20,17 @@ from config import Config
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+# Initialize Limiter with default settings (by IP address)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["500 per day", "50 per hour"],  # Adjust as needed
+)
 
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
@@ -202,34 +214,50 @@ def transactions():
 @login_required
 def add_transaction():
     if request.method == 'POST':
-        amount = float(request.form.get('amount'))
+        try:
+            amount = float(request.form.get('amount'))
+        except (TypeError, ValueError):
+            flash('Invalid amount.', 'danger')
+            return redirect(url_for('add_transaction'))
+
+        if amount <= 0:
+            flash('Amount must be positive.', 'danger')
+            return redirect(url_for('add_transaction'))
+
         transaction_type = request.form.get('type')
         category = request.form.get('category')
         description = request.form.get('description')
         date_str = request.form.get('date')
         related_person = request.form.get('related_person', '')
-        
+
+        # Require a description
+        if not description or len(description.strip()) < 3:
+            flash('Please provide a more descriptive description.', 'danger')
+            return redirect(url_for('add_transaction'))
+
+        # Ensure date is not in the future (optional) or not in the distant past
         try:
             date = datetime.strptime(date_str, '%Y-%m-%d')
         except ValueError:
             date = datetime.utcnow()
-        
+
         transaction_data = {
             'user_id': current_user.id,
             'amount': amount,
             'type': transaction_type,
             'category': category,
-            'description': description,
+            'description': description.strip(),
             'date': date,
             'related_person': related_person,
             'created_at': datetime.utcnow()
         }
-        
+
         Transaction.create_transaction(transaction_data, mongo.db)
         flash('Transaction added successfully.', 'success')
         return redirect(url_for('transactions'))
-    
+
     return render_template('add_transaction.html')
+
 
 @app.route('/transactions/<transaction_id>/delete', methods=['POST'])
 @login_required
