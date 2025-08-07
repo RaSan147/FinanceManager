@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row">
     <div class="col-md-8">
-        <div class="card mb-4">
+<div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0">Monthly Summary - {{ summary.month }}</h5>
             </div>
@@ -39,6 +39,43 @@
             </div>
         </div>
 
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Complete Financial Picture</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="card bg-success bg-opacity-10 mb-3">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">Total Income</h6>
+                                <h4 class="card-text text-success">${{ "{:,.2f}".format(balance.total_income) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-danger bg-opacity-10 mb-3">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">Total Expenses</h6>
+                                <h4 class="card-text text-danger">${{ "{:,.2f}".format(balance.total_expenses) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-info bg-opacity-10 mb-3">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">Current Balance</h6>
+                                <h4 class="card-text text-info">${{ "{:,.2f}".format(balance.current_balance) }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <small class="text-muted">Based on {{ balance.total_transactions }} transactions</small>
+                </div>
+            </div>
+        </div>
+		
         <div class="card mb-4">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">Recent Transactions</h5>

@@ -1,35 +1,32 @@
 from datetime import datetime, timedelta
 
 def calculate_monthly_summary(user_id, db):
-    # Get the first and last day of the current month
     today = datetime.utcnow()
     first_day = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    # First day of next month
     if first_day.month == 12:
         first_day_next_month = first_day.replace(year=first_day.year + 1, month=1)
     else:
         first_day_next_month = first_day.replace(month=first_day.month + 1)
-    # Query using $gte and $lt
+    
     transactions = list(db.transactions.find({
         'user_id': user_id,
         'date': {'$gte': first_day, '$lt': first_day_next_month}
     }))
     
-    # Calculate totals
-    total_income = 0
-    total_expenses = 0
+    # Calculate with precise rounding
+    total_income = round(sum(t['amount'] for t in transactions if t['type'] == 'income'), 2)
+    total_expenses = round(sum(t['amount'] for t in transactions if t['type'] == 'expense'), 2)
+    savings = round(total_income - total_expenses, 2)
+    
     expense_categories = {}
     income_categories = {}
     
     for t in transactions:
+        amount = round(t['amount'], 2)
         if t['type'] == 'income':
-            total_income += t['amount']
-            income_categories[t['category']] = income_categories.get(t['category'], 0) + t['amount']
+            income_categories[t['category']] = round(income_categories.get(t['category'], 0) + amount, 2)
         else:
-            total_expenses += t['amount']
-            expense_categories[t['category']] = expense_categories.get(t['category'], 0) + t['amount']
-    
-    savings = total_income - total_expenses
+            expense_categories[t['category']] = round(expense_categories.get(t['category'], 0) + amount, 2)
     
     return {
         'month': first_day.strftime('%B %Y'),
@@ -37,7 +34,8 @@ def calculate_monthly_summary(user_id, db):
         'total_expenses': total_expenses,
         'savings': savings,
         'income_categories': income_categories,
-        'expense_categories': expense_categories
+        'expense_categories': expense_categories,
+        'transaction_count': len(transactions)
     }
 
 def calculate_goal_progress(goal, monthly_summary):
@@ -68,3 +66,17 @@ def calculate_total_balance(user_id, db):
     expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
 
     return round(income - expenses, 2)
+
+
+def calculate_total_balance(user_id, db):
+    transactions = list(db.transactions.find({'user_id': user_id}))
+    
+    income = round(sum(t['amount'] for t in transactions if t['type'] == 'income'), 2)
+    expenses = round(sum(t['amount'] for t in transactions if t['type'] == 'expense'), 2)
+    
+    return {
+        'total_income': income,
+        'total_expenses': expenses,
+        'current_balance': round(income - expenses, 2),
+        'total_transactions': len(transactions)
+    }

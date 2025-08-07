@@ -1,5 +1,6 @@
 import asyncio
 import json
+import traceback
 from google import genai
 from datetime import datetime
 
@@ -8,6 +9,7 @@ class FinancialBrain:
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-2.5-pro"
         
+        
     async def _get_ai_response(self, prompt):
         max_retries = 3
         for attempt in range(max_retries):
@@ -15,7 +17,7 @@ class FinancialBrain:
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
                     model=self.model,
-                    contents=[{"role": "user", "parts": [prompt]}]
+                    contents=prompt
                 )
                 return response.text.strip()
             except Exception as e:
@@ -35,17 +37,30 @@ class FinancialBrain:
         - health_impact (for students)
         - confidence (0-1)
         - suggested_actions (array)
+        - summary (string)
+
+
+        Note: DO NOT USE ANY MARKDOWN OR HTML. Just return a JSON object.
         """
         response = await self._get_ai_response(prompt)
         return self._parse_response(response)
     
     def _parse_response(self, response):
+        response = response.strip() or '{"error": "Empty response from AI"}'
+
+        if response.startswith("```json"):
+            response = response[8:].strip()
+        if response.endswith("```"):
+            response = response[:-3].strip()
         try:
             data = json.loads(response)
             if "error" in data:
                 return self._fallback_response()
             return data
-        except:
+        except Exception as e:
+            traceback.print_exc()
+            print(f"Failed to parse AI response: {e}")
+            print(f"Response was: {response}")
             return self._fallback_response()
     
     def _fallback_response(self):

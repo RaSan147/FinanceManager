@@ -73,12 +73,13 @@ def index():
     # Calculate monthly summary
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
     
+    # Calculate complete financial picture
+    full_balance = calculate_total_balance(current_user.id, mongo.db)
+    
     # Add progress to each goal
     for goal in active_goals:
         goal['progress'] = calculate_goal_progress(goal, monthly_summary)
 
-    current_balance = calculate_total_balance(current_user.id, mongo.db)
-    
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
     days_until_income = None
 
@@ -91,7 +92,7 @@ def index():
         transactions=recent_transactions,
         goals=active_goals,
         summary=monthly_summary,
-        balance=current_balance,
+        balance=full_balance,  # Now passing the complete balance object
         days_until_income=days_until_income
     )
 

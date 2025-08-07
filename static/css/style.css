@@ -32,7 +32,7 @@
     --card-shadow: 0 6px 12px rgba(0,0,0,0.5);
     --success-bg: #0f5132;
     --danger-bg: #842029;
-    --hover-bg: rgba(58,134,255,0.3);
+    --hover-bg: rgba(0, 42, 109, 0.3);
 }
 
 /* =======================
@@ -126,6 +126,15 @@ main {
 
 .list-group-item .d-flex {
     gap: 0.5rem;
+}
+
+/* =======================
+   Navigation Bar
+   ======================= */
+.nav-link {
+	padding-left: 1rem;
+	padding-right: 1rem;
+	border-radius: 5px;
 }
 
 /* =======================
