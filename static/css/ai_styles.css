@@ -51,3 +51,34 @@
     left: 50%;
     transform: translate(-50%, -50%);
 }
+
+
+
+/* Visualization Styles */
+.card canvas {
+    max-height: 300px;
+    width: 100% !important;
+}
+
+.tag-input-container {
+    position: relative;
+}
+
+#tag-list {
+    min-height: 30px;
+}
+
+.badge .btn-close {
+    font-size: 0.6em;
+    padding: 0.25em;
+}
+
+/* Export Buttons */
+.btn-group .btn {
+    padding: 0.375rem 0.75rem;
+}
+
+/* Impact Cards */
+#goal-impact-container .card {
+    border-left: 4px solid var(--accent-primary);
+}

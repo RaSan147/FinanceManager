@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <!-- Main Form Column -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title">Purchase Advisor</h3>
+                    <p class="card-subtitle text-muted">Get AI-powered spending recommendations</p>
+                </div>
+                <div class="card-body">
+                    <form id="purchase-form" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <input type="text" class="form-control" id="description" name="description" required placeholder="What do you want to buy?">
+                            <div class="invalid-feedback">Please enter a description.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Price</label>
+                            <input type="number" class="form-control" id="amount" name="amount" required min="0.01" step="0.01" placeholder="Enter price">
+                            <div class="invalid-feedback">Please enter a valid price.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="category" class="form-label">Category <span class="text-muted">(optional)</span></label>
+                            <input type="text" class="form-control" id="category" name="category" placeholder="e.g. Groceries, Electronics">
+                        </div>
+                        <div class="mb-3">
+                            <label for="urgency" class="form-label">Urgency</label>
+                            <select class="form-select" id="urgency" name="urgency" required>
+                                <option value="">Select urgency</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                            <div class="invalid-feedback">Please select urgency.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tags <span class="text-muted">(optional)</span></label>
+                            <div class="tag-input-container">
+                                <input type="text" class="form-control" id="tags" placeholder="Add tags (e.g. urgent, luxury)">
+                                <div id="tag-list" class="d-flex flex-wrap mt-2"></div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="spinner-border spinner-border-sm d-none" id="spinner"></span>
+                            Get Advice
+                        </button>
+                    </form>
+                    <div id="ai-feedback" class="mt-4"></div>
+                </div>
+            </div>
+
+            <!-- History Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title">Recent Recommendations</h4>
+                </div>
+                <div class="card-body">
+                    <div id="recommendation-history" class="list-group"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Column -->
+        <div class="col-lg-4">
+            <!-- Impact Visualization -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title">Your Spending Impact</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="impactChart" height="200"></canvas>
+                    <div id="goal-impact-container" class="mt-3"></div>
+                </div>
+            </div>
+            <!-- Category Breakdown -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title">Category Analysis</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryChart" height="250"></canvas>
+                </div>
+            </div>
+            <!-- Trend Visualization -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title">Spending Trend</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="trendChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4 class="card-title">Export Data</h4>
+        </div>
+        <div class="card-body">
+            <div class="btn-group">
+                <button id="export-csv" class="btn btn-outline-secondary">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+                </button>
+                <button id="export-json" class="btn btn-outline-secondary">
+                    <i class="bi bi-code-square"></i> JSON
+                </button>
+                <button id="export-pdf" class="btn btn-outline-secondary">
+                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="{{ url_for('static', filename='js/purchase_advisor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/advisor-visualization.js') }}"></script>
+<script src="{{ url_for('static', filename='js/advisor-tagging.js') }}"></script>
+<script src="{{ url_for('static', filename='js/advisor-export.js') }}"></script>
+{% endblock %}

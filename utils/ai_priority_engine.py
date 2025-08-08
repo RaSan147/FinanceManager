@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import traceback
 from google import genai
 from datetime import datetime
@@ -8,23 +9,46 @@ class FinancialBrain:
     def __init__(self, api_key):
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-2.5-pro"
-        
-        
-    async def _get_ai_response(self, prompt):
+
+    def _get_ai_response(self, prompt):
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = await asyncio.to_thread(
-                    self.client.models.generate_content,
+                response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt
                 )
-                return response.text.strip()
+                text = response.text.strip()
+                if text.startswith("```json"):
+                    text = text[8:].strip()
+                    if text.endswith("```"):
+                        text = text[:-3].strip()
+                return text
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    return json.dumps({"error": str(e)})
+                time.sleep(1 * (attempt + 1))
+
+        
+    async def _async_get_ai_response(self, prompt):
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt
+                )
+                text = response.text.strip()
+                if text.startswith("```json"):
+                    text = text[8:].strip()
+                    if text.endswith("```"):
+                        text = text[:-3].strip()
+                return text
             except Exception as e:
                 if attempt == max_retries - 1:
                     return json.dumps({"error": str(e)})
                 await asyncio.sleep(1 * (attempt + 1))
-    
+
     async def calculate_priority(self, financial_context):
         prompt = f"""Analyze this financial context and provide priority assessment:
         

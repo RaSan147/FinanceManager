@@ -11,10 +11,14 @@
   // 3. Apply BEFORE CSS loads
   if (mode === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
-    document.body.classList.add('dark-mode');
+    if (document.body) {
+      document.body.classList.add('dark-mode');
+    }
   } else {
     document.documentElement.setAttribute('data-theme', 'light');
-    document.body.classList.remove('dark-mode');
+    if (document.body) {
+      document.body.classList.remove('dark-mode');
+    }
   }
 })();
 </script>
