@@ -4,5 +4,6 @@ python-dotenv
 google-genai
 flask-bcrypt
 flask-login
-flask-limiter
+Flask-Limiter[mongodb]
+dnspython
 

@@ -12,3 +12,5 @@ class Config:
     ONLY_ALLOWED_EMAILS = [e for e in ONLY_ALLOWED_EMAILS if e]
     ONLY_ALLOWED_EMAIL_DOMAINS = [d.strip() for d in os.getenv('ONLY_ALLOWED_EMAIL_DOMAINS', '').split(',')]
     ONLY_ALLOWED_EMAIL_DOMAINS = [d for d in ONLY_ALLOWED_EMAIL_DOMAINS if d]
+
+    MONGO_URI_LIMITER = os.getenv('MONGO_URI_LIMITER', MONGO_URI)

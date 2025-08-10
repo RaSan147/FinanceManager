@@ -33,7 +33,12 @@ from flask_limiter.util import get_remote_address
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["500 per day", "50 per hour"],  # Adjust as needed
+    default_limits=["5000 per day", "500 per hour"],  # Adjust as needed
+    storage_uri=Config.MONGO_URI_LIMITER,
+    strategy="sliding-window-counter",
+    storage_options={
+        "database_name": "self_finance_tracker_limiter"
+    }
 )
 
 mongo = PyMongo(app)
