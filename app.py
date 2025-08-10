@@ -18,6 +18,7 @@ from models.transaction import Transaction
 from models.goal import Goal
 from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary, calculate_goal_progress, calculate_total_balance
+from utils.tools import is_allowed_email
 from config import Config
 
 app = Flask(__name__)
@@ -26,6 +27,7 @@ app.config.from_object(Config)
 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
 
 # Initialize Limiter with default settings (by IP address)
 limiter = Limiter(
@@ -106,6 +108,8 @@ def index():
         days_until_income=days_until_income
     )
 
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -114,7 +118,11 @@ def login():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
+
+        if not is_allowed_email(email, Config.ONLY_ALLOWED_EMAILS, Config.ONLY_ALLOWED_EMAIL_DOMAINS):
+            flash('Email not allowed.', 'danger')
+            return redirect(url_for('login'))
+
         user_data = mongo.db.users.find_one({'email': email})
         if user_data and bcrypt.check_password_hash(user_data['password'], password):
             user = User(user_data)
@@ -135,7 +143,14 @@ def register():
         email = request.form.get('email')
         password = request.form.get('password')
         name = request.form.get('name')
-        
+
+        if not is_allowed_email(
+            email, 
+            allowed_emails=Config.ONLY_ALLOWED_EMAILS, allowed_domains=Config.ONLY_ALLOWED_EMAIL_DOMAINS
+        ):
+            flash('Email not allowed.', 'danger')
+            return redirect(url_for('register'))
+
         if mongo.db.users.find_one({'email': email}):
             flash('Email already exists.', 'danger')
             return redirect(url_for('register'))
@@ -412,7 +427,7 @@ from models.advice import PurchaseAdvice
 from utils.pastebin_client import PastebinClient
 
 # Initialize Pastebin client (optional)
-pastebin_client = PastebinClient(os.getenv('PASTEBIN_API_KEY')) if os.getenv('PASTEBIN_API_KEY') else None
+pastebin_client = PastebinClient(Config.PASTEBIN_API_KEY)
 
 
 @app.route('/api/ai/advice/<advice_id>', methods=['DELETE'])
