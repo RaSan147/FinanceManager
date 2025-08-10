@@ -5,9 +5,12 @@ from datetime import datetime, timedelta
 import asyncio
 import logging
 import threading
+
+from flask_pymongo.wrappers import Database
+
 from models.user import User
 from utils.ai_priority_engine import FinancialBrain
-from utils.finance_calculator import calculate_total_balance
+from utils.finance_calculator import calculate_lifetime_transaction_summary, get_N_month_income_expense
 # Configure basic logging for the module
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -17,7 +20,7 @@ class Goal:
     """
 
     @staticmethod
-    async def create_with_ai(goal_data: dict, db, ai_engine) -> ObjectId:
+    async def create_with_ai(goal_data: dict, db: Database, ai_engine: FinancialBrain) -> ObjectId:
         """
         Creates a new goal and triggers a background task for AI enhancement.
 
@@ -43,7 +46,7 @@ class Goal:
         return goal_id
     
     @staticmethod
-    async def _ai_enhance_goal(goal_id, goal_data, db, ai_engine):
+    async def _ai_enhance_goal(goal_id, goal_data, db: Database, ai_engine: FinancialBrain):
         """Performs the AI-powered analysis and updates the goal in the background."""
         try:
             print("\n=== Starting AI Goal Enhancement ===")
@@ -57,15 +60,17 @@ class Goal:
             if not user:
                 raise ValueError(f"User with ID {user_id_str} not found")
 
+            user_obj = User(user, db)
 
-            balance_info = calculate_total_balance(user_id_str, db)
+            balance_info = user_obj.get_lifetime_transaction_summary()
 
             # Get past 3 months' income and expenses
-            monthly_history = User.get_N_month_income_expense(user_id_str, db, n=3)
+            monthly_history = user_obj.get_recent_income_expense(months=3)
 
             context = {
                 "goal": goal_data,
-                "user_income": user.get('monthly_income', 0),
+                "user_monthly_income": user.get('monthly_income', 0),
+                "user_expected_monthly_income_date": user_obj.usual_income_date,
                 "user_balance": balance_info.get('current_balance', 0) if isinstance(balance_info, dict) else balance_info,
                 "monthly_history": monthly_history,
                 "today": datetime.utcnow().isoformat(),
@@ -106,17 +111,17 @@ class Goal:
             raise  # Re-raise the exception after logging
 
     @staticmethod
-    def get_prioritized(user_id: str, db) -> list:
+    def get_prioritized(user_id: str, db: Database) -> list:
         """Retrieves and sorts a user's goals by AI-assigned priority."""
         return list(db.goals.find({'user_id': user_id}).sort('ai_priority', -1))
     
     @staticmethod
-    def get_user_goals(user_id: str, db) -> list:
+    def get_user_goals(user_id: str, db: Database) -> list:
         """Retrieves all goals for a user, sorted by target date."""
         return list(db.goals.find({'user_id': user_id}).sort('target_date', 1))
     
     @staticmethod
-    def get_active_goals(user_id: str, db) -> list:
+    def get_active_goals(user_id: str, db: Database) -> list:
         """Retrieves a user's active (uncompleted) goals, sorted by target date."""
         return list(db.goals.find({
             'user_id': user_id,
@@ -124,7 +129,7 @@ class Goal:
         }).sort('target_date', 1))
     
     @staticmethod
-    def mark_as_completed(user_id: str, goal_id: ObjectId, db):
+    def mark_as_completed(user_id: str, goal_id: ObjectId, db: Database):
         """Marks a specific goal as completed for a user."""
         db.goals.update_one(
             {'_id': goal_id, 'user_id': user_id},
@@ -132,6 +137,20 @@ class Goal:
         )
     
     @staticmethod
-    def delete_goal(user_id: str, goal_id: ObjectId, db):
+    def delete_goal(user_id: str, goal_id: ObjectId, db: Database):
         """Deletes a goal for a user."""
         db.goals.delete_one({'_id': goal_id, 'user_id': user_id})
+
+    @staticmethod
+    def calculate_goal_progress(goal_data, monthly_summary):
+        if goal_data['type'] == 'savings':
+            # For savings goals, progress is based on monthly savings
+            remaining_months = max((goal_data['target_date'] - datetime.utcnow()).days / 30, 1)
+            required_monthly = goal_data['target_amount'] / remaining_months
+            current_monthly = monthly_summary['savings']
+            progress = min((current_monthly / required_monthly) * 100, 100)
+            return {
+                'progress_percent': round(progress, 1),
+                'current': current_monthly,
+                'required': required_monthly
+            }

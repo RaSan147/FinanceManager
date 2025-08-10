@@ -38,13 +38,11 @@
                         {% endif %}
 
                         {# Show AI priority and metadata #}
-                        {% if goal.ai_priority is defined and goal.ai_priority is not none %}
-                            <div class="mb-1">
-                                <span class="badge bg-info text-dark">AI Priority: {{ goal.ai_priority }}</span>
-                            </div>
-                        {% endif %}
-                        {% if goal.ai_metadata is defined and goal.ai_metadata %}
+                        {% if goal.ai_metadata is defined and goal.ai_metadata and goal.ai_priority is defined and goal.ai_priority %}
                             <div class="mb-2">
+                                {% if goal.ai_priority is defined and goal.ai_priority %}
+                                    <span class="badge bg-info text-dark">AI Priority: {{ goal.ai_priority }}</span>
+                                {% endif %}
                                 {% if goal.ai_metadata.urgency is defined and goal.ai_metadata.urgency %}
                                     <span class="badge bg-warning text-dark me-1">Urgency: {{ goal.ai_metadata.urgency }}</span>
                                 {% endif %}

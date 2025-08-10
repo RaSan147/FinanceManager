@@ -3,6 +3,8 @@ import os
 from google import genai
 from google.genai import types
 
+from models.user import User
+
 # Expect: export GEMINI_API_KEY="..."
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
@@ -20,17 +22,32 @@ def _make_gemini_response(prompt):
     )
     return resp.text.strip()
 
-def get_ai_analysis(monthly_summary, goals, user):
-    user_name = user.get("name", "User")
+def get_ai_analysis(monthly_summary, goals, user: User):
+    user_name = user.name
+    usual_income_date = user.usual_income_date
+    occupation = user.occupation
+    lifetime_data = user.get_lifetime_transaction_summary()
+    transaction_count = monthly_summary.get("transaction_count", "Unknown")
+    income_categories = monthly_summary.get("income_categories", {})
+    expense_categories = monthly_summary.get("expense_categories", {})
+
     prompt = (
         f"You are a helpful financial advisor.\n\n"
         f"User: {user_name}\n"
-        f"Monthly Income: ${monthly_summary['total_income']:,.2f}\n"
-        f"Monthly Expenses: ${monthly_summary['total_expenses']:,.2f}\n"
-        f"Monthly Savings: ${monthly_summary['savings']:,.2f}\n\n"
-        f"Expense Categories:\n"
-        f"{json.dumps(monthly_summary['expense_categories'], indent=2, default=default_serializer)}\n\n"
-        f"Goals:\n"
+        f"Occupation: {occupation}\n"
+        f"Usual Income Date (day of month): {usual_income_date}\n"
+        f"Lifetime Transaction Summary: {lifetime_data}\n"
+        f"This month's Income: ${monthly_summary['total_income']:,.2f}\n"
+        f"This month's Expenses: ${monthly_summary['total_expenses']:,.2f}\n"
+        f"This month's Savings: ${monthly_summary['savings']:,.2f}\n"
+        f"This month's Transactions: {transaction_count}\n\n"
+        f"This month's Income Breakdown by Category:\n"
+        f"{json.dumps(income_categories, indent=2, default=default_serializer)}\n\n"
+        f"This month's Expense Breakdown by Category:\n"
+        f"{json.dumps(expense_categories, indent=2, default=default_serializer)}\n\n"
+        f"Last 3 month Transaction summary:\n"
+        f"{json.dumps(user.get_recent_income_expense(months=3), indent=2, default=default_serializer)}\n\n"
+        f"Active Goals:\n"
         f"{json.dumps([{'description': g['description'], 'target_amount': g['target_amount'], 'target_date': g['target_date']} for g in goals], indent=2, default=default_serializer)}\n\n"
         "Provide a concise analysis of their financial health, spending patterns, and progress toward goals. "
         "Highlight any concerning patterns or opportunities for improvement. "

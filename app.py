@@ -17,12 +17,17 @@ from models.user import User
 from models.transaction import Transaction
 from models.goal import Goal
 from utils.ai_helper import get_ai_analysis, get_goal_plan
-from utils.finance_calculator import calculate_monthly_summary, calculate_goal_progress, calculate_total_balance
+from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
 from utils.tools import is_allowed_email
 from config import Config
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+
+# Pass real user IP to app
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 
 from flask_limiter import Limiter
@@ -56,7 +61,11 @@ def load_user(user_id):
     user_data = mongo.db.users.find_one({'_id': ObjectId(user_id)})
     if not user_data:
         return None
-    return User(user_data)
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return None
+
+    return User(user_data, mongo.db)
 
 # Custom JSON encoder to handle ObjectId and datetime
 class JSONEncoder(json.JSONEncoder):
@@ -73,23 +82,27 @@ app.json_encoder = JSONEncoder
 @app.route('/')
 @login_required
 def index():
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('logout'))
     # Get recent transactions
     recent_transactions = Transaction.get_recent_transactions(current_user.id, mongo.db)
-    
+    user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
     # Get active goals
+
+    user_obj = User(user, mongo.db)
     active_goals = Goal.get_active_goals(current_user.id, mongo.db)
     
     # Calculate monthly summary
-    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-    
+    monthly_summary = user_obj.get_recent_income_expense(months=1)[0]
+
     # Calculate complete financial picture
-    full_balance = calculate_total_balance(current_user.id, mongo.db)
-    
+    full_balance = user_obj.get_lifetime_transaction_summary()
+
     # Add progress to each goal
     for goal in active_goals:
-        goal['progress'] = calculate_goal_progress(goal, monthly_summary)
+        goal['progress'] = Goal.calculate_goal_progress(goal, monthly_summary)
 
-    user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
     days_until_income = None
     # Calculate days until usual income date (if set)
     if user.get('usual_income_date'):
@@ -128,9 +141,13 @@ def login():
             flash('Email not allowed.', 'danger')
             return redirect(url_for('login'))
 
+        if mongo.db is None:
+            flash('Database connection error.', 'danger')
+            return redirect(url_for('logout'))
+
         user_data = mongo.db.users.find_one({'email': email})
         if user_data and bcrypt.check_password_hash(user_data['password'], password):
-            user = User(user_data)
+            user = User(user_data, mongo.db)
             login_user(user)
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
@@ -155,6 +172,10 @@ def register():
         ):
             flash('Email not allowed.', 'danger')
             return redirect(url_for('register'))
+
+        if mongo.db is None:
+            flash('Database connection error.', 'danger')
+            return redirect(url_for('logout'))
 
         if mongo.db.users.find_one({'email': email}):
             flash('Email already exists.', 'danger')
@@ -192,6 +213,10 @@ spending_advisor = SpendingAdvisor(ai_engine, mongo.db)
 @app.route('/api/goals/prioritized')
 @login_required
 def get_prioritized_goals():
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return {"error": "Database connection error."}
+
     goals = Goal.get_prioritized(current_user.id, mongo.db)
     return jsonify(goals)
 
@@ -211,6 +236,10 @@ def add_goal():
         'created_at': datetime.utcnow(),
         'is_completed': False
     }
+
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('goals'))
 
     asyncio.run(Goal.create_with_ai(goal_data, mongo.db, ai_engine))
     flash('Goal created with AI optimization', 'success')
@@ -307,7 +336,7 @@ def goals():
 
     # Add progress to each goal
     for goal in goals:
-        goal['progress'] = calculate_goal_progress(goal, monthly_summary)
+        goal['progress'] = Goal.calculate_goal_progress(goal, monthly_summary)
 
     total_pages = (total_goals + per_page - 1) // per_page
 
@@ -392,11 +421,15 @@ def analysis():
 @app.route('/analysis/run', methods=['POST'])
 @login_required
 def run_ai_analysis():
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('analysis'))
+
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
     goals = Goal.get_active_goals(current_user.id, mongo.db)
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-
-    ai_analysis = get_ai_analysis(monthly_summary, goals, user)
+    user_obj = User(user, db=mongo.db)
+    ai_analysis = get_ai_analysis(monthly_summary, goals, user_obj)
 
     mongo.db.users.update_one(
         {'_id': ObjectId(current_user.id)},
@@ -610,6 +643,10 @@ def set_advice_user_action(advice_id):
 @app.route('/goals/<goal_id>/revalidate', methods=['POST'])
 @login_required
 def revalidate_goal(goal_id):
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('goals'))
+
     try:
         goal = mongo.db.goals.find_one({'_id': ObjectId(goal_id), 'user_id': current_user.id})
         if not goal:

@@ -1,49 +1,60 @@
+# user.py
 from bson import ObjectId
 from flask_login import UserMixin
+from datetime import datetime, timedelta
+from flask_pymongo.wrappers import Database
+
+from utils.finance_calculator import (
+    get_N_month_income_expense,
+    calculate_lifetime_transaction_summary
+)
 
 
 class User(UserMixin):
-    def __init__(self, user_data):
+    def __init__(self, user_data, db: Database):
         self.id = str(user_data['_id'])
         self.email = user_data['email']
         self.name = user_data.get('name', '')
         self.created_at = user_data.get('created_at')
         self.occupation = user_data.get('occupation', '')  # Added occupation field
+        self.usual_income_date = user_data.get('usual_income_date', None)
+        self.db = db
 
-    @staticmethod
-    def get_N_month_income_expense(user_id, db, n=3):
+    def get_recent_income_expense(self, months=3):
         """
-        Returns a list of dicts for the past 3 months, each with:
+        Returns a list of dicts for the past N months with:
         - month (e.g. 'August 2025')
         - total_income
         - total_expenses
+        - savings
+        - category breakdowns
         """
-        from datetime import datetime, timedelta
-        import calendar
-        now = datetime.utcnow()
-        results = []
-        for i in range(n):
-            # Get the first day of the month i months ago
-            year = now.year
-            month = now.month - i
-            while month <= 0:
-                month += 12
-                year -= 1
-            first_day = datetime(year, month, 1)
-            # Get the first day of the next month
-            if month == 12:
-                next_month = datetime(year + 1, 1, 1)
-            else:
-                next_month = datetime(year, month + 1, 1)
-            transactions = list(db.transactions.find({
-                'user_id': user_id,
-                'date': {'$gte': first_day, '$lt': next_month}
+        return get_N_month_income_expense(self.id, self.db, n=months)
+
+    def get_this_duration_details(self, week=False, month=False) -> list:
+        """Returns total spending for the current week or month."""
+        if not (week or month) or (week and month):
+            raise ValueError("Specify either week=True or month=True")
+        if week:
+            return list(t['amount'] for t in self.db.transactions.find({
+                'user_id': self.id,
+                'date': {'$gte': datetime.utcnow() - timedelta(days=7)},
+                'type': 'expense'
             }))
-            total_income = round(sum(t['amount'] for t in transactions if t['type'] == 'income'), 2)
-            total_expenses = round(sum(t['amount'] for t in transactions if t['type'] == 'expense'), 2)
-            results.append({
-                'month': first_day.strftime('%B %Y'),
-                'total_income': total_income,
-                'total_expenses': total_expenses
-            })
-        return results
+        elif month:
+            return list(t['amount'] for t in self.db.transactions.find({
+                'user_id': self.id,
+                'date': {'$gte': datetime.utcnow() - timedelta(days=30)},
+                'type': 'expense'
+            }))
+        return []
+
+    def get_lifetime_transaction_summary(self):
+        """
+        Returns lifetime totals for the user:
+        - total_income
+        - total_expenses
+        - current_balance
+        - total_transactions
+        """
+        return calculate_lifetime_transaction_summary(self.id, self.db)

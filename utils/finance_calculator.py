@@ -1,82 +1,83 @@
-from datetime import datetime, timedelta
+# finance_utils.py
+from datetime import datetime
+from collections import defaultdict
+from typing import Any
 
-def calculate_monthly_summary(user_id, db):
-    today = datetime.utcnow()
-    first_day = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if first_day.month == 12:
-        first_day_next_month = first_day.replace(year=first_day.year + 1, month=1)
-    else:
-        first_day_next_month = first_day.replace(month=first_day.month + 1)
-    
-    transactions = list(db.transactions.find({
-        'user_id': user_id,
-        'date': {'$gte': first_day, '$lt': first_day_next_month}
-    }))
-    
-    # Calculate with precise rounding
-    total_income = round(sum(t['amount'] for t in transactions if t['type'] == 'income'), 2)
-    total_expenses = round(sum(t['amount'] for t in transactions if t['type'] == 'expense'), 2)
-    savings = round(total_income - total_expenses, 2)
-    
-    expense_categories = {}
-    income_categories = {}
-    
+def get_transactions(user_id, db, start_date=None, end_date=None):
+    """Fetch transactions for a user with optional date filtering."""
+    query = {'user_id': user_id}
+    if start_date and end_date:
+        query['date'] = {'$gte': start_date, '$lt': end_date}
+    return list(db.transactions.find(query))
+
+
+def calculate_summary(user_id, db, start_date, end_date):
+    """Calculate income, expenses, savings, and category breakdowns for a given period."""
+    transactions = get_transactions(user_id, db, start_date, end_date)
+
+    total_income = 0.0
+    total_expenses = 0.0
+    income_categories = defaultdict(float)
+    expense_categories = defaultdict(float)
+
     for t in transactions:
         amount = round(t['amount'], 2)
         if t['type'] == 'income':
-            income_categories[t['category']] = round(income_categories.get(t['category'], 0) + amount, 2)
-        else:
-            expense_categories[t['category']] = round(expense_categories.get(t['category'], 0) + amount, 2)
-    
+            total_income += amount
+            income_categories[t['category']] += amount
+        elif t['type'] == 'expense':
+            total_expenses += amount
+            expense_categories[t['category']] += amount
+
     return {
-        'month': first_day.strftime('%B %Y'),
-        'total_income': total_income,
-        'total_expenses': total_expenses,
-        'savings': savings,
-        'income_categories': income_categories,
-        'expense_categories': expense_categories,
+        'total_income': round(total_income, 2),
+        'total_expenses': round(total_expenses, 2),
+        'savings': round(total_income - total_expenses, 2),
+        'income_categories': dict(income_categories),
+        'expense_categories': dict(expense_categories),
         'transaction_count': len(transactions)
     }
 
-def calculate_goal_progress(goal, monthly_summary):
-    if goal['type'] == 'savings':
-        # For savings goals, progress is based on monthly savings
-        remaining_months = max((goal['target_date'] - datetime.utcnow()).days / 30, 1)
-        required_monthly = goal['target_amount'] / remaining_months
-        current_monthly = monthly_summary['savings']
-        progress = min((current_monthly / required_monthly) * 100, 100)
-        return {
-            'progress_percent': round(progress, 1),
-            'current': current_monthly,
-            'required': required_monthly
-        }
+
+def calculate_monthly_summary(user_id, db, year=None, month=None):
+    """Wrapper for calculating the current or specified month's summary."""
+    today = datetime.utcnow()
+    if year is None:
+        year = today.year
+    if month is None:
+        month = today.month
+
+    start_date = datetime(year, month, 1)
+    if month == 12:
+        end_date = datetime(year + 1, 1, 1)
     else:
-        # For purchase goals, progress is based on accumulated savings
-        progress = min((monthly_summary['savings'] / goal['target_amount']) * 100, 100)
-        return {
-            'progress_percent': round(progress, 1),
-            'current': monthly_summary['savings'],
-            'required': goal['target_amount']
-        }
+        end_date = datetime(year, month + 1, 1)
 
-def calculate_total_balance(user_id, db):
-    transactions = list(db.transactions.find({'user_id': user_id}))
-
-    income = sum(t['amount'] for t in transactions if t['type'] == 'income')
-    expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
-
-    return round(income - expenses, 2)
+    summary = calculate_summary(user_id, db, start_date, end_date)
+    summary['month'] = start_date.strftime('%B %Y')
+    return summary
 
 
-def calculate_total_balance(user_id, db):
-    transactions = list(db.transactions.find({'user_id': user_id}))
-    
-    income = round(sum(t['amount'] for t in transactions if t['type'] == 'income'), 2)
-    expenses = round(sum(t['amount'] for t in transactions if t['type'] == 'expense'), 2)
-    
+def get_N_month_income_expense(user_id, db, n=3) -> list[dict[str, Any]]:
+    """Get income and expenses for the last N months."""
+    now = datetime.utcnow()
+    results = []
+    for i in range(n):
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        results.append(calculate_monthly_summary(user_id, db, year, month))
+    return results
+
+
+def calculate_lifetime_transaction_summary(user_id, db):
+    """Get lifetime totals for a user."""
+    transactions = get_transactions(user_id, db)
     return {
-        'total_income': income,
-        'total_expenses': expenses,
-        'current_balance': round(income - expenses, 2),
+        'total_income': round(sum(t['amount'] for t in transactions if t['type'] == 'income'), 2),
+        'total_expenses': round(sum(t['amount'] for t in transactions if t['type'] == 'expense'), 2),
+        'current_balance': round(sum(t['amount'] if t['type'] == 'income' else -t['amount'] for t in transactions), 2),
         'total_transactions': len(transactions)
     }

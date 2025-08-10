@@ -174,12 +174,15 @@
                 </div>
             </div>
         </div>
+        
+        {% if days_until_income is not none %}
+        <div class="alert alert-info">
+        Next income in {{ days_until_income }} day{{ 's' if days_until_income != 1 else '' }}.
+        </div>
+        {% endif %}
+
     </div>
 </div>
-{% endblock %}
 
-{% if days_until_income is not none %}
-<div class="alert alert-info">
-  Next income in {{ days_until_income }} day{{ 's' if days_until_income != 1 else '' }}.
-</div>
-{% endif %}
+
+{% endblock %}

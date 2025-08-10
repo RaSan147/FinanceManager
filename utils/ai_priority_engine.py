@@ -66,7 +66,7 @@ class FinancialBrain:
 
         Note: DO NOT USE ANY MARKDOWN OR HTML. Just return a JSON object.
         """
-        response = await self._get_ai_response(prompt)
+        response = self._get_ai_response(prompt)
         return self._parse_response(response)
     
     def _parse_response(self, response):
