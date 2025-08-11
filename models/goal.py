@@ -49,7 +49,7 @@ class Goal:
     async def _ai_enhance_goal(goal_id, goal_data, db: Database, ai_engine: FinancialBrain):
         """Performs the AI-powered analysis and updates the goal in the background."""
         try:
-            print("\n=== Starting AI Goal Enhancement ===")
+            # print("\n=== Starting AI Goal Enhancement ===")
             
             # Ensure user_id is a string before converting to ObjectId
             user_id_str = goal_data['user_id']
@@ -81,13 +81,13 @@ class Goal:
                 }))
             }
 
-            print("\n=== DEBUG: Gemini Input Context ===")
-            print(json.dumps(context, indent=2, default=str))
+            # print("\n=== DEBUG: Gemini Input Context ===")
+            # print(json.dumps(context, indent=2, default=str))
             
             ai_analysis = await ai_engine.calculate_priority(context)
             
-            print("\n=== DEBUG: Gemini Output ===")
-            print(json.dumps(ai_analysis, indent=2))
+            # print("\n=== DEBUG: Gemini Output ===")
+            # print(json.dumps(ai_analysis, indent=2))
 
             # Update the goal with the AI analysis results
             db.goals.update_one(
@@ -103,7 +103,7 @@ class Goal:
                     "last_updated": datetime.utcnow()
                 }}
             )
-            print("=== AI Enhancement Completed Successfully ===")
+            # print("=== AI Enhancement Completed Successfully ===")
             
         except Exception as e:
             print(f"\n=== ERROR in _ai_enhance_goal: {str(e)} ===")

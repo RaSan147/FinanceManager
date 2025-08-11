@@ -117,7 +117,7 @@ def index():
             last_day = monthrange(now.year, now.month)[1]
             days_until_income = (last_day - today) + income_day
 
-    print(active_goals)
+    # print(active_goals)
 
     return render_template(
         'index.html', 
@@ -412,7 +412,7 @@ def analysis():
 
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
 
-    print(goals)
+    # print(goals)
 
     # Use cached analysis if available
     ai_analysis = user.get('ai_analysis')
