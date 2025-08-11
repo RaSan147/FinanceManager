@@ -143,14 +143,42 @@ class Goal:
 
     @staticmethod
     def calculate_goal_progress(goal_data, monthly_summary):
+        target_date = goal_data['target_date']
+        now = datetime.utcnow()
+
+        total_saved = goal_data.get('current_amount', 0)  # Must track real saved total
+        remaining_months = (target_date - now).days / 30
+        target_amount = goal_data['target_amount']
+
+        # Overdue tracking
+        overdue_months = 0
+        if target_date < now:
+            overdue_months = abs(remaining_months)
+            remaining_months = 0.01  # Prevent div/0, treat as "immediate"
+
         if goal_data['type'] == 'savings':
-            # For savings goals, progress is based on monthly savings
-            remaining_months = max((goal_data['target_date'] - datetime.utcnow()).days / 30, 1)
-            required_monthly = goal_data['target_amount'] / remaining_months
-            current_monthly = monthly_summary['savings']
-            progress = min((current_monthly / required_monthly) * 100, 100)
+            required_monthly = (target_amount - total_saved) / max(remaining_months, 1)
+            current_monthly = monthly_summary.get('savings', 0)
+            progress = (total_saved / target_amount) * 100
+
             return {
                 'progress_percent': round(progress, 1),
                 'current': current_monthly,
-                'required': required_monthly
+                'required': max(required_monthly, 0),
+                'overdue_months': round(overdue_months, 1)
             }
+
+        elif goal_data['type'] == 'purchase':
+            required_monthly = (target_amount - total_saved) / max(remaining_months, 1)
+            progress = (total_saved / target_amount) * 100
+
+            return {
+                'progress_percent': round(progress, 1),
+                'current': total_saved,
+                'required': max(required_monthly, 0),
+                'overdue_months': round(overdue_months, 1)
+            }
+
+        else:
+            raise ValueError(f"Unknown goal type: {goal_data['type']}")
+

@@ -14,6 +14,19 @@ def default_serializer(obj):
         return obj.isoformat()
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
+
+def remove_markdown_code(data: str, md_type='json') -> str:
+    start_fence = f"```{md_type}\n"
+    end_fence = "```"
+
+    if data.startswith(start_fence):
+        data = data[len(start_fence):]
+
+    if data.endswith(end_fence):
+        data = data[:-len(end_fence)]
+
+    return data.strip()
+
 def _make_gemini_response(prompt):
     # gemini-2.5-pro is highest quality but hits quota faster than flash models.
     resp = client.models.generate_content(
@@ -24,7 +37,10 @@ def _make_gemini_response(prompt):
 
 def get_ai_analysis(monthly_summary, goals, user: User):
     user_name = user.name
-    usual_income_date = user.usual_income_date
+
+    monthly_income = user.monthly_income
+    monthly_income_date = user.usual_income_date
+
     occupation = user.occupation
     lifetime_data = user.get_lifetime_transaction_summary()
     transaction_count = monthly_summary.get("transaction_count", "Unknown")
@@ -35,7 +51,12 @@ def get_ai_analysis(monthly_summary, goals, user: User):
         f"You are a helpful financial advisor.\n\n"
         f"User: {user_name}\n"
         f"Occupation: {occupation}\n"
-        f"Usual Income Date (day of month): {usual_income_date}\n"
+
+        + ((
+            f"Monthly Salary: ${monthly_income:,.2f}\n"
+            f"Monthly Salary Date (day of month): {monthly_income_date}\n"
+        ) if monthly_income_date else "") +
+
         f"Lifetime Transaction Summary: {lifetime_data}\n"
         f"This month's Income: ${monthly_summary['total_income']:,.2f}\n"
         f"This month's Expenses: ${monthly_summary['total_expenses']:,.2f}\n"
@@ -52,8 +73,10 @@ def get_ai_analysis(monthly_summary, goals, user: User):
         "Provide a concise analysis of their financial health, spending patterns, and progress toward goals. "
         "Highlight any concerning patterns or opportunities for improvement. "
         "Offer 2-3 actionable recommendations."
+
+        "\n\nMake sure everything is in HTML, not in markdown. Feel free to use inline css (not much recommanded) [Note, it will be shown in sidebar. So avoid h1, h2 or extra big text, Do not force bg color, using bootstrap with clean UI motivation. BG/font color is handled by body.dark-mode/body [not .dark-mode]]"
     )
-    return _make_gemini_response(prompt)
+    return remove_markdown_code(_make_gemini_response(prompt), "html")
 
 def get_goal_plan(goal_type, target_amount, target_date, current_finances, user_income):
     prompt = (

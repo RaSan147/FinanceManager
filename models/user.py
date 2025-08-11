@@ -18,6 +18,7 @@ class User(UserMixin):
         self.created_at = user_data.get('created_at')
         self.occupation = user_data.get('occupation', '')  # Added occupation field
         self.usual_income_date = user_data.get('usual_income_date', None)
+        self.monthly_income = user_data.get('monthly_income', 0)
         self.db = db
 
     def get_recent_income_expense(self, months=3):

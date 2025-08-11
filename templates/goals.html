@@ -14,43 +14,61 @@
                 <div class="list-group">
                     {% for goal in goals %}
                     <div class="list-group-item">
-                        <!-- {# DEBUG: Show all goal fields for troubleshooting #}
-                        <pre style="background:#f8f9fa; color:#333; font-size:0.85em;">{{ goal | tojson(indent=2) }}</pre> -->
+                        {% if request.args.get('debug') %}
+                            <pre style="background:#f8f9fa; color:#333; font-size:0.85em;">{{ goal | tojson(indent=2) }}</pre>
+                        {% endif %}
+
+                        <!-- Goal header -->
                         <div class="d-flex w-100 justify-content-between">
                             <h5 class="mb-1">{{ goal.description }}</h5>
                             <small class="{{ 'text-success' if goal.is_completed else 'text-primary' }}">
                                 {{ 'Completed' if goal.is_completed else 'Active' }}
                             </small>
                         </div>
+
+                        <!-- Goal meta -->
                         <div class="d-flex justify-content-between mb-1">
                             <small>Target: ${{ "%.2f"|format(goal.target_amount) }}</small>
-                            <small>Due: {{ goal.target_date.strftime('%b %d, %Y') }}</small>
+                            <small>
+                                Due: {{ goal.target_date.strftime('%b %d, %Y') }}
+                                {% if goal.progress and goal.progress.overdue_months and goal.progress.overdue_months > 0 %}
+                                    <span class="badge bg-danger ms-1">Overdue {{ goal.progress.overdue_months }} mo</span>
+                                {% endif %}
+                            </small>
                         </div>
 
+                        <!-- Progress bar -->
                         {% if not goal.is_completed %}
                             {% set percent = goal.progress.progress_percent if goal.progress and goal.progress.progress_percent is not none else 0 %}
+                            {% set percent_display = percent %}
+                            {% set percent_width = 100 if percent > 100 else percent %}
                             {% set bar_class = 'bg-success' if percent >= 75 else 'bg-warning' if percent >= 40 else 'bg-danger' %}
-                            <div class="progress mb-2">
-                                <div class="progress-bar {{ bar_class }}" role="progressbar" style="width: {{ percent }}%">
-                                    {{ percent }}%
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div class="progress-bar {{ bar_class }}" 
+                                     role="progressbar" 
+                                     style="width: {{ percent_width }}%"
+                                     aria-valuenow="{{ percent_width }}" aria-valuemin="0" aria-valuemax="100"
+                                     title="{% if percent > 100 %}Target date passed{% endif %}">
+                                    {{ percent_display }}%
                                 </div>
                             </div>
                         {% endif %}
 
-                        {# Show AI priority and metadata #}
-                        {% if goal.ai_metadata is defined and goal.ai_metadata and goal.ai_priority is defined and goal.ai_priority %}
+                        <!-- AI metadata -->
+                        {% if goal.ai_metadata or goal.ai_priority %}
                             <div class="mb-2">
-                                {% if goal.ai_priority is defined and goal.ai_priority %}
+                                {% if goal.ai_priority %}
                                     <span class="badge bg-info text-dark">AI Priority: {{ goal.ai_priority }}</span>
                                 {% endif %}
-                                {% if goal.ai_metadata.urgency is defined and goal.ai_metadata.urgency %}
-                                    <span class="badge bg-warning text-dark me-1">Urgency: {{ goal.ai_metadata.urgency }}</span>
-                                {% endif %}
-                                {% if goal.ai_metadata.impact is defined and goal.ai_metadata.impact %}
-                                    <span class="badge bg-success me-1">Impact: {{ goal.ai_metadata.impact }}</span>
-                                {% endif %}
+                                {% for label, color in [('urgency', 'warning'), ('impact', 'success')] %}
+                                    {% if goal.ai_metadata and goal.ai_metadata.get(label) %}
+                                        <span class="badge bg-{{ color }} text-dark me-1">
+                                            {{ label|capitalize }}: {{ goal.ai_metadata.get(label) }}
+                                        </span>
+                                    {% endif %}
+                                {% endfor %}
                             </div>
-                            {% if goal.ai_metadata.suggestions is defined and goal.ai_metadata.suggestions %}
+                            {% if goal.ai_metadata and goal.ai_metadata.suggestions %}
                                 <div class="mb-2">
                                     <strong>AI Suggestions:</strong>
                                     <ul>
@@ -62,6 +80,7 @@
                             {% endif %}
                         {% endif %}
 
+                        <!-- AI plan -->
                         {% if goal.ai_plan %}
                         <div class="accordion mb-2">
                             <div class="accordion-item">
@@ -80,6 +99,7 @@
                         </div>
                         {% endif %}
                         
+                        <!-- Action buttons -->
                         <div class="d-flex justify-content-end gap-2">
                             {% if not goal.is_completed %}
                             <form method="POST" action="{{ url_for('complete_goal', goal_id=goal._id) }}" class="d-inline">
@@ -104,11 +124,12 @@
                     {% endfor %}
                 </div>
 
+                <!-- Pagination -->
                 {% if total_pages > 1 %}
                 <nav aria-label="Goal pagination">
                   <ul class="pagination justify-content-center mt-3">
                     <li class="page-item {% if page == 1 %}disabled{% endif %}">
-                      <a class="page-link" href="{{ url_for('goals', page=page-1) }}" tabindex="-1">Previous</a>
+                      <a class="page-link" href="{{ url_for('goals', page=page-1) }}">Previous</a>
                     </li>
                     {% for p in range(1, total_pages+1) %}
                       <li class="page-item {% if p == page %}active{% endif %}">
@@ -129,6 +150,8 @@
             </div>
         </div>
     </div>
+
+    <!-- Add Goal Form -->
     <div class="col-md-4">
         <div class="card">
             <div class="card-header bg-primary text-white">
