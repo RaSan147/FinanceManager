@@ -14,3 +14,7 @@ class Config:
     ONLY_ALLOWED_EMAIL_DOMAINS = [d for d in ONLY_ALLOWED_EMAIL_DOMAINS if d]
 
     MONGO_URI_LIMITER = os.getenv('MONGO_URI_LIMITER', MONGO_URI)
+
+    # If set to '1' (or any truthy value below) will force showing full traceback
+    # in custom error pages and JSON responses even when debug=False (production).
+    SHOW_DETAILED_ERRORS = str(os.getenv('SHOW_DETAILED_ERRORS', '0')).lower() in {'1','true','yes','on'}

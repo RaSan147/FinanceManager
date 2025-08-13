@@ -678,5 +678,56 @@ def revalidate_goal(goal_id):
     
     return redirect(url_for('goals'))
 
+
+# -------------------------------------------------------------
+# Central error handling (HTML + JSON with optional tracebacks)
+# -------------------------------------------------------------
+from werkzeug.exceptions import HTTPException
+from flask import Response
+
+def _wants_json_response():
+    best = request.accept_mimetypes.best_match(['application/json', 'text/html'])
+    return best == 'application/json' and \
+        request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
+
+@app.errorhandler(Exception)
+def handle_any_exception(err):  # noqa: D401
+    status_code = 500
+    error_title = 'Internal Server Error'
+    error_message = 'An unexpected error occurred.'
+
+    if isinstance(err, HTTPException):
+        status_code = err.code or 500
+        error_title = err.name
+        error_message = err.description
+
+    show_details = app.debug or app.config.get('SHOW_DETAILED_ERRORS')
+    tb_str = ''
+    if show_details:
+        tb_str = ''.join(traceback.format_exception(type(err), err, err.__traceback__))
+        # log full traceback
+        app.logger.error(f"Unhandled exception: {tb_str}")
+    else:
+        app.logger.error(f"Unhandled exception: {err}")
+
+    if _wants_json_response():
+        payload = {
+            'error': error_title,
+            'message': error_message,
+            'status': status_code
+        }
+        if show_details:
+            payload['traceback'] = tb_str
+        return jsonify(payload), status_code
+
+    return render_template(
+        'error.html',
+        status_code=status_code,
+        error_title=error_title,
+        error_message=error_message,
+        traceback_str=tb_str,
+        show_details=show_details
+    ), status_code
+
 if __name__ == '__main__':
     app.run(debug=True)
