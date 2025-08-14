@@ -6,17 +6,16 @@ from flask_pymongo.wrappers import Database
 from datetime import timezone
 from utils.finance_calculator import (
     get_N_month_income_expense,
-    calculate_lifetime_transaction_summary
+    calculate_lifetime_transaction_summary,
+    calculate_period_summary,
+    get_expense_amounts_for_period,
+    DURATION_MAP,
+    get_transactions
 )
 # Added timezone helpers
 from utils.timezone_utils import now_utc, ensure_utc
 
-DURATION_MAP = {
-    "day": 1,
-    'week': 7,
-    'month': 30,
-    'year': 365
-}
+"""Duration map moved to finance_calculator.DURATION_MAP to ensure single source of truth."""
 
 class User(UserMixin):
     def __init__(self, user_data, db: Database):
@@ -40,53 +39,22 @@ class User(UserMixin):
         """
         return get_N_month_income_expense(self.id, self.db, n=months)
 
-    def get_this_duration_details(self, duration_type:str='week') -> list:
-        """
-        Returns total spending for the current week or month.
-        
-        Args:
-            duration_type (str): The duration type to filter by ('week', 'day', 'month', 'year')
-        """
-
+    def get_this_duration_details(self, duration_type: str = 'week') -> list[dict]:
+        """Return full financial details for a rolling duration window (for charts/sparklines)."""
         if duration_type not in DURATION_MAP:
-            raise ValueError("Invalid duration type. Choose from 'week', 'month', or 'year'.")
-        return list(t['amount'] for t in self.db.transactions.find({
-                'user_id': self.id,
-                'date': {'$gte': now_utc() - timedelta(days=DURATION_MAP[duration_type])},
-                'type': 'expense'
-            }))
-        return []
+            raise ValueError("Invalid duration type. Choose from 'day', 'week', 'month', 'year'.")
+        return get_transactions(
+            self.id,
+            self.db,
+            start_date=now_utc() - timedelta(days=DURATION_MAP[duration_type]),
+            end_date=now_utc()
+        )
 
-    def get_this_duration_summary(self, duration_type:str='week') -> dict:
-        """
-        Returns total income, spending for the last duration.
-
-        Args:
-            duration_type (str): The duration type to filter by ('week', 'day', 'month', 'year')
-        """
-
-        in_transactions = list(t for t in self.db.transactions.find({
-            'user_id': self.id,
-            'date': {'$gte': now_utc() - timedelta(days=DURATION_MAP[duration_type])},
-            'type': 'income'
-        }))
-
-        out_transactions = list(t for t in self.db.transactions.find({
-            'user_id': self.id,
-            'date': {'$gte': now_utc() - timedelta(days=DURATION_MAP[duration_type])},
-            'type': 'expense'
-        }))
-
-        # Normalize dates to UTC aware before min
-        all_dates = [d for d in (ensure_utc(t.get('date')) for t in in_transactions + out_transactions) if d is not None]
-        oldest_date = min(all_dates) if all_dates else None
-
-        return {
-            "total_income": sum(t['amount'] for t in in_transactions),
-            "total_expenses": sum(t['amount'] for t in out_transactions),
-            "from_date": oldest_date,
-            "to_date": now_utc()
-        }
+    def get_this_duration_summary(self, duration_type: str = 'week') -> dict:
+        """Return full financial summary for a rolling duration window (income, expenses, savings)."""
+        if duration_type not in DURATION_MAP:
+            raise ValueError("Invalid duration type. Choose from 'day', 'week', 'month', 'year'.")
+        return calculate_period_summary(self.id, self.db, DURATION_MAP[duration_type])
 
     def get_lifetime_transaction_summary(self):
         """

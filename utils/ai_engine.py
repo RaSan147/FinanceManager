@@ -1,98 +1,154 @@
 import asyncio
 import json
+import os
 import time
 import traceback
+from dataclasses import dataclass
+from typing import Any, Iterable, Optional
+
 from google import genai
-from datetime import datetime
+
+
+# --- Configuration -----------------------------------------------------------
+DEFAULT_MODEL_CANDIDATES: list[str] = [
+    "gemini-2.5-flash-lite",  # frequent, light queries
+    "gemini-2.5-flash",       # reasoning-heavy queries
+    "gemini-2.0-flash",       # big data imports
+    "gemini-2.5-pro",         # rare deep reasoning
+    "gemini-2.0-flash-lite",  # last-resort fallback
+]
+
+# --- Core Engine -------------------------------------------------------------
+@dataclass
+class _RetryPolicy:
+    max_retries: int = 3
+    base_delay_s: float = 1.0  # exponential backoff base
+
 
 class FinancialBrain:
-    def __init__(self, api_key):
-        self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-2.5-pro"
+    """Thin, centralized wrapper around Gemini client with:
+    - lazy model validation/selection with env override (GEMINI_MODEL)
+    - unified sync/async request helpers
+    - consistent markdown fence stripping
+    - JSON-safe helpers with robust fallbacks
+    """
 
-    def _get_ai_response(self, prompt):
-        max_retries = 3
-        for attempt in range(max_retries):
+    def __init__(self, api_key: Optional[str] = None,
+                 model_candidates: Optional[Iterable[str]] = None,
+                 retry: _RetryPolicy = _RetryPolicy()):
+        api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.client = genai.Client(api_key=api_key) if api_key else None
+
+        override = os.getenv("GEMINI_MODEL")
+        base_candidates = list(model_candidates) if model_candidates else list(DEFAULT_MODEL_CANDIDATES)
+        self.model_candidates: list[str] = ([override] if override else []) + base_candidates
+        # de-dup while keeping order
+        seen = set()
+        self.model_candidates = [m for m in self.model_candidates if not (m in seen or seen.add(m))]
+
+        self._validated_model: Optional[str] = None
+        self.retry = retry
+
+    # ----------------- Utility helpers -----------------
+    @staticmethod
+    def strip_fences(text: str, md_type: str = "json") -> str:
+        if not isinstance(text, str):
+            return text
+        start = f"```{md_type}\n"
+        end = "```"
+        if text.startswith(start):
+            text = text[len(start):]
+        if text.endswith(end):
+            text = text[: -len(end)]
+        return text.strip()
+
+    # ----------------- Model selection -----------------
+    def _ensure_model(self) -> str:
+        if self._validated_model:
+            return self._validated_model
+        if not self.client:
+            # No API key -> operate in degraded mode; callers should handle this
+            self._validated_model = "(no-client)"
+            return self._validated_model
+
+        last_err: Exception | None = None
+        for name in self.model_candidates:
             try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt
-                )
-                text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[8:].strip()
-                    if text.endswith("```"):
-                        text = text[:-3].strip()
-                return text
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    return json.dumps({"error": str(e)})
-                time.sleep(1 * (attempt + 1))
+                resp = self.client.models.generate_content(model=name, contents="ping")
+                if getattr(resp, "text", None) is not None:
+                    self._validated_model = name
+                    return name
+            except Exception as e:  # continue through candidates
+                last_err = e
+                continue
+        # If nothing works, record a reason and keep symbolic name to prevent None usage
+        self._validated_model = f"(unavailable:{last_err})"
+        return self._validated_model
 
-        
-    async def _async_get_ai_response(self, prompt):
-        max_retries = 3
-        for attempt in range(max_retries):
+    # ----------------- Low-level request helpers -----------------
+    def _call(self, prompt: str) -> str:
+        model = self._ensure_model()
+        if model.startswith("(no-client)"):
+            return "AI analysis unavailable (missing GEMINI_API_KEY)."
+        if model.startswith("(unavailable:"):
+            return f"AI analysis unavailable {model}."
+
+        delay = self.retry.base_delay_s
+        for attempt in range(self.retry.max_retries):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt
-                )
-                text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[8:].strip()
-                    if text.endswith("```"):
-                        text = text[:-3].strip()
-                return text
+                resp = self.client.models.generate_content(model=model, contents=prompt)
+                return (str(getattr(resp, "text", "")).strip() or "(empty AI response)")
             except Exception as e:
-                if attempt == max_retries - 1:
-                    return json.dumps({"error": str(e)})
-                await asyncio.sleep(1 * (attempt + 1))
+                if attempt == self.retry.max_retries - 1:
+                    return f"AI analysis unavailable (error: {e})"
+                time.sleep(delay)
+                delay *= 2
 
-    async def calculate_priority(self, financial_context):
-        prompt = f"""Analyze this financial context and provide priority assessment:
-        
-        {json.dumps(financial_context, indent=2, default=str)}
-        
-        Return JSON with:
-        - priority_score (0-100)
-        - urgency (days_remaining/total_days)
-        - financial_impact (amount/income)
-        - health_impact (for students)
-        - confidence (0-1)
-        - suggested_actions (array)
-        - summary (string)
+    async def _acall(self, prompt: str) -> str:
+        model = self._ensure_model()
+        if model.startswith("(no-client)"):
+            return "AI analysis unavailable (missing GEMINI_API_KEY)."
+        if model.startswith("(unavailable:"):
+            return f"AI analysis unavailable {model}."
 
+        delay = self.retry.base_delay_s
+        for attempt in range(self.retry.max_retries):
+            try:
+                resp = self.client.models.generate_content(model=model, contents=prompt)
+                return (str(getattr(resp, "text", "")).strip() or "(empty AI response)")
+            except Exception as e:
+                if attempt == self.retry.max_retries - 1:
+                    return f"AI analysis unavailable (error: {e})"
+                await asyncio.sleep(delay)
+                delay *= 2
 
-        Note: DO NOT USE ANY MARKDOWN OR HTML. Just return a JSON object.
-        """
-        response = self._get_ai_response(prompt)
-        return self._parse_response(response)
-    
-    def _parse_response(self, response):
-        response = response.strip() or '{"error": "Empty response from AI"}'
+    # ----------------- Public high-level helpers -----------------
+    def get_text(self, prompt: str) -> str:
+        return self._call(prompt)
 
-        if response.startswith("```json"):
-            response = response[8:].strip()
-        if response.endswith("```"):
-            response = response[:-3].strip()
+    async def aget_text(self, prompt: str) -> str:
+        return await self._acall(prompt)
+
+    def get_json(self, prompt: str, fallback: Optional[dict] = None, fence: str = "json") -> dict:
+        raw = self._call(prompt)
+        clean = self.strip_fences(raw, fence)
         try:
-            data = json.loads(response)
-            if "error" in data:
-                return self._fallback_response()
-            return data
-        except Exception as e:
+            data = json.loads(clean)
+            if isinstance(data, dict):
+                return data
+            raise ValueError("JSON root is not an object")
+        except Exception:
             traceback.print_exc()
-            print(f"Failed to parse AI response: {e}")
-            print(f"Response was: {response}")
-            return self._fallback_response()
-    
-    def _fallback_response(self):
-        return {
-            "priority_score": 50,
-            "urgency": 0.5,
-            "financial_impact": 0.3,
-            "health_impact": 0,
-            "confidence": 0,
-            "suggested_actions": ["Review manually"]
-        }
+            return fallback or {"error": "parse_failure", "raw": clean[:4000]}
+
+    async def aget_json(self, prompt: str, fallback: Optional[dict] = None, fence: str = "json") -> dict:
+        raw = await self._acall(prompt)
+        clean = self.strip_fences(raw, fence)
+        try:
+            data = json.loads(clean)
+            if isinstance(data, dict):
+                return data
+            raise ValueError("JSON root is not an object")
+        except Exception:
+            traceback.print_exc()
+            return fallback or {"error": "parse_failure", "raw": clean[:4000]}

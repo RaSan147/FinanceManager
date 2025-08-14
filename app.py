@@ -15,7 +15,7 @@ from bson import ObjectId
 import json
 from models.user import User
 from models.transaction import Transaction
-from models.goal import Goal
+from models.goal import Goal, GoalCreate, GoalUpdate, GoalInDB
 from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
 from utils.tools import is_allowed_email
@@ -52,7 +52,7 @@ mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
 
 login_manager = LoginManager(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'login'  # type: ignore[attr-defined]
 
 @app.context_processor
 def inject_now():
@@ -79,7 +79,7 @@ class JSONEncoder(json.JSONEncoder):
             return ensure_utc(o).isoformat()
         return json.JSONEncoder.default(self, o)
 
-app.json_encoder = JSONEncoder
+app.json_encoder = JSONEncoder  # type: ignore[attr-defined]
 
 # Routes
 @app.route('/')
@@ -94,17 +94,21 @@ def index():
     # Get active goals
 
     user_obj = User(user, mongo.db)
-    active_goals = Goal.get_active_goals(current_user.id, mongo.db)
+    active_goal_models = Goal.get_active_goals(current_user.id, mongo.db)
     
-    # Calculate monthly summary
-    monthly_summary = user_obj.get_recent_income_expense(months=1)[0]
+    # Calculate current month summary (calendar-aware) via helper
+    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
 
     # Calculate complete financial picture
     full_balance = user_obj.get_lifetime_transaction_summary()
 
-    # Add progress to each goal
-    for goal in active_goals:
-        goal['progress'] = Goal.calculate_goal_progress(goal, monthly_summary)
+    # Convert models to dicts with progress for template compatibility
+    active_goals = []
+    for gm in active_goal_models:
+        progress = Goal.calculate_goal_progress(gm, monthly_summary)
+        gd = gm.model_dump(by_alias=True)
+        gd['progress'] = progress
+        active_goals.append(gd)
 
     days_until_income = None
     # Calculate days until usual income date (if set)
@@ -213,6 +217,9 @@ from utils.ai_spending_advisor import SpendingAdvisor
 
 # Initialize AI components
 ai_engine = FinancialBrain(app.config["GEMINI_API_KEY"])
+# Ensure mongo.db is available before creating advisor
+if mongo.db is None:
+    raise RuntimeError("Database not initialized")
 spending_advisor = SpendingAdvisor(ai_engine, mongo.db)
 
 @app.route('/api/goals/prioritized')
@@ -225,28 +232,46 @@ def get_prioritized_goals():
     goals = Goal.get_prioritized(current_user.id, mongo.db)
     return jsonify(goals)
 
-# Modified Goal Creation
 @app.route('/goals/add', methods=['POST'])
 @login_required
 def add_goal():
-    goal_data = {
-        'user_id': current_user.id,
-        'type': request.form.get('goal_type'),
-        'target_amount': float(request.form.get('target_amount')),
-        'description': request.form.get('description'),
-        'target_date': ensure_utc(datetime.strptime(
-            request.form.get('target_date'), 
-            '%Y-%m-%d'
-        )),
-        'created_at': now_utc(),
-        'is_completed': False
-    }
+    goal_type = request.form.get('goal_type') or ''
+    target_amount_raw = request.form.get('target_amount')
+    description_val = request.form.get('description') or ''
+    target_date_str = request.form.get('target_date')
+
+    # Basic validation prior to Pydantic model
+    try:
+        target_amount_val = float(target_amount_raw) if target_amount_raw is not None else None
+    except ValueError:
+        target_amount_val = None
+
+    if not goal_type or target_amount_val is None or not description_val or not target_date_str:
+        flash('All goal fields are required and must be valid.', 'danger')
+        return redirect(url_for('goals'))
+
+    try:
+        parsed_date = ensure_utc(datetime.strptime(target_date_str, '%Y-%m-%d'))
+    except Exception:
+        flash('Invalid target date format.', 'danger')
+        return redirect(url_for('goals'))
+
+    # parsed_date guaranteed not None due to earlier try/except
+    goal_data = GoalCreate(
+        user_id=current_user.id,
+        type=goal_type,
+        target_amount=target_amount_val,  # type: ignore[arg-type]
+        description=description_val,
+        target_date=parsed_date  # type: ignore[arg-type]
+    )
 
     if mongo.db is None:
         flash('Database connection error.', 'danger')
         return redirect(url_for('goals'))
 
-    asyncio.run(Goal.create_with_ai(goal_data, mongo.db, ai_engine))
+    goal = Goal.create(goal_data, mongo.db)
+    # Launch background AI enhancement
+    Goal.enhance_goal_background(goal, mongo.db, ai_engine)
     flash('Goal created with AI optimization', 'success')
     return redirect(url_for('goals'))
 
@@ -271,9 +296,12 @@ def transactions():
 @login_required
 def add_transaction():
     if request.method == 'POST':
+        amount_raw = request.form.get('amount')
         try:
-            amount = float(request.form.get('amount'))
+            amount = float(amount_raw) if amount_raw is not None else None
         except (TypeError, ValueError):
+            amount = None
+        if amount is None:
             flash('Invalid amount.', 'danger')
             return redirect(url_for('add_transaction'))
 
@@ -293,9 +321,12 @@ def add_transaction():
             return redirect(url_for('add_transaction'))
 
         # Ensure date is not in the future (optional) or not in the distant past
-        try:
-            date = datetime.strptime(date_str, '%Y-%m-%d')
-        except ValueError:
+        if date_str:
+            try:
+                date = datetime.strptime(date_str, '%Y-%m-%d')
+            except ValueError:
+                date = datetime.now(timezone.utc)
+        else:
             date = datetime.now(timezone.utc)
 
         transaction_data = {
@@ -323,29 +354,24 @@ def delete_transaction(transaction_id):
     flash('Transaction deleted successfully.', 'success')
     return redirect(url_for('transactions'))
 
-# Goals routes
 @app.route('/goals')
 @login_required
 def goals():
     page = int(request.args.get('page', 1))
-    per_page = 5  # You can adjust this as needed
+    per_page = 5
     skip = (page - 1) * per_page
     total_goals = mongo.db.goals.count_documents({'user_id': current_user.id})
-    goals = list(mongo.db.goals.find({'user_id': current_user.id})
-                .sort('target_date', 1)
-                .skip(skip)
-                .limit(per_page))
-
-    # Calculate monthly summary for progress calculation
+    goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page)
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
 
-    # Add progress to each goal
-    for goal in goals:
-        goal['progress'] = Goal.calculate_goal_progress(goal, monthly_summary)
+    # Build list of (GoalInDB model, progress_dict) tuples for template
+    goals_with_progress = [
+        (gm, Goal.calculate_goal_progress(gm, monthly_summary)) for gm in goal_models
+    ]
 
     total_pages = (total_goals + per_page - 1) // per_page
 
-    return render_template('goals.html', goals=goals, page=page, total_pages=total_pages)
+    return render_template('goals.html', goals=goals_with_progress, page=page, total_pages=total_pages)
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -392,15 +418,25 @@ def profile():
 @app.route('/goals/<goal_id>/complete', methods=['POST'])
 @login_required
 def complete_goal(goal_id):
-    Goal.mark_as_completed(current_user.id, ObjectId(goal_id), mongo.db)
-    flash('Goal marked as completed.', 'success')
+    update_data = GoalUpdate(
+        is_completed=True,
+        completed_date=now_utc()
+    )
+    goal = Goal.update(goal_id, current_user.id, update_data, mongo.db)
+    if goal:
+        flash('Goal marked as completed.', 'success')
+    else:
+        flash('Goal not found.', 'danger')
     return redirect(url_for('goals'))
 
 @app.route('/goals/<goal_id>/delete', methods=['POST'])
 @login_required
 def delete_goal(goal_id):
-    Goal.delete_goal(current_user.id, ObjectId(goal_id), mongo.db)
-    flash('Goal deleted successfully.', 'success')
+    deleted = Goal.delete(goal_id, current_user.id, mongo.db)
+    if deleted:
+        flash('Goal deleted successfully.', 'success')
+    else:
+        flash('Goal not found.', 'danger')
     return redirect(url_for('goals'))
 
 # Analysis routes
@@ -408,10 +444,13 @@ def delete_goal(goal_id):
 @login_required
 def analysis():
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-    goals = Goal.get_active_goals(current_user.id, mongo.db)
-
-    for goal in goals:
-        goal['progress'] = Goal.calculate_goal_progress(goal, monthly_summary)
+    goal_models = Goal.get_active_goals(current_user.id, mongo.db)
+    goals = []
+    for gm in goal_models:
+        progress = Goal.calculate_goal_progress(gm, monthly_summary)
+        gd = gm.model_dump(by_alias=True)
+        gd['progress'] = progress
+        goals.append(gd)
 
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
 

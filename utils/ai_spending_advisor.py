@@ -4,6 +4,7 @@ from bson import ObjectId
 from flask_pymongo.wrappers import Database
 
 from models.user import User
+from models.goal import Goal, GoalInDB
 from utils.ai_engine import FinancialBrain
 from utils.ai_helper import get_purchase_advice
 
@@ -25,9 +26,11 @@ class SpendingAdvisor:
 
         user_obj = User(user_doc, self.db)
         weekly_spending = user_obj.get_this_duration_details(duration_type='week')
-        balance = self._calculate_balance(user_id)
         last_3_months_transactions = user_obj.get_recent_income_expense(months=3)
+        lifetime_summary = user_obj.get_lifetime_transaction_summary()
+        balance = lifetime_summary.get('current_balance', 0)
         usual_income_date = user_doc.get('usual_income_date')
+        active_goals: list[GoalInDB] = Goal.get_active_goals(user_id, self.db)
 
         return get_purchase_advice(
             user=user_obj,
@@ -36,11 +39,6 @@ class SpendingAdvisor:
             balance=balance,
             last_3_months_summary=last_3_months_transactions,
             usual_income_date=usual_income_date,
-            lifetime_summary=user_obj.get_lifetime_transaction_summary()
+            lifetime_summary=lifetime_summary,
+            active_goals=active_goals
         )
-
-    def _calculate_balance(self, user_id):
-        transactions = list(self.db.transactions.find({'user_id': user_id}))
-        income = sum(t['amount'] for t in transactions if t['type'] == 'income')
-        expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
-        return round(income - expenses, 2)

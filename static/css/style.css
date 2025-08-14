@@ -434,3 +434,25 @@ body.dark-mode .nav-link:hover,
     color: var(--nav-hover-color) !important;
     background-color: var(--nav-hover-bg) !important;
 }
+
+/* H1-6 */
+body.dark-mode h1,
+[data-theme="dark"] h1,
+body.dark-mode h2,
+[data-theme="dark"] h2,
+body.dark-mode h3,
+[data-theme="dark"] h3,
+body.dark-mode h4,
+[data-theme="dark"] h4,
+body.dark-mode h5,
+[data-theme="dark"] h5,
+body.dark-mode h6,
+[data-theme="dark"] h6 {
+    color: var(--text-primary) !important;
+}
+
+/* bg-light by bootstrap */
+body.dark-mode .bg-light,
+[data-theme="dark"] .bg-light {
+    background-color: var(--bg-secondary) !important;
+}

@@ -1,5 +1,5 @@
 from bson import ObjectId
-from datetime import datetime
+from utils.finance_calculator import get_transactions
 
 class Transaction:
     @staticmethod
@@ -9,16 +9,20 @@ class Transaction:
     @staticmethod
     def get_user_transactions(user_id, db, page=1, per_page=10):
         skip = (page - 1) * per_page
-        return list(db.transactions.find({'user_id': user_id})
-                         .sort([('date', -1), ('created_at', -1)])
-                         .skip(skip)
-                         .limit(per_page))
+        return get_transactions(
+            user_id, db,
+            sort=[('date', -1), ('created_at', -1)],
+            skip=skip,
+            limit=per_page
+        )
     
     @staticmethod
     def get_recent_transactions(user_id, db, limit=5):
-        return list(db.transactions.find({'user_id': user_id})
-                         .sort([('date', -1), ('created_at', -1)])
-                         .limit(limit))
+        return get_transactions(
+            user_id, db,
+            sort=[('date', -1), ('created_at', -1)],
+            limit=limit
+        )
     
     @staticmethod
     def count_user_transactions(user_id, db):

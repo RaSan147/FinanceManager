@@ -7,3 +7,4 @@ flask-login
 Flask-Limiter[mongodb]
 dnspython
 gunicorn
+pydantic
