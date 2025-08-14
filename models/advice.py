@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 import json
 from collections import defaultdict
@@ -12,7 +12,7 @@ class PurchaseAdvice:
             'advice': advice,
             'category': request_data.get('category', 'other'),
             'amount': float(request_data.get('amount', request_data.get('amount', 0))),
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
             'is_archived': False,
             'tags': request_data.get('tags', []),
             'user_action': 'unknown'  # can be 'followed', 'ignored', or 'unknown'
@@ -39,7 +39,7 @@ class PurchaseAdvice:
     @staticmethod
     def get_stats(user_id, db):
         # 30-day spending by category
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         pipeline = [
             {'$match': {
                 'user_id': user_id,
@@ -68,7 +68,7 @@ class PurchaseAdvice:
             {'$match': {
                 'user_id': user_id,
                 'advice.recommendation': 'no',
-                'created_at': {'$gte': datetime.utcnow() - timedelta(days=30)}
+                'created_at': {'$gte': datetime.now(timezone.utc) - timedelta(days=30)}
             }},
             {'$group': {
                 '_id': None,
@@ -98,7 +98,7 @@ class PurchaseAdvice:
         # Archive entries older than 30 days
         old_entries = list(db.purchase_advice.find({
             'user_id': user_id,
-            'created_at': {'$lt': datetime.utcnow() - timedelta(days=30)},
+            'created_at': {'$lt': datetime.now(timezone.utc) - timedelta(days=30)},
             'is_archived': False
         }))
 
@@ -115,6 +115,6 @@ class PurchaseAdvice:
                 )
         else:
             db.purchase_advice.update_many(
-                {'user_id': user_id, 'created_at': {'$lt': datetime.utcnow() - timedelta(days=30)}},
+                {'user_id': user_id, 'created_at': {'$lt': datetime.now(timezone.utc) - timedelta(days=30)}},
                 {'$set': {'is_archived': True}}
             )

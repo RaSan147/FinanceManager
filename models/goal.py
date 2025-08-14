@@ -1,7 +1,8 @@
 import json
 import traceback
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from utils.timezone_utils import now_utc, ensure_utc
 import asyncio
 import logging
 import threading
@@ -9,7 +10,8 @@ import threading
 from flask_pymongo.wrappers import Database
 
 from models.user import User
-from utils.ai_priority_engine import FinancialBrain
+from utils.ai_engine import FinancialBrain
+from utils.ai_helper import run_goal_priority_analysis
 from utils.finance_calculator import calculate_lifetime_transaction_summary, get_N_month_income_expense
 # Configure basic logging for the module
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,7 +75,9 @@ class Goal:
                 "user_expected_monthly_income_date": user_obj.usual_income_date,
                 "user_balance": balance_info.get('current_balance', 0) if isinstance(balance_info, dict) else balance_info,
                 "monthly_history": monthly_history,
-                "today": datetime.utcnow().isoformat(),
+                "user_lifetime_summary": user_obj.get_lifetime_transaction_summary(),
+                "user_last_3_month_summary": user_obj.get_recent_income_expense(months=3),
+                "today": now_utc().isoformat(),
                 "existing_goals": list(db.goals.find({
                     'user_id': user_id_str,
                     'is_completed': False,
@@ -84,7 +88,7 @@ class Goal:
             # print("\n=== DEBUG: Gemini Input Context ===")
             # print(json.dumps(context, indent=2, default=str))
             
-            ai_analysis = await ai_engine.calculate_priority(context)
+            ai_analysis = await run_goal_priority_analysis(context, ai_engine)
             
             # print("\n=== DEBUG: Gemini Output ===")
             # print(json.dumps(ai_analysis, indent=2))
@@ -100,7 +104,7 @@ class Goal:
                         'suggestions': ai_analysis.get('suggested_actions')
                     },
                     'ai_plan': ai_analysis.get('summary'),
-                    "last_updated": datetime.utcnow()
+                    "last_updated": now_utc()
                 }}
             )
             # print("=== AI Enhancement Completed Successfully ===")
@@ -133,7 +137,7 @@ class Goal:
         """Marks a specific goal as completed for a user."""
         db.goals.update_one(
             {'_id': goal_id, 'user_id': user_id},
-            {'$set': {'is_completed': True, 'completed_date': datetime.utcnow()}}
+            {'$set': {'is_completed': True, 'completed_date': now_utc()}}
         )
     
     @staticmethod
@@ -143,8 +147,8 @@ class Goal:
 
     @staticmethod
     def calculate_goal_progress(goal_data, monthly_summary):
-        target_date = goal_data['target_date']
-        now = datetime.utcnow()
+        target_date = ensure_utc(goal_data['target_date'])
+        now = now_utc()
 
         total_saved = goal_data.get('current_amount', 0)  # Must track real saved total
         remaining_months = (target_date - now).days / 30

@@ -1,5 +1,6 @@
 # finance_utils.py
-from datetime import datetime
+from datetime import datetime, timezone
+from utils.timezone_utils import now_utc, ensure_utc
 from collections import defaultdict
 from typing import Any
 
@@ -41,17 +42,17 @@ def calculate_summary(user_id, db, start_date, end_date):
 
 def calculate_monthly_summary(user_id, db, year=None, month=None):
     """Wrapper for calculating the current or specified month's summary."""
-    today = datetime.utcnow()
+    today = now_utc()
     if year is None:
         year = today.year
     if month is None:
         month = today.month
 
-    start_date = datetime(year, month, 1)
+    start_date = ensure_utc(datetime(year, month, 1))
     if month == 12:
-        end_date = datetime(year + 1, 1, 1)
+        end_date = ensure_utc(datetime(year + 1, 1, 1))
     else:
-        end_date = datetime(year, month + 1, 1)
+        end_date = ensure_utc(datetime(year, month + 1, 1))
 
     summary = calculate_summary(user_id, db, start_date, end_date)
     summary['month'] = start_date.strftime('%B %Y')
@@ -60,7 +61,7 @@ def calculate_monthly_summary(user_id, db, year=None, month=None):
 
 def get_N_month_income_expense(user_id, db, n=3) -> list[dict[str, Any]]:
     """Get income and expenses for the last N months."""
-    now = datetime.utcnow()
+    now = now_utc()
     results = []
     for i in range(n):
         year = now.year

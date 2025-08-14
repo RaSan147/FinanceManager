@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_pymongo import PyMongo
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 import json
 from models.user import User
@@ -20,6 +20,8 @@ from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
 from utils.tools import is_allowed_email
 from config import Config
+# Added centralized timezone helpers
+from utils.timezone_utils import now_utc, ensure_utc
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -54,7 +56,8 @@ login_manager.login_view = 'login'
 
 @app.context_processor
 def inject_now():
-    return {'now': datetime.utcnow()}
+    # Always provide UTC now (aware)
+    return {'now': now_utc()}
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -73,7 +76,7 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(o, ObjectId):
             return str(o)
         if isinstance(o, datetime):
-            return o.isoformat()
+            return ensure_utc(o).isoformat()
         return json.JSONEncoder.default(self, o)
 
 app.json_encoder = JSONEncoder
@@ -106,14 +109,14 @@ def index():
     days_until_income = None
     # Calculate days until usual income date (if set)
     if user.get('usual_income_date'):
-        today = datetime.utcnow().day
+        today = now_utc().day
         income_day = int(user['usual_income_date'])
         if today <= income_day:
             days_until_income = income_day - today
         else:
             # Next month
             from calendar import monthrange
-            now = datetime.utcnow()
+            now = now_utc()
             last_day = monthrange(now.year, now.month)[1]
             days_until_income = (last_day - today) + income_day
 
@@ -189,7 +192,7 @@ def register():
             'email': email,
             'password': hashed_password,
             'name': name,
-            'created_at': datetime.utcnow()
+            'created_at': now_utc()
         }
         
         mongo.db.users.insert_one(user_data)
@@ -205,7 +208,7 @@ def logout():
     return redirect(url_for('login'))
 
 # Add to imports
-from utils.ai_priority_engine import FinancialBrain
+from utils.ai_engine import FinancialBrain
 from utils.ai_spending_advisor import SpendingAdvisor
 
 # Initialize AI components
@@ -231,11 +234,11 @@ def add_goal():
         'type': request.form.get('goal_type'),
         'target_amount': float(request.form.get('target_amount')),
         'description': request.form.get('description'),
-        'target_date': datetime.strptime(
+        'target_date': ensure_utc(datetime.strptime(
             request.form.get('target_date'), 
             '%Y-%m-%d'
-        ),
-        'created_at': datetime.utcnow(),
+        )),
+        'created_at': now_utc(),
         'is_completed': False
     }
 
@@ -293,7 +296,7 @@ def add_transaction():
         try:
             date = datetime.strptime(date_str, '%Y-%m-%d')
         except ValueError:
-            date = datetime.utcnow()
+            date = datetime.now(timezone.utc)
 
         transaction_data = {
             'user_id': current_user.id,
@@ -303,7 +306,7 @@ def add_transaction():
             'description': description.strip(),
             'date': date,
             'related_person': related_person,
-            'created_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc)
         }
 
         Transaction.create_transaction(transaction_data, mongo.db)
@@ -543,12 +546,12 @@ def get_visualization_data():
         'followed_count': mongo.db.purchase_advice.count_documents({
             'user_id': current_user.id,
             'user_action': 'followed',
-            'created_at': {'$gte': datetime.utcnow() - timedelta(days=30)}
+            'created_at': {'$gte': datetime.now(timezone.utc) - timedelta(days=30)}
         }),
         'ignored_count': mongo.db.purchase_advice.count_documents({
             'user_id': current_user.id,
             'user_action': 'ignored',
-            'created_at': {'$gte': datetime.utcnow() - timedelta(days=30)}
+            'created_at': {'$gte': datetime.now(timezone.utc) - timedelta(days=30)}
         })
     }
 
@@ -558,7 +561,7 @@ def get_visualization_data():
     # Trend data (weekly spending)
     trend = []
     for i in range(4):
-        week_start = datetime.utcnow() - timedelta(weeks=(4-i))
+        week_start = datetime.now(timezone.utc) - timedelta(weeks=(4-i))
         week_end = week_start + timedelta(weeks=1)
         week_data = list(mongo.db.purchase_advice.aggregate([{
             '$match': {

@@ -127,11 +127,17 @@
     
     <div class="col-md-4">
         <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h4 class="card-title mb-0">AI Financial Advisor</h4>
-				<form action="{{ url_for('run_ai_analysis') }}" method="post">
-					<button type="submit" class="btn btn-primary">Generate</button>
-				</form>
+            <div class="card-header bg-primary text-white py-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <h4 class="card-title mb-0">AI Financial Advisor</h4>
+                    <form action="{{ url_for('run_ai_analysis') }}" method="post" onsubmit="return startAiGeneration(this);" class="m-0">
+                        <button id="aiGenBtn" type="submit" class="ai-gen-btn btn btn-warning btn-sm fw-semibold position-relative px-3 d-inline-flex align-items-center gap-1 w-100 w-sm-auto">
+                            <span id="aiGenSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <i class="bi bi-cpu"></i>
+                            <span class="btn-text">Generate</span>
+                        </button>
+                    </form>
+                </div>
             </div>
             <div class="card-body">
                 {% if ai_analysis %}
@@ -160,4 +166,51 @@
     content: "";
 }
 </style>
+<style>
+/* Enhanced Generate button visibility */
+#aiGenBtn.ai-gen-btn {
+    letter-spacing:.3px;
+    font-size:.8rem;
+    box-shadow:0 2px 4px rgba(0,0,0,.15),0 0 0 2px rgba(255,255,255,.15) inset;
+    transition:.18s ease-in-out;
+    min-height:34px;
+}
+#aiGenBtn.ai-gen-btn:hover:not(:disabled){
+    filter:brightness(1.05);
+    transform:translateY(-1px);
+    box-shadow:0 4px 10px -2px rgba(0,0,0,.25),0 0 0 2px rgba(255,255,255,.2) inset;
+}
+#aiGenBtn.ai-gen-btn:active{transform:translateY(0);}
+#aiGenBtn.ai-gen-btn:disabled{opacity:.8;cursor:wait;}
+/* Dark mode adjustments */
+.dark-mode #aiGenBtn.ai-gen-btn {
+    background:linear-gradient(135deg,#ffb347,#ff9800,#ffca28);
+    color:#1b1f24;
+    border:1px solid rgba(255,193,7,.55);
+    box-shadow:0 2px 6px -1px rgba(0,0,0,.6),0 0 0 1px #ffca28 inset;
+}
+.dark-mode #aiGenBtn.ai-gen-btn:hover:not(:disabled){
+    box-shadow:0 4px 12px -2px rgba(0,0,0,.75),0 0 0 1px #ffe082 inset;
+}
+/* Mobile full-width */
+@media (max-width:576px){
+  #aiGenBtn.ai-gen-btn {font-size:.9rem;min-height:42px;}
+  #aiGenBtn.ai-gen-btn .bi {font-size:1rem;}
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function startAiGeneration(form){
+    const btn = form.querySelector('#aiGenBtn');
+    const spinner = form.querySelector('#aiGenSpinner');
+    if(btn.dataset.loading==='1') return false; // prevent double submit
+    btn.dataset.loading='1';
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+    btn.querySelector('.btn-text').textContent = 'Generating...';
+    return true; // allow submit
+}
+</script>
 {% endblock %}
