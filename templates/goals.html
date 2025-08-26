@@ -24,7 +24,8 @@
                                 <h5 class="mb-1">{{ goal.description }}</h5>
                                 <div class="mb-1">
                                     <span class="badge bg-{{ 'success' if goal.is_completed else 'primary' }}">{{ goal.type|capitalize }}</span>
-                                    <span class="text-muted ms-2">Target: ${{ '%.2f'|format(goal.target_amount) }}</span>
+                                    {% set gsym = currency_symbols.get(goal.currency|default(currency_code), currency_symbol) %}
+                                    <span class="text-muted ms-2">Target: {{ gsym }}{{ '{:,.2f}'.format(goal.target_amount) }}</span>
                                 </div>
                                 <small class="text-muted">Due: {{ goal.target_date.strftime('%b %d, %Y') }}</small>
                                 {% if progress.overdue_months and progress.overdue_months > 0 %}
@@ -39,17 +40,23 @@
                                     <div class="progress-bar {{ bar_class }}" role="progressbar" style="width: {{ percent_width }}%" aria-valuenow="{{ percent_width }}" aria-valuemin="0" aria-valuemax="100" title="{{ percent > 100 and 'Target surpassed' or '' }}">{{ '%.1f'|format(percent) }}%</div>
                                 </div>
                                 <div class="small text-muted">
-                                    <div>Saved: ${{ '%.2f'|format(goal.current_amount or 0) }} / ${{ '%.2f'|format(goal.target_amount) }}</div>
+                                    {% set shown_saved = progress.current_amount if progress.current_amount is not none else (goal.current_amount or 0) %}
+                                    <div>Saved: {{ gsym }}{{ '{:,.2f}'.format(shown_saved) }} / {{ gsym }}{{ '{:,.2f}'.format(goal.target_amount) }}
+                                        {% if goal.current_amount and shown_saved != goal.current_amount %}
+                                            <span class="ms-1 text-muted" title="Lifetime-based allocation">(alloc)</span>
+                                        {% endif %}
+                                    </div>
                                     {% if progress.remaining_days is defined %}
                                         <div>Time Left: {{ progress.remaining_days }} days ({{ '%.1f'|format(progress.remaining_months) }} mo)</div>
                                     {% endif %}
                                     {% if progress.required_monthly %}
                                         <div>
-                                            Req/mo: ${{ '%.2f'|format(progress.required_monthly) }}
+                                            {% set psym = currency_symbols.get(progress.currency|default(goal.currency|default(currency_code)), gsym) %}
+                                            Req/mo: {{ psym }}{{ '{:,.2f}'.format(progress.required_monthly) }}
                                             {% if progress.current_monthly is defined %}
-                                                | Current/mo: ${{ '%.2f'|format(progress.current_monthly) }}
+                                                | Current/mo: {{ psym }}{{ '{:,.2f}'.format(progress.current_monthly) }}
                                                 {% set diff = (progress.required_monthly - progress.current_monthly) %}
-                                                <span class="ms-1 {{ 'text-success' if diff <= 0 else 'text-danger' }}">{{ diff <= 0 and 'On Track' or ('Need +' ~ '%.2f'|format(diff)) }}</span>
+                                                <span class="ms-1 {{ 'text-success' if diff <= 0 else 'text-danger' }}">{{ diff <= 0 and 'On Track' or ('Need +' ~ '{:,.2f}'.format(diff)) }}</span>
                                             {% endif %}
                                         </div>
                                     {% endif %}
@@ -145,9 +152,14 @@
                     <div class="mb-3">
                         <label for="target_amount" class="form-label">Target Amount</label>
                         <div class="input-group">
-                            <span class="input-group-text">$</span>
+                            <span class="input-group-text" id="goal-amount-prefix">{{ currency_symbol }}</span>
                             <input type="number" step="0.01" class="form-control" 
                                    id="target_amount" name="target_amount" required>
+                            <select class="form-select" id="target_currency" name="target_currency" style="max-width:120px">
+                                {% for c in supported_currencies %}
+                                <option value="{{ c }}" data-symbol="{{ currency_symbols[c] }}" {% if c == currency_code %}selected{% endif %}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                     
@@ -170,4 +182,18 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sel = document.getElementById('target_currency');
+    const prefix = document.getElementById('goal-amount-prefix');
+    if (sel && prefix) {
+        const update = () => { const sym = sel.options[sel.selectedIndex]?.dataset?.symbol || '{{ currency_symbol }}'; prefix.textContent = sym; };
+        sel.addEventListener('change', update);
+        update();
+    }
+});
+</script>
 {% endblock %}

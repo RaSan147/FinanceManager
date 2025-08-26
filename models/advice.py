@@ -62,7 +62,7 @@ class PurchaseAdvice:
             'user_id': user_id,
             'is_completed': False
         }))
-        
+
         # Calculate total recommended savings
         pipeline = [
             {'$match': {
@@ -76,23 +76,31 @@ class PurchaseAdvice:
             }}
         ]
         saved_result = list(db.purchase_advice.aggregate(pipeline))
-        total_saved = saved_result[0]['total_saved'] if saved_result else 0
-        
+        total_saved = saved_result[0]['total_saved'] if saved_result else 0.0
+
         # Calculate potential impact on goals
         for goal in goals:
-            if goal['type'] == 'savings':
-                goal['potential_progress'] = min(
-                    (total_saved / goal['target_amount']) * 100, 
-                    100
-                )
-        
+            try:
+                gtype = goal.get('type')
+                target_amount = float(goal.get('target_amount') or 0) if goal.get('target_amount') is not None else 0.0
+                # Default potential_progress to 0 for non-savings or missing target
+                if gtype == 'savings' and target_amount > 0:
+                    progress = (float(total_saved) / target_amount) * 100.0
+                    # clamp to [0, 100]
+                    goal['potential_progress'] = max(0.0, min(100.0, progress))
+                else:
+                    goal['potential_progress'] = 0.0
+                # Normalize target_amount to numeric for client display
+                goal['target_amount'] = target_amount
+            except Exception:
+                goal['potential_progress'] = 0.0
+
         return {
             'goals': goals,
             'total_saved': total_saved,
             'timeframe': '30 days'
         }
 
-	
     @staticmethod
     async def archive_old_entries(user_id, db, pastebin_client=None):
         # Archive entries older than 30 days

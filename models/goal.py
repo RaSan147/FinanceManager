@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Union
 from pydantic import BaseModel, Field, field_validator
 from utils.timezone_utils import now_utc, ensure_utc
+from utils.finance_calculator import calculate_lifetime_transaction_summary
 import asyncio
 import threading
 import traceback
@@ -16,6 +17,7 @@ class GoalBase(BaseModel):
     user_id: str
     type: str  # 'savings' or 'purchase'
     target_amount: float
+    currency: str  # currency code for target/current amounts
     description: str
     target_date: datetime
     current_amount: float = 0.0
@@ -92,27 +94,94 @@ class Goal:
         return [GoalInDB(**goal) for goal in goals]
 
     @staticmethod
-    def calculate_goal_progress(goal: GoalInDB, monthly_summary: Dict[str, Any]) -> Dict[str, Any]:
+    def calculate_goal_progress(goal: GoalInDB, monthly_summary: Dict[str, Any], override_current_amount: float | None = None, base_currency_code: str = 'USD') -> Dict[str, Any]:
         target_date = ensure_utc(goal.target_date)
         now = now_utc()
         remaining_days = (target_date - now).days
         remaining_months = remaining_days / 30
         
+        # Normalize currencies
+        goal_currency = goal.currency
+        try:
+            from utils.currency import convert_amount as _convert
+        except Exception:
+            def _convert(amount: float, from_code: str, to_code: str) -> float:
+                return amount
+        
+        # Determine current amount in goal currency
+        if override_current_amount is not None:
+            # override is assumed to be in base currency; convert to goal currency
+            current_amt_goal = _convert(float(override_current_amount), base_currency_code, goal_currency)
+        else:
+            # stored current_amount assumed to be in goal currency already
+            current_amt_goal = float(getattr(goal, 'current_amount', 0.0) or 0.0)
+        
         progress_data = {
-            "current_amount": goal.current_amount,
+            "current_amount": current_amt_goal,
             "target_amount": goal.target_amount,
-            "progress_percent": (goal.current_amount / goal.target_amount) * 100 if goal.target_amount else 0,
+            "progress_percent": round((
+                ((current_amt_goal) / goal.target_amount) * 100), 2
+            ) if goal.target_amount else 0,
             "remaining_days": remaining_days,
             "remaining_months": remaining_months
         }
         
         if goal.type == "savings":
             progress_data["required_monthly"] = (
-                (goal.target_amount - goal.current_amount) / max(remaining_months, 1)
+                (goal.target_amount - progress_data["current_amount"]) / max(remaining_months, 1)
             )
-            progress_data["current_monthly"] = monthly_summary.get("savings", 0)
+            # monthly_summary values are in base currency; convert to goal currency for display
+            monthly_savings_base = float(monthly_summary.get("savings", 0) or 0)
+            progress_data["current_monthly"] = _convert(monthly_savings_base, base_currency_code, goal_currency)
+            progress_data["currency"] = goal_currency
         
         return progress_data
+
+    @staticmethod
+    def compute_allocations(user_id: str, db, *, sort_by: str = 'created_at') -> Dict[str, float]:
+        """Allocate lifetime current balance across active goals in a simple FIFO manner.
+
+        Algorithm:
+        - Pool = max(lifetime current_balance, 0)
+        - Sort active (not completed) goals by sort_by ascending
+        - For each goal: allocated = min(pool, goal.target_amount); pool -= allocated
+        - Return mapping of goal_id -> allocated amount
+
+        Note: This is a "hotwire" approach and ignores per-goal contributions.
+        """
+        # Get lifetime current balance as savings pool
+        lifetime = calculate_lifetime_transaction_summary(user_id, db)
+        pool = max(float(lifetime.get('current_balance', 0) or 0), 0.0)
+        # Determine user's base currency for conversions
+        user_doc = db.users.find_one({'_id': ObjectId(user_id)})
+        base_ccy = (user_doc or {}).get('default_currency', 'USD').upper()
+        try:
+            from utils.currency import convert_amount as _convert
+        except Exception:
+            def _convert(amount: float, from_code: str, to_code: str) -> float:
+                return amount
+
+        # Fetch active goals
+        goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False})
+        # Sort in Python to avoid index requirements
+        goals_list = list(goals_cursor)
+        goals_list.sort(key=lambda g: g.get(sort_by) or g.get('created_at') or now_utc())
+
+        allocations: Dict[str, float] = {}
+        for g in goals_list:
+            gid = str(g.get('_id'))
+            target = float(g.get('target_amount', 0) or 0)
+            g_ccy = (g.get('currency') or base_ccy).upper()
+            # Convert target into base currency for allocation math
+            target_in_base = _convert(target, g_ccy, base_ccy)
+            if pool <= 0 or target <= 0:
+                allocations[gid] = 0.0
+                continue
+            amt = min(pool, target_in_base)
+            allocations[gid] = round(amt, 2)  # allocation stored in base currency
+            pool = round(pool - amt, 2)
+
+        return allocations
 
     # -------- AI Enhancement Methods (reintroduced & adapted) --------
     @staticmethod

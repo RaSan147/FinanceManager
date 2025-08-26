@@ -7,7 +7,7 @@
     <div class="col-md-8">
 <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0">Monthly Summary - {{ summary.month }}</h5>
+                <h5 class="card-title mb-0">Monthly Summary - {{ summary.month }} ({{ currency_code }})</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
@@ -15,7 +15,7 @@
                         <div class="card bg-success bg-opacity-10 mb-3">
                             <div class="card-body">
                                 <h6 class="card-subtitle mb-2">Income</h6>
-                                <h4 class="card-text text-success">${{ "%.2f"|format(summary.total_income) }}</h4>
+                                <h4 class="card-text text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -23,7 +23,7 @@
                         <div class="card bg-danger bg-opacity-10 mb-3">
                             <div class="card-body">
                                 <h6 class="card-subtitle mb-2">Expenses</h6>
-                                <h4 class="card-text text-danger">${{ "%.2f"|format(summary.total_expenses) }}</h4>
+                                <h4 class="card-text text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -31,7 +31,7 @@
                         <div class="card bg-info bg-opacity-10 mb-3">
                             <div class="card-body">
                                 <h6 class="card-subtitle mb-2">Savings</h6>
-                                <h4 class="card-text text-info">${{ "%.2f"|format(summary.savings) }}</h4>
+                                <h4 class="card-text text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -49,7 +49,7 @@
                         <div class="card bg-success bg-opacity-10 mb-3">
                             <div class="card-body">
                                 <h6 class="card-subtitle mb-2">Total Income</h6>
-                                <h4 class="card-text text-success">${{ "{:,.2f}".format(balance.total_income) }}</h4>
+                                <h4 class="card-text text-success">{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_income) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -57,7 +57,7 @@
                         <div class="card bg-danger bg-opacity-10 mb-3">
                             <div class="card-body">
                                 <h6 class="card-subtitle mb-2">Total Expenses</h6>
-                                <h4 class="card-text text-danger">${{ "{:,.2f}".format(balance.total_expenses) }}</h4>
+                                <h4 class="card-text text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_expenses) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -65,7 +65,7 @@
                         <div class="card bg-info bg-opacity-10 mb-3">
                             <div class="card-body">
                                 <h6 class="card-subtitle mb-2">Current Balance</h6>
-                                <h4 class="card-text text-info">${{ "{:,.2f}".format(balance.current_balance) }}</h4>
+                                <h4 class="card-text text-info">{{ currency_symbol }}{{ "{:,.2f}".format(balance.current_balance) }}</h4>
                             </div>
                         </div>
                     </div>
@@ -102,7 +102,7 @@
                                 <td>{{ t.description }}</td>
                                 <td>{{ t.category }}</td>
                                 <td class="{{ 'text-success' if t.type == 'income' else 'text-danger' }}">
-                                    {{ '+' if t.type == 'income' else '-' }}${{ "%.2f"|format(t.amount) }}
+                                    {{ '+' if t.type == 'income' else '-' }}{{ currency_symbol }}{{ "{:,.2f}".format(t.amount) }}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -132,11 +132,12 @@
             </div>
             <div class="card-body">
                 {% if goals %}
-                    {% for goal in goals %}
+            {% for goal in goals %}
                     <div class="mb-3">
                         <h6>{{ goal.description }}</h6>
                         <div class="d-flex justify-content-between mb-1">
-                            <small>Target: ${{ "%.2f"|format(goal.target_amount) }}</small>
+                {% set gsym = currency_symbols.get(goal.currency|default(currency_code), currency_symbol) %}
+                <small>Target: {{ gsym }}{{ "{:,.2f}".format(goal.target_amount) }}</small>
                             <small>{{ goal.target_date.strftime('%b %d, %Y') }}</small>
                         </div>
                         <div class="progress">

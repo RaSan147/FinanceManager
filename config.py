@@ -18,3 +18,6 @@ class Config:
     # If set to '1' (or any truthy value below) will force showing full traceback
     # in custom error pages and JSON responses even when debug=False (production).
     SHOW_DETAILED_ERRORS = str(os.getenv('SHOW_DETAILED_ERRORS', '0')).lower() in {'1','true','yes','on'}
+
+    # Currency settings
+    DEFAULT_CURRENCY = os.getenv('DEFAULT_CURRENCY', 'USD').upper()

@@ -104,6 +104,8 @@ class FinancialBrain:
                 time.sleep(delay)
                 delay *= 2
 
+        return "(unreachable)"  # should not reach here
+
     async def _acall(self, prompt: str) -> str:
         model = self._ensure_model()
         if model.startswith("(no-client)"):
@@ -121,6 +123,8 @@ class FinancialBrain:
                     return f"AI analysis unavailable (error: {e})"
                 await asyncio.sleep(delay)
                 delay *= 2
+
+        return "(unreachable)"  # should not reach here
 
     # ----------------- Public high-level helpers -----------------
     def get_text(self, prompt: str) -> str:

@@ -69,6 +69,7 @@ def get_transactions(
     skip: int | None = None,
     limit: int | None = None,
     cache_id: str | None = None,
+    clean: bool = False
 ) -> list[Dict[str, Any]]:
     """Fetch transactions for a user (Mongo) OR from an in-memory cache session.
 
@@ -76,6 +77,13 @@ def get_transactions(
     performed in Python on the preloaded list to eliminate extra DB queries.
     The behavioral contract matches Mongo usage for common operations.
     """
+    def cleaner(transactions:List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove ID and UserID fields from transactions."""
+        for t in transactions:
+            t.pop('id', None)
+            t.pop('user_id', None)
+        return transactions
+
     cached = _get_cached_transactions(cache_id, user_id)
     if cached is not None:
         data = cached
@@ -102,7 +110,12 @@ def get_transactions(
             data = data[skip:]
         if limit:
             data = data[:limit]
-        return list(data)
+
+
+        data = list(data)
+        if clean:
+            data = cleaner(data)
+        return data
 
     # Fallback to Mongo query path
     query: Dict[str, Any] = {'user_id': user_id}
@@ -115,7 +128,12 @@ def get_transactions(
         cursor = cursor.skip(skip)
     if limit:
         cursor = cursor.limit(limit)
-    return list(cursor)
+
+    data = list(cursor)
+
+    if clean:
+        data = cleaner(data)
+    return data
 
 
 def calculate_summary(user_id, db, start_date: datetime, end_date: datetime, *, cache_id: str | None = None):
@@ -198,6 +216,7 @@ def calculate_monthly_summary(user_id, db, year=None, month=None, *, cache_id: s
 
     summary = calculate_summary(user_id, db, start_date, end_date, cache_id=cache_id)
     summary['month'] = start_date.strftime('%B %Y')
+    
     return summary
 
 

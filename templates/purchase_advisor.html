@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai_styles.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="row">
@@ -19,7 +23,16 @@
                         </div>
                         <div class="mb-3">
                             <label for="amount" class="form-label">Price</label>
-                            <input type="number" class="form-control" id="amount" name="amount" required min="0.01" step="0.01" placeholder="Enter price">
+                            <div class="input-group">
+                                <span class="input-group-text" id="amount-currency-prefix">{{ currency_symbol }}</span>
+                                <input type="number" class="form-control" id="amount" name="amount" required min="0.01" step="0.01" placeholder="Enter price">
+                                <select class="form-select" id="currency" name="currency" style="max-width: 9rem">
+                                    {% for code in supported_currencies %}
+                                        <option value="{{ code }}" data-symbol="{{ currency_symbols[code] }}" {% if code == currency_code %}selected{% endif %}>{{ code }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-text">Select the currency of the price.</div>
                             <div class="invalid-feedback">Please enter a valid price.</div>
                         </div>
                         <div class="mb-3">
@@ -120,8 +133,29 @@
 <!-- Include Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script src="{{ url_for('static', filename='js/purchase_advisor.js') }}"></script>
+<!-- Page-scoped config for JS -->
+<script>
+            window.defaultCurrency = "{{ currency_code }}";
+            window.currencySymbol = "{{ currency_symbol }}";
+    // Update the prefix when currency changes
+    document.addEventListener('DOMContentLoaded', function() {
+        const sel = document.getElementById('currency');
+        const prefix = document.getElementById('amount-currency-prefix');
+        if (sel && prefix) {
+                    const update = () => {
+                        const opt = sel.options[sel.selectedIndex];
+                        const sym = opt?.dataset?.symbol || window.currencySymbol || '$';
+                        prefix.textContent = sym;
+                    }
+            sel.addEventListener('change', update);
+            update();
+        }
+    });
+    </script>
+
+<!-- Load visualizer before the page controller so it's available -->
 <script src="{{ url_for('static', filename='js/advisor-visualization.js') }}"></script>
+<script src="{{ url_for('static', filename='js/purchase_advisor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/advisor-tagging.js') }}"></script>
 <script src="{{ url_for('static', filename='js/advisor-export.js') }}"></script>
 {% endblock %}

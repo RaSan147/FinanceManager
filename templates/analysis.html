@@ -7,7 +7,7 @@
     <div class="col-md-8">
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h4 class="card-title mb-0">Monthly Analysis - {{ summary.month }}</h4>
+                <h4 class="card-title mb-0">Monthly Analysis - {{ summary.month }} ({{ currency_code }})</h4>
             </div>
             <div class="card-body">
                 <div class="row mb-4">
@@ -15,7 +15,7 @@
                         <div class="card bg-success bg-opacity-10">
                             <div class="card-body text-center">
                                 <h6 class="card-subtitle mb-2">Income</h6>
-                                <h3 class="card-text text-success">${{ "%.2f"|format(summary.total_income) }}</h3>
+                                <h3 class="card-text text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h3>
                             </div>
                         </div>
                     </div>
@@ -23,7 +23,7 @@
                         <div class="card bg-danger bg-opacity-10">
                             <div class="card-body text-center">
                                 <h6 class="card-subtitle mb-2">Expenses</h6>
-                                <h3 class="card-text text-danger">${{ "%.2f"|format(summary.total_expenses) }}</h3>
+                                <h3 class="card-text text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h3>
                             </div>
                         </div>
                     </div>
@@ -31,7 +31,7 @@
                         <div class="card bg-info bg-opacity-10">
                             <div class="card-body text-center">
                                 <h6 class="card-subtitle mb-2">Savings</h6>
-                                <h3 class="card-text text-info">${{ "%.2f"|format(summary.savings) }}</h3>
+                                <h3 class="card-text text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h3>
                             </div>
                         </div>
                     </div>
@@ -53,7 +53,7 @@
                                     {% for category, amount in summary.income_categories.items() %}
                                     <tr>
                                         <td>{{ category|capitalize }}</td>
-                                        <td>${{ "%.2f"|format(amount) }}</td>
+                                        <td>{{ currency_symbol }}{{ "{:,.2f}".format(amount) }}</td>
                                         <td>{{ "%.1f"|format((amount / summary.total_income) * 100) }}%</td>
                                     </tr>
                                     {% endfor %}
@@ -76,7 +76,7 @@
                                     {% for category, amount in summary.expense_categories.items() %}
                                     <tr>
                                         <td>{{ category|capitalize }}</td>
-                                        <td>${{ "%.2f"|format(amount) }}</td>
+                                        <td>{{ currency_symbol }}{{ "{:,.2f}".format(amount) }}</td>
                                         <td>{{ "%.1f"|format((amount / summary.total_expenses) * 100) if summary.total_expenses > 0 else 0 }}%</td>
                                     </tr>
                                     {% endfor %}
@@ -99,7 +99,7 @@
                         <h5>{{ goal.description }}</h5>
                         <div class="d-flex justify-content-between mb-1">
                             <span>
-                                Progress: ${{ "%.2f"|format(goal.progress.current_amount) }} of ${{ "%.2f"|format(goal.progress.target_amount) }}
+                                Progress: {{ currency_symbol }}{{ "{:,.2f}".format(goal.progress.current_amount) }} of {{ currency_symbol }}{{ "{:,.2f}".format(goal.progress.target_amount) }}
                             </span>
                             <span>{{ goal.progress.progress_percent }}%</span>
                         </div>

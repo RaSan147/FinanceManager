@@ -19,7 +19,7 @@
                         <th>Date</th>
                         <th>Description</th>
                         <th>Category</th>
-                        <th>Amount</th>
+                        <th>Amount ({{ currency_code }})</th>
                         <th>Type</th>
                         <th>Actions</th>
                     </tr>
@@ -31,7 +31,7 @@
                         <td>{{ t.description }}</td>
                         <td>{{ t.category }}</td>
                         <td class="{{ 'text-success' if t.type == 'income' else 'text-danger' }}">
-                            {{ '+' if t.type == 'income' else '-' }}${{ "%.2f"|format(t.amount) }}
+                            {{ '+' if t.type == 'income' else '-' }}{{ currency_symbol }}{{ "{:,.2f}".format(t.amount) }}
                         </td>
                         <td>{{ t.type|capitalize }}</td>
                         <td>

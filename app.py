@@ -18,6 +18,7 @@ from models.transaction import Transaction
 from models.goal import Goal, GoalCreate, GoalUpdate, GoalInDB
 from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
+from utils.currency import get_currency_symbol, SUPPORTED_CURRENCIES, convert_amount
 from utils.tools import is_allowed_email
 from config import Config
 # Added centralized timezone helpers
@@ -53,11 +54,31 @@ bcrypt = Bcrypt(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'  # type: ignore[attr-defined]
+login_manager.login_message_category = 'warning'
 
 @app.context_processor
 def inject_now():
     # Always provide UTC now (aware)
     return {'now': now_utc()}
+
+@app.context_processor
+def inject_currency():
+    code = None
+    try:
+        if current_user and getattr(current_user, 'is_authenticated', False):
+            user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+            if user:
+                code = user.get('default_currency')
+    except Exception:
+        code = None
+    if not code:
+        code = app.config['DEFAULT_CURRENCY']
+    return {
+        'currency_code': code,
+        'currency_symbol': get_currency_symbol(code),
+        'supported_currencies': SUPPORTED_CURRENCIES,
+    'currency_symbols': {c: get_currency_symbol(c) for c in SUPPORTED_CURRENCIES},
+    }
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -94,6 +115,15 @@ def index():
     # Get active goals
 
     user_obj = User(user, mongo.db)
+    user_default_code = (user or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    # Backfill missing goal currency to current default to freeze existing goals
+    try:
+        mongo.db.goals.update_many(
+            {'user_id': current_user.id, 'currency': {'$exists': False}},
+            {'$set': {'currency': user_default_code}}
+        )
+    except Exception:
+        pass
     active_goal_models = Goal.get_active_goals(current_user.id, mongo.db)
     
     # Calculate current month summary (calendar-aware) via helper
@@ -102,12 +132,17 @@ def index():
     # Calculate complete financial picture
     full_balance = user_obj.get_lifetime_transaction_summary()
 
+    # Compute simple lifetime-based allocations across active goals
+    allocations = Goal.compute_allocations(current_user.id, mongo.db)
     # Convert models to dicts with progress for template compatibility
     active_goals = []
     for gm in active_goal_models:
-        progress = Goal.calculate_goal_progress(gm, monthly_summary)
+        alloc_amt = allocations.get(gm.id, None)
+        progress = Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)
         gd = gm.model_dump(by_alias=True)
         gd['progress'] = progress
+        if alloc_amt is not None:
+            gd['allocated_amount'] = alloc_amt
         active_goals.append(gd)
 
     days_until_income = None
@@ -196,7 +231,9 @@ def register():
             'email': email,
             'password': hashed_password,
             'name': name,
-            'created_at': now_utc()
+            'created_at': now_utc(),
+            'default_currency': app.config['DEFAULT_CURRENCY'],
+            'monthly_income_currency': app.config['DEFAULT_CURRENCY']
         }
         
         mongo.db.users.insert_one(user_data)
@@ -237,6 +274,7 @@ def get_prioritized_goals():
 def add_goal():
     goal_type = request.form.get('goal_type') or ''
     target_amount_raw = request.form.get('target_amount')
+    target_currency = request.form.get('target_currency')
     description_val = request.form.get('description') or ''
     target_date_str = request.form.get('target_date')
 
@@ -256,11 +294,17 @@ def add_goal():
         flash('Invalid target date format.', 'danger')
         return redirect(url_for('goals'))
 
+    # Keep goal amount in the input currency; store currency alongside
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    input_code = (target_currency or user_default_code).upper()
+
     # parsed_date guaranteed not None due to earlier try/except
     goal_data = GoalCreate(
         user_id=current_user.id,
         type=goal_type,
         target_amount=target_amount_val,  # type: ignore[arg-type]
+        currency=input_code,
         description=description_val,
         target_date=parsed_date  # type: ignore[arg-type]
     )
@@ -297,6 +341,7 @@ def transactions():
 def add_transaction():
     if request.method == 'POST':
         amount_raw = request.form.get('amount')
+        currency = request.form.get('currency')
         try:
             amount = float(amount_raw) if amount_raw is not None else None
         except (TypeError, ValueError):
@@ -329,9 +374,19 @@ def add_transaction():
         else:
             date = datetime.now(timezone.utc)
 
+        # Determine user's base/default currency
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+        input_code = (currency or user_default_code).upper()
+        # Convert amount to user's default currency for storage/analytics
+        converted_amount = convert_amount(amount, input_code, user_default_code)
+
         transaction_data = {
             'user_id': current_user.id,
-            'amount': amount,
+            'amount': converted_amount,
+            'amount_original': amount,
+            'currency': input_code,
+            'base_currency': user_default_code,
             'type': transaction_type,
             'category': category,
             'description': description.strip(),
@@ -363,11 +418,16 @@ def goals():
     total_goals = mongo.db.goals.count_documents({'user_id': current_user.id})
     goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page)
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = user_doc['default_currency']
+
+    allocations = Goal.compute_allocations(current_user.id, mongo.db)
 
     # Build list of (GoalInDB model, progress_dict) tuples for template
-    goals_with_progress = [
-        (gm, Goal.calculate_goal_progress(gm, monthly_summary)) for gm in goal_models
-    ]
+    goals_with_progress = []
+    for gm in goal_models:
+        alloc_amt = allocations.get(gm.id, None)
+        goals_with_progress.append((gm, Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)))
 
     total_pages = (total_goals + per_page - 1) // per_page
 
@@ -383,11 +443,20 @@ def profile():
         monthly_income = request.form.get('monthly_income')
         usual_income_date = request.form.get('usual_income_date')
         occupation = request.form.get('occupation')
+        default_currency = request.form.get('default_currency')
+        monthly_income_currency = request.form.get('monthly_income_currency')
 
         update_data = {}
         if monthly_income:
             try:
-                update_data['monthly_income'] = float(monthly_income)
+                mi_val = float(monthly_income)
+                # Determine target default currency
+                dc = (default_currency or user.get('default_currency')).upper()
+                mic = (monthly_income_currency or dc).upper()
+                # Always store monthly income in the user's default/base currency (dc)
+                update_data['monthly_income'] = convert_amount(mi_val, mic, dc)
+                # Track the currency of the stored monthly_income, not the input source
+                update_data['monthly_income_currency'] = dc
             except ValueError:
                 flash('Monthly income must be a number.', 'danger')
 
@@ -403,6 +472,34 @@ def profile():
 
         if occupation is not None:
             update_data['occupation'] = occupation.strip()
+
+        if default_currency:
+            new_dc = default_currency.upper()
+            old_dc = (user.get('default_currency') or app.config['DEFAULT_CURRENCY']).upper()
+            update_data['default_currency'] = new_dc
+            # If currency actually changes, migrate existing amounts
+            if new_dc != old_dc:
+                # Convert stored monthly_income if not explicitly provided above
+                if 'monthly_income' not in update_data and user.get('monthly_income') is not None:
+                    try:
+                        update_data['monthly_income'] = convert_amount(float(user['monthly_income']), old_dc, new_dc)
+                        update_data['monthly_income_currency'] = new_dc
+                    except Exception:
+                        pass
+                # Migrate all transactions to new base currency
+                try:
+                    cursor = mongo.db.transactions.find({'user_id': current_user.id})
+                    for tx in cursor:
+                        amt = float(tx.get('amount', 0))
+                        tx_base = (tx.get('base_currency') or old_dc).upper()
+                        new_amt = convert_amount(amt, tx_base, new_dc)
+                        mongo.db.transactions.update_one(
+                            {'_id': tx['_id']},
+                            {'$set': {'amount': new_amt, 'base_currency': new_dc}}
+                        )
+                except Exception:
+                    # Non-fatal; user can refresh to retry
+                    pass
 
         if update_data:
             mongo.db.users.update_one(
@@ -445,11 +542,17 @@ def delete_goal(goal_id):
 def analysis():
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
     goal_models = Goal.get_active_goals(current_user.id, mongo.db)
+    allocations = Goal.compute_allocations(current_user.id, mongo.db)
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
     goals = []
     for gm in goal_models:
-        progress = Goal.calculate_goal_progress(gm, monthly_summary)
+        alloc_amt = allocations.get(gm.id, None)
+        progress = Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)
         gd = gm.model_dump(by_alias=True)
         gd['progress'] = progress
+        if alloc_amt is not None:
+            gd['allocated_amount'] = alloc_amt
         goals.append(gd)
 
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
@@ -557,10 +660,19 @@ def get_purchase_advice():
             app.logger.error("User not authenticated.")
             return jsonify({"error": "User not authenticated."}), 401
 
+        # Determine user's base currency and convert amount
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(user_id)})
+        user_base_currency = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY']).upper()
+        input_currency = (data.get('currency') or user_base_currency).upper()
+        converted_amount = convert_amount(amount, input_currency, user_base_currency)
+
         # Prepare data for AI and DB
         item_data = {
             'description': data['description'],
-            'amount': amount,
+            'amount': converted_amount,  # amount in base currency for AI consistency
+            'amount_original': amount,
+            'currency': input_currency,
+            'base_currency': user_base_currency,
             'category': data.get('category'),
             'tags': data.get('tags', []),
             'urgency': data.get('urgency')
@@ -568,6 +680,12 @@ def get_purchase_advice():
 
         app.logger.info(f"Calling spending_advisor.evaluate_purchase for user {user_id} with item_data: {item_data}")
         advice = spending_advisor.evaluate_purchase(user_id, item_data)
+        # add echo of conversion context for client display
+        advice = {
+            **advice,
+            'amount_converted': converted_amount,
+            'base_currency': user_base_currency,
+        }
         inserted_id = PurchaseAdvice.save_advice(user_id, item_data, advice, mongo.db)
         app.logger.info(f"Advice saved with id: {inserted_id}")
         return jsonify(advice)
@@ -657,11 +775,17 @@ def get_advice_history():
         advice['_id'] = str(advice['_id'])
         if 'created_at' in advice:
             advice['created_at'] = advice['created_at'].isoformat()
-        if 'request' in advice and 'amount' in advice['request']:
-            try:
-                advice['request']['amount'] = float(advice['request']['amount'])
-            except Exception:
-                pass
+        if 'request' in advice:
+            if 'amount' in advice['request']:
+                try:
+                    advice['request']['amount'] = float(advice['request']['amount'])
+                except Exception:
+                    pass
+            if 'amount_original' in advice['request']:
+                try:
+                    advice['request']['amount_original'] = float(advice['request']['amount_original'])
+                except Exception:
+                    pass
 
     return jsonify({
         'items': advices,

@@ -1,12 +1,12 @@
 import json
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 from bson import ObjectId
 
 from models.user import User
 from models.goal import GoalInDB
 from utils.timezone_utils import now_utc
-from datetime import timedelta
+from datetime import datetime, timedelta
 from utils.finance_calculator import (
     create_cache_session,
     drop_cache_session,
@@ -62,22 +62,22 @@ def _analysis_prompt(monthly_summary, goals: List[GoalInDB], user: User) -> str:
     cache_id = None
     lifetime_summary = None
     year_summary = None
-    last_30_details = []
-    recent_3_month = []
+    last_30D_details = []
+    recent_3M_summary = []
     try:
         cache_id = create_cache_session(user.id, user.db)
         lifetime_summary = calculate_lifetime_transaction_summary(user.id, user.db, cache_id=cache_id)
         year_summary = calculate_period_summary(user.id, user.db, 365, cache_id=cache_id)  # rolling year
         end_now = now_utc()
         start_30 = end_now - timedelta(days=30)
-        last_30_details = get_transactions(user.id, user.db, start_30, end_now, cache_id=cache_id)[:10]
-        recent_3_month = get_N_month_income_expense(user.id, user.db, n=3, cache_id=cache_id)
+        last_30D_details = get_transactions(user.id, user.db, start_30, end_now, cache_id=cache_id, clean=True)
+        recent_3M_summary = get_N_month_income_expense(user.id, user.db, n=3, cache_id=cache_id)
     except Exception:
         # Fallback to existing per-call helper methods if cache path fails.
         lifetime_summary = user.get_lifetime_transaction_summary()
         year_summary = user.get_this_duration_summary(duration_type='year')
-        last_30_details = user.get_this_duration_details(duration_type='month')[:10]
-        recent_3_month = user.get_recent_income_expense(months=3)
+        last_30D_details = user.get_this_duration_details(duration_type='month')[:10]
+        recent_3M_summary = user.get_recent_income_expense(months=3)
     finally:
         if cache_id:
             drop_cache_session(cache_id)
@@ -100,22 +100,22 @@ def _analysis_prompt(monthly_summary, goals: List[GoalInDB], user: User) -> str:
         "- Use headings h4–h6 only.\n"
         "- Use concise paragraphs and cards for clarity.\n"
         "- Keep total output under 1000 words, but cover all key financial details.\n"
-        "- Amounts are in USD.\n"
+    f"- Amounts are in {getattr(user, 'default_currency', 'USD')}.\n"
         "- Maintain a professional but encouraging tone.\n\n"
         "- Avoid adding financial/balance snapshots or detailed transaction lists (They are already visible in the report)."
         f"User: {user.name}\n"
         f"Occupation: {user.occupation}\n"
         + (
-            f"Monthly Salary: ${user.monthly_income:,.2f}\n"
+            f"Monthly Salary: {getattr(user, 'default_currency', 'USD')} {user.monthly_income:,.2f}\n"
             f"Monthly Salary Date (day of month): {user.usual_income_date}\n"
             if user.usual_income_date else ""
         )
         + f"Current date: {now_utc()}\n"
         f"Lifetime Summary: {lifetime_summary}\n"
         f"This Year Summary: {year_summary}\n"
-        f"This Month: Income ${monthly_summary['total_income']:,.2f}, "
-        f"Expenses ${monthly_summary['total_expenses']:,.2f}, "
-        f"Savings ${monthly_summary['savings']:,.2f}, "
+    f"This Month: Income {getattr(user,'default_currency','USD')} {monthly_summary['total_income']:,.2f}, "
+    f"Expenses {getattr(user,'default_currency','USD')} {monthly_summary['total_expenses']:,.2f}, "
+    f"Savings {getattr(user,'default_currency','USD')} {monthly_summary['savings']:,.2f}, "
         f"Transactions: {monthly_summary.get('transaction_count', 'Unknown')}\n\n"
 
         "Income Breakdown by Category:\n"
@@ -124,10 +124,10 @@ def _analysis_prompt(monthly_summary, goals: List[GoalInDB], user: User) -> str:
         f"{json.dumps(expense_categories, indent=2, default=default_serializer)}\n\n"
 
         "Last 30 days transactions:\n"
-        f"{json.dumps(last_30_details, indent=2, default=default_serializer)}\n\n"
+        f"{json.dumps(last_30D_details, indent=2, default=default_serializer)}\n\n"
 
         "Recent 3-month income/expense summary:\n"
-        f"{json.dumps(recent_3_month, indent=2, default=default_serializer)}\n\n"
+        f"{json.dumps(recent_3M_summary, indent=2, default=default_serializer)}\n\n"
 
         "Active Goals:\n"
         f"{json.dumps(goals_compact, indent=2, default=default_serializer)}\n\n"
@@ -192,10 +192,12 @@ def _goal_priority_prompt(financial_context: dict) -> str:
 
 
 # ---------------- Public API -----------------
-def get_ai_analysis(monthly_summary, goals: List[GoalInDB], user: User) -> str:
+def get_ai_analysis(monthly_summary:dict[str, Any], goals: List[GoalInDB], user: User) -> str:
     """Return HTML analysis for the sidebar (no markdown)."""
     start = time.perf_counter()
     prompt = _analysis_prompt(monthly_summary, goals, user)
+    with open("ai_prompt.log", "a", encoding="utf-8") as f:
+        f.write(f"Prompt generated at {datetime.now()}: {prompt}\n")
     end = time.perf_counter()
     print(f"Prompt generation took {end - start:.2f} seconds")
 
@@ -206,16 +208,16 @@ def get_ai_analysis(monthly_summary, goals: List[GoalInDB], user: User) -> str:
     return _strip(raw, md_type="html")
 
 
-def get_goal_plan(goal_type: str, target_amount: float, target_date, current_finances, user_income: float) -> str:
+def get_goal_plan(goal_type: str, target_amount: float, target_date, current_finances, user_income: float, currency_code: str = 'USD') -> str:
     prompt = (
         "You are a helpful financial planner.\n\n"
         f"Goal Type: {goal_type}\n"
-        f"Target Amount: ${target_amount:,.2f}\n"
+    f"Target Amount: {currency_code} {target_amount:,.2f}\n"
         f"Target Date: {target_date}\n\n"
         "Current Financial Situation:\n"
-        f"Monthly Income: ${user_income:,.2f}\n"
-        f"Monthly Expenses: ${current_finances['total_expenses']:,.2f}\n"
-        f"Monthly Savings: ${current_finances['savings']:,.2f}\n\n"
+    f"Monthly Income: {currency_code} {user_income:,.2f}\n"
+    f"Monthly Expenses: {currency_code} {current_finances['total_expenses']:,.2f}\n"
+    f"Monthly Savings: {currency_code} {current_finances['savings']:,.2f}\n\n"
         "Expense Breakdown:\n"
         f"{json.dumps(current_finances['expense_categories'], indent=2, default=default_serializer)}\n\n"
         "Provide a step-by-step plan to achieve this goal. Include: 1) required monthly savings 2) spending reductions 3) timeline milestones 4) tips to stay on track."
@@ -259,16 +261,17 @@ def get_purchase_advice(
             except Exception:
                 continue
 
+    currency_code = getattr(user, 'default_currency', 'USD')
     prompt = (
         "You are an objective financial advisor. Assess whether the user should buy an item.\n"
         f"User occupation: {user.occupation}\n"
-        f"Item: {item_data.get('description')} (${item_data.get('amount')})\n"
+        f"Item: {item_data.get('description')} ({currency_code} {item_data.get('amount')})\n"
         f"Category: {item_data.get('category', 'Auto-detect')}\n"
         f"Tags: {item_data.get('tags', [])}\n"
         f"Urgency: {item_data.get('urgency', 'unspecified')}\n"
-        f"Weekly spending (total): ${total_week_spend}\n"
-        f"Current balance: ${balance}\n"
-        f"Monthly income: ${user.monthly_income or 0}\n"
+        f"Weekly spending (total): {currency_code} {total_week_spend}\n"
+        f"Current balance: {currency_code} {balance}\n"
+        f"Monthly income: {currency_code} {user.monthly_income or 0}\n"
         f"Usual income day-of-month: {usual_income_date}\n"
         f"Last 3 months summary: {last_3_months_summary}\n"
         f"Lifetime summary: {lifetime_summary}\n\n"

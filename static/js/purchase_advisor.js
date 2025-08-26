@@ -5,6 +5,17 @@ class PurchaseAdvisor {
         this.loadVisualizationData();
         this.setupArchiveButton();
 		
+        // Build currency symbol map from the select options if available
+        const sel = document.getElementById('currency');
+        this.currencySymbolMap = {};
+        if (sel) {
+            Array.from(sel.options).forEach(opt => {
+                if (opt.value) {
+                    this.currencySymbolMap[opt.value] = opt.dataset?.symbol || '';
+                }
+            });
+        }
+
         FinanceVisualizer.init();
     }
 
@@ -15,7 +26,9 @@ class PurchaseAdvisor {
             
             const data = await response.json();
             FinanceVisualizer.updateCharts(data);
-            FinanceVisualizer.renderGoalImpact(data.goal_impact);
+            if (data && data.goal_impact) {
+                FinanceVisualizer.renderGoalImpact(data.goal_impact);
+            }
         } catch (error) {
             console.error('Error loading visualization data:', error);
         }
@@ -45,6 +58,7 @@ class PurchaseAdvisor {
                 const formData = {
                     description: form.elements.description?.value,
                     amount: parseFloat(form.elements.amount?.value),
+                    currency: form.elements.currency?.value,
                     category: form.elements.category?.value || undefined,
                     urgency: form.elements.urgency?.value,
                     tags: tags.length ? tags : undefined
@@ -79,9 +93,11 @@ class PurchaseAdvisor {
         });
     }
 
-    static displayAdvice(advice) {
-        const feedbackDiv = document.getElementById('ai-feedback');
-        feedbackDiv.innerHTML = '';
+    static displayAdvice(advice, targetEl) {
+        // If a target container is provided, render there; otherwise fallback to the main feedback area
+        const container = targetEl || document.getElementById('ai-feedback');
+        if (!container) return;
+        container.innerHTML = '';
 
         const adviceBox = document.createElement('div');
         adviceBox.className = `ai-advice ${advice.recommendation}`;
@@ -98,6 +114,7 @@ class PurchaseAdvisor {
             </div>
             <div class="ms-4">
                 <p class="mb-2"><strong>Reason:</strong> ${advice.reason}</p>
+                ${advice.amount_converted != null && advice.base_currency ? `<p class="mb-2"><strong>Amount (base):</strong> ${formatNumber(advice.amount_converted, 2)} ${advice.base_currency}</p>` : ''}
                 ${advice.alternatives?.length ? `
                     <div class="mb-2"><strong>Alternatives:</strong>
                         <ul class="mb-0 ps-4">
@@ -115,7 +132,7 @@ class PurchaseAdvisor {
             </div>
         `;
         
-        feedbackDiv.appendChild(adviceBox);
+        container.appendChild(adviceBox);
     }
 
     static showError() {
@@ -177,12 +194,24 @@ class PurchaseAdvisor {
                 if (item.advice.recommendation === 'no') icon = '❌';
                 if (item.advice.recommendation === 'maybe') icon = '⚠️';
                 const date = new Date(item.created_at).toLocaleString();
+                const srcAmount = (item?.request?.amount_original ?? item?.request?.amount);
+                const amtNum = Number(srcAmount);
+                const amountSafe = Number.isFinite(amtNum) ? amtNum : 0;
+                const reqCurrency = (item?.request?.currency || window.defaultCurrency || 'USD');
+                const sym = this.currencySymbolMap?.[reqCurrency] || '$';
+                const status = item.user_action === 'followed'
+                    ? '<span class="badge rounded-pill bg-success me-2">Followed</span>'
+                    : (item.user_action === 'ignored'
+                        ? '<span class="badge rounded-pill bg-secondary me-2">Ignored</span>'
+                        : '');
+                const detailsId = `rec-${item._id}`;
                 element.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
+                            ${status}
                             <span class="me-2">${icon}</span>
                             <strong>${item.request.description}</strong>
-                            <span class="text-muted ms-2">$${item.request.amount.toFixed(2)}</span>
+                            <span class="text-muted ms-2">${formatMoney(amountSafe, sym)}</span>
                         </div>
                         <div class="d-flex align-items-center">
                             <small class="text-muted me-2">${date}</small>
@@ -197,15 +226,17 @@ class PurchaseAdvisor {
                             <a href="${item.pastebin_url}" target="_blank" class="small">View Archive</a>
                         </div>
                     ` : ''}
+                    <div id="${detailsId}" class="recommendation-details d-none mt-2"></div>
                 `;
                 // Add Followed/Ignored buttons
                 const actionBtns = document.createElement('div');
                 actionBtns.className = 'btn-group btn-group-sm ms-2';
                 ['followed', 'ignored'].forEach(action => {
                     const btn = document.createElement('button');
-                    btn.className = `btn btn-outline-${action === 'followed' ? 'success' : 'secondary'}`;
+                    const isSelected = item.user_action === action;
+                    btn.className = `btn btn-outline-${action === 'followed' ? 'success' : 'secondary'}${isSelected ? ' is-selected' : ''}`;
                     btn.textContent = action.charAt(0).toUpperCase() + action.slice(1);
-                    btn.disabled = item.user_action === action;
+                    btn.disabled = isSelected; // prevent re-post of same state
                     btn.addEventListener('click', async (e) => {
                         e.stopPropagation();
                         await fetch(`/api/ai/advice/${item._id}/action`, {
@@ -213,14 +244,29 @@ class PurchaseAdvisor {
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({action})
                         });
+                        // Refresh history for visual state and refresh charts dynamically
                         this.loadRecommendationHistory();
+                        this.loadVisualizationData();
                     });
                     actionBtns.appendChild(btn);
                 });
                 element.querySelector('.d-flex > div:last-child').appendChild(actionBtns);
                 element.addEventListener('click', (e) => {
-                    if (!e.target.closest('.delete-btn') && !e.target.closest('.btn-group')) {
-                        this.displayAdvice(item.advice);
+                    if (!e.target.closest('.delete-btn') && !e.target.closest('.btn-group') && !e.target.closest('a')) {
+                        // Toggle inline details like an accordion
+                        const details = element.querySelector(`#${detailsId}`);
+                        const isHidden = details.classList.contains('d-none');
+                        // Collapse other open details in the list
+                        container.querySelectorAll('.recommendation-details').forEach(d => {
+                            if (d !== details) d.classList.add('d-none');
+                        });
+                        if (isHidden) {
+                            // Render advice into this details container and show
+                            this.displayAdvice(item.advice, details);
+                            details.classList.remove('d-none');
+                        } else {
+                            details.classList.add('d-none');
+                        }
                     }
                 });
                 element.querySelector('.delete-btn')?.addEventListener('click', async (e) => {
@@ -271,6 +317,7 @@ class PurchaseAdvisor {
             
             if (response.ok) {
                 this.loadRecommendationHistory();
+                this.loadVisualizationData();
             }
         } catch (error) {
             console.error('Error deleting advice:', error);

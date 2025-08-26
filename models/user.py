@@ -18,14 +18,31 @@ from utils.timezone_utils import now_utc, ensure_utc
 """Duration map moved to finance_calculator.DURATION_MAP to ensure single source of truth."""
 
 class User(UserMixin):
+    id: str
+    email: str
+    name: str
+    created_at: datetime | None
+    occupation: str
+    usual_income_date: int | None
+    monthly_income: float
+    default_currency: str
+    monthly_income_currency: str
+    db: Database
+
     def __init__(self, user_data, db: Database):
+        # Core identity and profile
         self.id = str(user_data['_id'])
         self.email = user_data['email']
         self.name = user_data.get('name', '')
         self.created_at = user_data.get('created_at')
-        self.occupation = user_data.get('occupation', '')  # Added occupation field
+        self.occupation = user_data.get('occupation', '')
         self.usual_income_date = user_data.get('usual_income_date', None)
+        # Financial profile
         self.monthly_income = user_data.get('monthly_income', 0)
+        # Currency preferences
+        self.default_currency = user_data.get('default_currency', 'USD')
+        self.monthly_income_currency = user_data.get('monthly_income_currency', self.default_currency)
+        # DB handle
         self.db = db
 
     def get_recent_income_expense(self, months=3):
