@@ -81,6 +81,7 @@ def get_transactions(
         """Remove ID and UserID fields from transactions."""
         for t in transactions:
             t.pop('id', None)
+            t.pop("_id", None)
             t.pop('user_id', None)
         return transactions
 
@@ -230,7 +231,7 @@ def get_N_month_income_expense(user_id, db, n=3, *, cache_id: str | None = None)
         while month <= 0:
             month += 12
             year -= 1
-    results.append(calculate_monthly_summary(user_id, db, year, month, cache_id=cache_id))
+        results.append(calculate_monthly_summary(user_id, db, year, month, cache_id=cache_id))
     return results
 
 
@@ -241,7 +242,8 @@ def calculate_lifetime_transaction_summary(user_id, db, *, cache_id: str | None 
         'total_income': round(sum(t['amount'] for t in transactions if t.get('type') == 'income'), 2),
         'total_expenses': round(sum(t['amount'] for t in transactions if t.get('type') == 'expense'), 2),
         'current_balance': round(sum(t['amount'] if t.get('type') == 'income' else -t.get('amount', 0) for t in transactions), 2),
-        'total_transactions': len(transactions)
+        'total_transactions': len(transactions),
+        "currency": transactions[0]['base_currency'] if transactions else 'USD'
     }
 
 # Public cache-related helpers exported for external use.

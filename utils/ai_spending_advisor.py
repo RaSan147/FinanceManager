@@ -37,8 +37,4 @@ class SpendingAdvisor:
             item_data=item_data,
             weekly_spending=weekly_spending,
             balance=balance,
-            last_3_months_summary=last_3_months_transactions,
-            usual_income_date=usual_income_date,
-            lifetime_summary=lifetime_summary,
-            active_goals=active_goals
         )

@@ -18,7 +18,7 @@ from models.transaction import Transaction
 from models.goal import Goal, GoalCreate, GoalUpdate, GoalInDB
 from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
-from utils.currency import get_currency_symbol, SUPPORTED_CURRENCIES, convert_amount
+from utils.currency import currency_service
 from utils.tools import is_allowed_email
 from config import Config
 # Added centralized timezone helpers
@@ -26,7 +26,6 @@ from utils.timezone_utils import now_utc, ensure_utc
 
 app = Flask(__name__)
 app.config.from_object(Config)
-
 
 # Pass real user IP to app
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -51,10 +50,14 @@ limiter = Limiter(
 
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
-
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'  # type: ignore[attr-defined]
 login_manager.login_message_category = 'warning'
+
+# Configure currency service with Mongo backend and start background refresh
+currency_service.re_initialize(db=mongo.db, cache_backend='mongo')
+currency_service.refresh_rates(force=True)
+threading.Thread(target=currency_service.background_initial_refresh, daemon=True).start()
 
 @app.context_processor
 def inject_now():
@@ -73,11 +76,12 @@ def inject_currency():
         code = None
     if not code:
         code = app.config['DEFAULT_CURRENCY']
+    supported = currency_service.supported_currencies
     return {
         'currency_code': code,
-        'currency_symbol': get_currency_symbol(code),
-        'supported_currencies': SUPPORTED_CURRENCIES,
-    'currency_symbols': {c: get_currency_symbol(c) for c in SUPPORTED_CURRENCIES},
+        'currency_symbol': currency_service.get_currency_symbol(code),
+        'supported_currencies': supported,
+        'currency_symbols': {c: currency_service.get_currency_symbol(c) for c in supported},
     }
 
 @login_manager.user_loader
@@ -294,6 +298,11 @@ def add_goal():
         flash('Invalid target date format.', 'danger')
         return redirect(url_for('goals'))
 
+    # Ensure valid goal type
+    if goal_type not in ('savings', 'purchase'):
+        flash('Invalid goal type.', 'danger')
+        return redirect(url_for('goals'))
+
     # Keep goal amount in the input currency; store currency alongside
     user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
     user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
@@ -341,7 +350,7 @@ def transactions():
 def add_transaction():
     if request.method == 'POST':
         amount_raw = request.form.get('amount')
-        currency = request.form.get('currency')
+        input_currency_code = request.form.get('currency')
         try:
             amount = float(amount_raw) if amount_raw is not None else None
         except (TypeError, ValueError):
@@ -377,9 +386,9 @@ def add_transaction():
         # Determine user's base/default currency
         user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
         user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
-        input_code = (currency or user_default_code).upper()
+        input_code = (input_currency_code or user_default_code).upper()
         # Convert amount to user's default currency for storage/analytics
-        converted_amount = convert_amount(amount, input_code, user_default_code)
+        converted_amount = currency_service.convert_amount(amount, input_code, user_default_code)
 
         transaction_data = {
             'user_id': current_user.id,
@@ -454,7 +463,7 @@ def profile():
                 dc = (default_currency or user.get('default_currency')).upper()
                 mic = (monthly_income_currency or dc).upper()
                 # Always store monthly income in the user's default/base currency (dc)
-                update_data['monthly_income'] = convert_amount(mi_val, mic, dc)
+                update_data['monthly_income'] = currency_service.convert_amount(mi_val, mic, dc)
                 # Track the currency of the stored monthly_income, not the input source
                 update_data['monthly_income_currency'] = dc
             except ValueError:
@@ -482,7 +491,7 @@ def profile():
                 # Convert stored monthly_income if not explicitly provided above
                 if 'monthly_income' not in update_data and user.get('monthly_income') is not None:
                     try:
-                        update_data['monthly_income'] = convert_amount(float(user['monthly_income']), old_dc, new_dc)
+                        update_data['monthly_income'] = currency_service.convert_amount(float(user['monthly_income']), old_dc, new_dc)
                         update_data['monthly_income_currency'] = new_dc
                     except Exception:
                         pass
@@ -492,7 +501,7 @@ def profile():
                     for tx in cursor:
                         amt = float(tx.get('amount', 0))
                         tx_base = (tx.get('base_currency') or old_dc).upper()
-                        new_amt = convert_amount(amt, tx_base, new_dc)
+                        new_amt = currency_service.convert_amount(amt, tx_base, new_dc)
                         mongo.db.transactions.update_one(
                             {'_id': tx['_id']},
                             {'$set': {'amount': new_amt, 'base_currency': new_dc}}
@@ -574,11 +583,9 @@ def run_ai_analysis():
         flash('Database connection error.', 'danger')
         return redirect(url_for('analysis'))
 
-    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-    goals = Goal.get_active_goals(current_user.id, mongo.db)
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
     user_obj = User(user, db=mongo.db)
-    ai_analysis = get_ai_analysis(monthly_summary, goals, user_obj)
+    ai_analysis = get_ai_analysis(user_obj)
 
     mongo.db.users.update_one(
         {'_id': ObjectId(current_user.id)},
@@ -664,7 +671,7 @@ def get_purchase_advice():
         user_doc = mongo.db.users.find_one({'_id': ObjectId(user_id)})
         user_base_currency = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY']).upper()
         input_currency = (data.get('currency') or user_base_currency).upper()
-        converted_amount = convert_amount(amount, input_currency, user_base_currency)
+        converted_amount = currency_service.convert_amount(amount, input_currency, user_base_currency)
 
         # Prepare data for AI and DB
         item_data = {

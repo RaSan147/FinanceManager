@@ -67,18 +67,23 @@
                             </div>
                         </div>
 
-                        {% if goal.ai_priority or goal.ai_metadata %}
+                        {% if goal.ai_priority or goal.ai_urgency or goal.ai_impact or goal.ai_health_impact or goal.ai_confidence %}
                             <div class="mt-2">
-                                {% if goal.ai_priority %}<span class="badge bg-info text-dark me-1">Priority {{ goal.ai_priority }}</span>{% endif %}
-                                {% if goal.ai_metadata and goal.ai_metadata.get('urgency') %}<span class="badge bg-warning text-dark me-1">Urgency {{ goal.ai_metadata.get('urgency') }}</span>{% endif %}
-                                {% if goal.ai_metadata and goal.ai_metadata.get('impact') %}<span class="badge bg-success text-dark me-1">Impact {{ goal.ai_metadata.get('impact') }}</span>{% endif %}
+                                {% if goal.ai_priority %}<span class="badge bg-info text-dark me-1">Priority {{ '%0.0f'|format(goal.ai_priority) }}</span>{% endif %}
+                                {% if goal.ai_urgency is not none %}<span class="badge bg-warning text-dark me-1">Urgency {{ '%0.2f'|format(goal.ai_urgency) }}</span>{% endif %}
+                                {% if goal.ai_impact is not none %}<span class="badge bg-success text-dark me-1">Impact {{ '%0.2f'|format(goal.ai_impact) }}</span>{% endif %}
+                                {% if goal.ai_health_impact is not none and goal.ai_health_impact > 0 %}<span class="badge bg-danger text-dark me-1">Health {{ '%0.2f'|format(goal.ai_health_impact) }}</span>{% endif %}
+                                {% if goal.ai_confidence is not none %}<span class="badge bg-secondary text-light me-1">Conf {{ '%0.2f'|format(goal.ai_confidence) }}</span>{% endif %}
                             </div>
-                            {% if goal.ai_metadata and goal.ai_metadata.get('suggestions') %}
+                            {% if goal.ai_suggestions %}
                                 <ul class="mt-2 small">
-                                    {% for s in goal.ai_metadata.get('suggestions') %}
+                                    {% for s in goal.ai_suggestions %}
                                         <li>{{ s }}</li>
                                     {% endfor %}
                                 </ul>
+                            {% endif %}
+                            {% if goal.ai_summary %}
+                                <div class="small text-muted mt-1">{{ goal.ai_summary }}</div>
                             {% endif %}
                         {% endif %}
 

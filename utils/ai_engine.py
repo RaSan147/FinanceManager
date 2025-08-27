@@ -88,6 +88,8 @@ class FinancialBrain:
     # ----------------- Low-level request helpers -----------------
     def _call(self, prompt: str) -> str:
         model = self._ensure_model()
+        returning = None
+
         if model.startswith("(no-client)"):
             return "AI analysis unavailable (missing GEMINI_API_KEY)."
         if model.startswith("(unavailable:"):
@@ -97,17 +99,31 @@ class FinancialBrain:
         for attempt in range(self.retry.max_retries):
             try:
                 resp = self.client.models.generate_content(model=model, contents=prompt)
-                return (str(getattr(resp, "text", "")).strip() or "(empty AI response)")
+                returning = (str(getattr(resp, "text", "")).strip() or "(empty AI response)")
+                break
+
             except Exception as e:
+                traceback.print_exc()
                 if attempt == self.retry.max_retries - 1:
-                    return f"AI analysis unavailable (error: {e})"
+                    returning = f"AI analysis unavailable (error: {e})"
+                    break
                 time.sleep(delay)
                 delay *= 2
+
+        # with open("PROMPT_HISTORY.pug", 'a') as f:
+        #     f.write(f"PROMPT:\n{prompt}\n\n")
+        #     f.write("=> " * 40 + "\n")
+        #     f.write(f"RESPONSE:\n{returning}\n\n\n")
+        #     f.write("== " * 40 + "\n\n")
+
+        if returning is not None:
+            return returning
 
         return "(unreachable)"  # should not reach here
 
     async def _acall(self, prompt: str) -> str:
         model = self._ensure_model()
+        returning = None
         if model.startswith("(no-client)"):
             return "AI analysis unavailable (missing GEMINI_API_KEY)."
         if model.startswith("(unavailable:"):
@@ -117,12 +133,25 @@ class FinancialBrain:
         for attempt in range(self.retry.max_retries):
             try:
                 resp = self.client.models.generate_content(model=model, contents=prompt)
-                return (str(getattr(resp, "text", "")).strip() or "(empty AI response)")
+                returning = (str(getattr(resp, "text", "")).strip() or "(empty AI response)")
+                break
+
             except Exception as e:
+                traceback.print_exc()
                 if attempt == self.retry.max_retries - 1:
-                    return f"AI analysis unavailable (error: {e})"
+                    returning = f"AI analysis unavailable (error: {e})"
+                    break
                 await asyncio.sleep(delay)
                 delay *= 2
+
+        # with open("PROMPT_HISTORY.pug", 'a') as f:
+        #     f.write(f"PROMPT:\n{prompt}\n\n")
+        #     f.write("=> " * 40 + "\n")
+        #     f.write(f"RESPONSE:\n{returning}\n\n\n")
+        #     f.write("== " * 40 + "\n\n")
+
+        if returning is not None:
+            return returning
 
         return "(unreachable)"  # should not reach here
 
@@ -155,4 +184,7 @@ class FinancialBrain:
             raise ValueError("JSON root is not an object")
         except Exception:
             traceback.print_exc()
+            with open("ai_error.log", "a") as f:
+                f.write(f"Error parsing JSON from AI PROMPT:\n{prompt}\nRESPONSE:\n{clean}\n\n\n")
+                f.write("=" * 40 + "\n")
             return fallback or {"error": "parse_failure", "raw": clean[:4000]}
