@@ -56,7 +56,7 @@ login_manager.login_message_category = 'warning'
 
 # Configure currency service with Mongo backend and start background refresh
 currency_service.re_initialize(db=mongo.db, cache_backend='mongo')
-currency_service.refresh_rates(force=True)
+currency_service.refresh_rates()
 threading.Thread(target=currency_service.background_initial_refresh, daemon=True).start()
 
 @app.context_processor
