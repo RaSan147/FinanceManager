@@ -60,6 +60,15 @@ currency_service.re_initialize(db=mongo.db, cache_backend='mongo')
 currency_service.refresh_rates()
 threading.Thread(target=currency_service.background_initial_refresh, daemon=True).start()
 
+# Ensure DB indexes exist on startup
+try:
+    from utils.db_indexes import ensure_indexes
+    if mongo.db is not None:
+        ensure_indexes(mongo.db)
+except Exception as _e:
+    # Non-fatal: continue even if indexing fails (logged to console)
+    print(f"[startup] Failed to ensure DB indexes: {_e}")
+
 @app.context_processor
 def inject_now():
     # Always provide UTC now (aware)
