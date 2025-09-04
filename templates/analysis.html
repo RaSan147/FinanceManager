@@ -10,29 +10,23 @@
                 <h4 class="card-title mb-0">Monthly Analysis - {{ summary.month }} ({{ currency_code }})</h4>
             </div>
             <div class="card-body">
-                <div class="row mb-4">
+                <div class="row mb-4 text-center">
                     <div class="col-md-4">
-                        <div class="card bg-success bg-opacity-10">
-                            <div class="card-body text-center">
-                                <h6 class="card-subtitle mb-2">Income</h6>
-                                <h3 class="card-text text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h3>
-                            </div>
+                        <div class="stat-bubble stat-bubble--income mb-3">
+                            <h6 class="mb-1">Income</h6>
+                            <h3 class="mb-0 text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h3>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card bg-danger bg-opacity-10">
-                            <div class="card-body text-center">
-                                <h6 class="card-subtitle mb-2">Expenses</h6>
-                                <h3 class="card-text text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h3>
-                            </div>
+                        <div class="stat-bubble stat-bubble--expenses mb-3">
+                            <h6 class="mb-1">Expenses</h6>
+                            <h3 class="mb-0 text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h3>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card bg-info bg-opacity-10">
-                            <div class="card-body text-center">
-                                <h6 class="card-subtitle mb-2">Savings</h6>
-                                <h3 class="card-text text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h3>
-                            </div>
+                        <div class="stat-bubble stat-bubble--savings mb-3">
+                            <h6 class="mb-1">Savings</h6>
+                            <h3 class="mb-0 text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h3>
                         </div>
                     </div>
                 </div>
@@ -118,7 +112,7 @@
                 {% else %}
                     <div class="text-center py-4">
                         <p class="text-muted">No active goals to analyze.</p>
-                        <a href="{{ url_for('goals') }}" class="btn btn-primary">Set a Goal</a>
+                        <a href="{{ url_for('goals') }}" class="btn btn-glassy">Set a Goal</a>
                     </div>
                 {% endif %}
             </div>
@@ -131,7 +125,7 @@
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <h4 class="card-title mb-0">AI Financial Advisor</h4>
                     <form action="{{ url_for('run_ai_analysis') }}" method="post" onsubmit="return startAiGeneration(this);" class="m-0">
-                        <button id="aiGenBtn" type="submit" class="ai-gen-btn btn btn-warning btn-sm fw-semibold position-relative px-3 d-inline-flex align-items-center gap-1 w-100 w-sm-auto">
+                        <button id="aiGenBtn" type="submit" class="ai-gen-btn btn btn-glassy btn-sm fw-semibold position-relative px-3 d-inline-flex align-items-center gap-1 w-100 w-sm-auto">
                             <span id="aiGenSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                             <i class="bi bi-cpu"></i>
                             <span class="btn-text">Generate</span>
@@ -182,16 +176,7 @@
 }
 #aiGenBtn.ai-gen-btn:active{transform:translateY(0);}
 #aiGenBtn.ai-gen-btn:disabled{opacity:.8;cursor:wait;}
-/* Dark mode adjustments */
-.dark-mode #aiGenBtn.ai-gen-btn {
-    background:linear-gradient(135deg,#ffb347,#ff9800,#ffca28);
-    color:#1b1f24;
-    border:1px solid rgba(255,193,7,.55);
-    box-shadow:0 2px 6px -1px rgba(0,0,0,.6),0 0 0 1px #ffca28 inset;
-}
-.dark-mode #aiGenBtn.ai-gen-btn:hover:not(:disabled){
-    box-shadow:0 4px 12px -2px rgba(0,0,0,.75),0 0 0 1px #ffe082 inset;
-}
+/* Dark mode adjustments handled by .btn-glassy theme */
 /* Mobile full-width */
 @media (max-width:576px){
   #aiGenBtn.ai-gen-btn {font-size:.9rem;min-height:42px;}

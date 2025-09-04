@@ -12,27 +12,21 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-md-4">
-                        <div class="card bg-success bg-opacity-10 mb-3">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2">Income</h6>
-                                <h4 class="card-text text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h4>
-                            </div>
+                        <div class="stat-bubble stat-bubble--income mb-3">
+                            <h6 class="mb-1">Income</h6>
+                            <h4 class="mb-0 text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card bg-danger bg-opacity-10 mb-3">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2">Expenses</h6>
-                                <h4 class="card-text text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h4>
-                            </div>
+                        <div class="stat-bubble stat-bubble--expenses mb-3">
+                            <h6 class="mb-1">Expenses</h6>
+                            <h4 class="mb-0 text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card bg-info bg-opacity-10 mb-3">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2">Savings</h6>
-                                <h4 class="card-text text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h4>
-                            </div>
+                        <div class="stat-bubble stat-bubble--savings mb-3">
+                            <h6 class="mb-1">Savings</h6>
+                            <h4 class="mb-0 text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h4>
                         </div>
                     </div>
                 </div>
@@ -46,27 +40,21 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-md-4">
-                        <div class="card bg-success bg-opacity-10 mb-3">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2">Total Income</h6>
-                                <h4 class="card-text text-success">{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_income) }}</h4>
-                            </div>
+                        <div class="stat-bubble stat-bubble--income mb-3">
+                            <h6 class="mb-1">Total Income</h6>
+                            <h4 class="mb-0 text-success">{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_income) }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card bg-danger bg-opacity-10 mb-3">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2">Total Expenses</h6>
-                                <h4 class="card-text text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_expenses) }}</h4>
-                            </div>
+                        <div class="stat-bubble stat-bubble--expenses mb-3">
+                            <h6 class="mb-1">Total Expenses</h6>
+                            <h4 class="mb-0 text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_expenses) }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="card bg-info bg-opacity-10 mb-3">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2">Current Balance</h6>
-                                <h4 class="card-text text-info">{{ currency_symbol }}{{ "{:,.2f}".format(balance.current_balance) }}</h4>
-                            </div>
+                        <div class="stat-bubble stat-bubble--savings mb-3">
+                            <h6 class="mb-1">Current Balance</h6>
+                            <h4 class="mb-0 text-info">{{ currency_symbol }}{{ "{:,.2f}".format(balance.current_balance) }}</h4>
                         </div>
                     </div>
                 </div>
@@ -110,12 +98,12 @@
                     </table>
                 </div>
                 <div class="text-end">
-                    <a href="{{ url_for('transactions') }}" class="btn btn-primary">View All</a>
+                    <a href="{{ url_for('transactions') }}" class="btn btn-glassy">View All</a>
                 </div>
                 {% else %}
                 <div class="text-center py-4">
                     <p class="text-muted">No transactions yet.</p>
-                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">Add Your First Transaction</a>
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-glassy">Add Your First Transaction</a>
                 </div>
                 {% endif %}
             </div>
@@ -132,8 +120,8 @@
             </div>
             <div class="card-body">
                 {% if goals %}
-            {% for goal in goals %}
-                    <div class="mb-3">
+        {% for goal in goals %}
+            <div class="mb-3 goal-item">
                         <h6>{{ goal.description }}</h6>
                         <div class="d-flex justify-content-between mb-1">
                 {% set gsym = currency_symbols.get(goal.currency|default(currency_code), currency_symbol) %}
@@ -157,19 +145,19 @@
             </div>
         </div>
 
-        <div class="card">
+    <div class="card quick-actions-card">
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0">Quick Actions</h5>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="{{ url_for('add_transaction') }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('add_transaction') }}" class="btn btn-outline-primary quick-action">
                         <i class="bi bi-plus-circle"></i> Add Transaction
                     </a>
-                    <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary quick-action">
                         <i class="bi bi-graph-up"></i> View Analysis
                     </a>
-                    <a href="{{ url_for('goals') }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('goals') }}" class="btn btn-outline-primary quick-action">
                         <i class="bi bi-bullseye"></i> Manage Goals
                     </a>
                 </div>
