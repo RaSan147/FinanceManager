@@ -19,27 +19,35 @@ class DarkMode {
         if (!toggle) return;
 
         toggle.addEventListener('change', (e) => {
+            // Checked means LIGHT (ball moves to sun icon)
             if (e.target.checked) {
-                this.enableDarkMode();
-            } else {
                 this.enableLightMode();
+            } else {
+                this.enableDarkMode();
             }
         });
 
         // Initialize toggle state
-        toggle.checked = document.documentElement.getAttribute('data-theme') === 'dark';
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        // If theme is not dark (light or unset), consider toggle ON (light)
+        toggle.checked = currentTheme !== 'dark';
     }
 
     static enableDarkMode() {
         document.documentElement.setAttribute('data-theme', 'dark');
         document.body.classList.add('dark-mode');
         localStorage.setItem('darkMode', 'dark');
+        const toggle = document.getElementById('darkModeSwitch');
+        if (toggle) toggle.checked = false;
     }
 
     static enableLightMode() {
-        document.documentElement.removeAttribute('data-theme');
+        // Keep explicit attribute for consistency with initial loader
+        document.documentElement.setAttribute('data-theme', 'light');
         document.body.classList.remove('dark-mode');
         localStorage.setItem('darkMode', 'light');
+        const toggle = document.getElementById('darkModeSwitch');
+        if (toggle) toggle.checked = true;
     }
 
     static applySystemPreference() {
@@ -47,7 +55,8 @@ class DarkMode {
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             if (prefersDark) {
                 this.enableDarkMode();
-                document.getElementById('darkModeSwitch').checked = true;
+            } else {
+                this.enableLightMode();
             }
         }
     }
