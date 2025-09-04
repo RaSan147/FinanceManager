@@ -24,6 +24,8 @@ from utils.tools import is_allowed_email
 from config import Config
 # Added centralized timezone helpers
 from utils.timezone_utils import now_utc, ensure_utc
+from utils.request_metrics import start_request, finish_request, summary as metrics_summary
+from utils.db_monitor import FlaskMongoCommandLogger
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -49,6 +51,13 @@ limiter = Limiter(
     }
 )
 
+# Register PyMongo command listener for per-request DB timings BEFORE client creation
+try:
+    from pymongo import monitoring as _pym_monitoring
+    _pym_monitoring.register(FlaskMongoCommandLogger())
+except Exception as _e:
+    print(f"[startup] Warning: Failed to register Mongo command listener early: {_e}")
+
 mongo = PyMongo(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
@@ -69,10 +78,50 @@ except Exception as _e:
     # Non-fatal: continue even if indexing fails (logged to console)
     print(f"[startup] Failed to ensure DB indexes: {_e}")
 
+# request lifecycle hooks for timing
+@app.before_request
+def _before_request_metrics():
+    start_request()
+
+
+@app.after_request
+def _after_request_metrics(response):
+    try:
+        data = finish_request(status_code=response.status_code)
+        if data:
+            # Attach metrics for optional template usage
+            response.headers['X-Request-Time-ms'] = str(round(data.get('total_ms') or 0, 2))
+            # Log concise line to console
+            app.logger.info(
+                f"{request.method} {request.path} -> {response.status_code} | total={data['total_ms']:.1f}ms "
+                f"db={data['db_count']}/{data['db_ms']:.1f}ms ai={data['ai_count']}/{data['ai_ms']:.1f}ms"
+            )
+            if app.config.get('LOG_PERF_DETAILS'):
+                from utils.request_metrics import current
+                rm = current()
+                if rm:
+                    for q in rm.db:
+                        app.logger.info(
+                            f"  DB {q.command_name} {q.database or ''}.{q.collection or ''} "
+                            f"{q.duration_ms:.1f}ms ok={q.ok} returned={q.n_returned}"
+                        )
+                    for a in rm.ai:
+                        app.logger.info(
+                            f"  AI {a.model} {a.duration_ms:.1f}ms prompt={a.prompt_chars} chars resp={a.response_chars} chars"
+                        )
+    except Exception:
+        pass
+    return response
+
 @app.context_processor
 def inject_now():
     # Always provide UTC now (aware)
     return {'now': now_utc()}
+
+@app.context_processor
+def inject_config():
+    # Expose selected config to templates
+    return {'config': app.config}
 
 @app.context_processor
 def inject_currency():
@@ -93,6 +142,14 @@ def inject_currency():
         'supported_currencies': supported,
         'currency_symbols': {c: currency_service.get_currency_symbol(c) for c in supported},
     }
+
+@app.context_processor
+def inject_perf_metrics():
+    # Always make perf metrics available to templates (footer uses it)
+    try:
+        return {'perf_metrics': metrics_summary()}
+    except Exception:
+        return {}
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -181,7 +238,8 @@ def index():
         goals=active_goals,
         summary=monthly_summary,
         balance=full_balance,  # Now passing the complete balance object
-        days_until_income=days_until_income
+    days_until_income=days_until_income,
+    perf_metrics=metrics_summary()
     )
 
 
@@ -212,7 +270,7 @@ def login():
         else:
             flash('Login failed. Check your email and password.', 'danger')
     
-    return render_template('login.html', next=request.args.get('next'))
+    return render_template('login.html', next=request.args.get('next'), perf_metrics=metrics_summary())
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -254,7 +312,7 @@ def register():
         flash('Account created successfully. Please login.', 'success')
         return redirect(url_for('login'))
     
-    return render_template('register.html')
+    return render_template('register.html', perf_metrics=metrics_summary())
 
 @app.route('/logout')
 @login_required
@@ -353,7 +411,8 @@ def transactions():
                          transactions=transactions,
                          page=page,
                          per_page=per_page,
-                         total_transactions=total_transactions)
+                         total_transactions=total_transactions,
+                         perf_metrics=metrics_summary())
 
 @app.route('/transactions/add', methods=['GET', 'POST'])
 @login_required
@@ -423,7 +482,7 @@ def add_transaction():
         flash('Transaction added successfully.', 'success')
         return redirect(url_for('transactions'))
 
-    return render_template('add_transaction.html')
+    return render_template('add_transaction.html', perf_metrics=metrics_summary())
 
 
 @app.route('/transactions/<transaction_id>/delete', methods=['POST'])
@@ -464,7 +523,7 @@ def goals():
 
     total_pages = (total_goals + per_page - 1) // per_page
 
-    return render_template('goals.html', goals=goals_with_progress, page=page, total_pages=total_pages)
+    return render_template('goals.html', goals=goals_with_progress, page=page, total_pages=total_pages, perf_metrics=metrics_summary())
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -542,7 +601,7 @@ def profile():
             flash('Profile updated successfully.', 'success')
             return redirect(url_for('profile'))
 
-    return render_template('profile.html', user=user)
+    return render_template('profile.html', user=user, perf_metrics=metrics_summary())
 
 
 @app.route('/goals/<goal_id>/complete', methods=['POST'])
@@ -598,7 +657,8 @@ def analysis():
     return render_template('analysis.html',
                            summary=monthly_summary,
                            goals=goals,
-                           ai_analysis=ai_analysis)
+                           ai_analysis=ai_analysis,
+                           perf_metrics=metrics_summary())
 
 @app.route('/analysis/run', methods=['POST'])
 @login_required
@@ -828,7 +888,7 @@ def get_advice_history():
 @app.route('/purchase-advisor')
 @login_required
 def purchase_advisor():
-    return render_template('purchase_advisor.html')
+    return render_template('purchase_advisor.html', perf_metrics=metrics_summary())
 
 @app.route('/api/ai/advice/<advice_id>/action', methods=['POST'])
 @login_required
@@ -923,7 +983,8 @@ def handle_any_exception(err):  # noqa: D401
         error_title=error_title,
         error_message=error_message,
         traceback_str=tb_str,
-        show_details=show_details
+        show_details=show_details,
+        perf_metrics=metrics_summary()
     ), status_code
 
 # ---------------------- LOANS ROUTES ----------------------
@@ -934,7 +995,7 @@ def loans():
         flash('Database connection error.', 'danger')
         return redirect(url_for('index'))
     items = Loan.list_user_loans(current_user.id, mongo.db, include_closed=True)
-    return render_template('loans.html', loans=items)
+    return render_template('loans.html', loans=items, perf_metrics=metrics_summary())
 
 
 @app.route('/api/loans/counterparties')

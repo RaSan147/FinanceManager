@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Optional
 
 from google import genai
+from .request_metrics import record_ai_call
 
 
 # --- Configuration -----------------------------------------------------------
@@ -89,11 +90,24 @@ class FinancialBrain:
     def _call(self, prompt: str) -> str:
         model = self._ensure_model()
         returning = None
+        t0 = time.perf_counter()
 
         if model.startswith("(no-client)"):
-            return "AI analysis unavailable (missing GEMINI_API_KEY)."
+            raw = "AI analysis unavailable (missing GEMINI_API_KEY)."
+            dt = (time.perf_counter() - t0) * 1000.0
+            try:
+                record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(raw))
+            except Exception:
+                pass
+            return raw
         if model.startswith("(unavailable:"):
-            return f"AI analysis unavailable {model}."
+            raw = f"AI analysis unavailable {model}."
+            dt = (time.perf_counter() - t0) * 1000.0
+            try:
+                record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(raw))
+            except Exception:
+                pass
+            return raw
 
         delay = self.retry.base_delay_s
         for attempt in range(self.retry.max_retries):
@@ -117,17 +131,41 @@ class FinancialBrain:
         #     f.write("== " * 40 + "\n\n")
 
         if returning is not None:
+            dt = (time.perf_counter() - t0) * 1000.0
+            try:
+                record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(str(returning)))
+            except Exception:
+                pass
             return returning
 
-        return "(unreachable)"  # should not reach here
+        raw = "(unreachable)"  # should not reach here
+        dt = (time.perf_counter() - t0) * 1000.0
+        try:
+            record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(raw))
+        except Exception:
+            pass
+        return raw
 
     async def _acall(self, prompt: str) -> str:
         model = self._ensure_model()
         returning = None
+        t0 = time.perf_counter()
         if model.startswith("(no-client)"):
-            return "AI analysis unavailable (missing GEMINI_API_KEY)."
+            raw = "AI analysis unavailable (missing GEMINI_API_KEY)."
+            dt = (time.perf_counter() - t0) * 1000.0
+            try:
+                record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(raw))
+            except Exception:
+                pass
+            return raw
         if model.startswith("(unavailable:"):
-            return f"AI analysis unavailable {model}."
+            raw = f"AI analysis unavailable {model}."
+            dt = (time.perf_counter() - t0) * 1000.0
+            try:
+                record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(raw))
+            except Exception:
+                pass
+            return raw
 
         delay = self.retry.base_delay_s
         for attempt in range(self.retry.max_retries):
@@ -151,9 +189,20 @@ class FinancialBrain:
         #     f.write("== " * 40 + "\n\n")
 
         if returning is not None:
+            dt = (time.perf_counter() - t0) * 1000.0
+            try:
+                record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(str(returning)))
+            except Exception:
+                pass
             return returning
 
-        return "(unreachable)"  # should not reach here
+        raw = "(unreachable)"  # should not reach here
+        dt = (time.perf_counter() - t0) * 1000.0
+        try:
+            record_ai_call(model, duration_ms=dt, prompt_chars=len(str(prompt)), response_chars=len(raw))
+        except Exception:
+            pass
+        return raw
 
     # ----------------- Public high-level helpers -----------------
     def get_text(self, prompt: str) -> str:

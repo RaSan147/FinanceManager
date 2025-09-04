@@ -1,0 +1,9 @@
+{% if perf_metrics and config.SHOW_PERF_FOOTER %}
+<div class="text-center small text-muted mt-2">
+  <span>Req: {{ '%.1f'|format(perf_metrics.total_ms or 0.0) }} ms</span>
+  <span class="mx-2">|</span>
+  <span>DB: {{ (perf_metrics.db_count or 0) }} ops / {{ '%.1f'|format(perf_metrics.db_ms or 0.0) }} ms</span>
+  <span class="mx-2">|</span>
+  <span>AI: {{ (perf_metrics.ai_count or 0) }} calls / {{ '%.1f'|format(perf_metrics.ai_ms or 0.0) }} ms</span>
+</div>
+{% endif %}
