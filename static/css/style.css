@@ -349,56 +349,81 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
 }
 
 /* =======================
-  Tables
+  Tables / Stat bubbles
 ======================= */
 .stat-bubble {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: .25rem;
-  min-height: 110px;
-  border-radius: 16px;
-  padding: 14px 10px;
+  gap: .35rem;
+  min-height: 120px;
+  border-radius: 18px;
+  padding: 16px 12px;
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  transform-style: preserve-3d;
+  backdrop-filter: saturate(130%) blur(var(--glass-blur));
+  /* avoid 3D text blurring */
+  transform-style: flat;
+  backface-visibility: hidden;
   transition: transform .22s ease, box-shadow .24s ease, filter .24s ease;
-  backdrop-filter: saturate(140%) blur(calc(var(--glass-blur) - 2px));
-  -webkit-backdrop-filter: saturate(140%) blur(calc(var(--glass-blur) - 2px));
+  /* frosted glass base */
   background:
-    radial-gradient(120% 120% at 20% 10%, rgba(255, 255, 255, 0.55), transparent 45%),
-    radial-gradient(100% 100% at 90% 10%, rgba(59, 130, 246, 0.16), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.35));
+    /* soft white sheen */
+    radial-gradient(120% 120% at 20% 8%, rgba(255,255,255,.55), rgba(255,255,255,.20) 40%, transparent 60%),
+    /* cool sky tint for depth */
+    radial-gradient(140% 120% at 110% 0%, rgba(59,130,246,.12), transparent 55%),
+    /* subtle vertical glass gradient */
+    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.32));
   border: 1px solid rgba(148, 163, 184, 0.35);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10);
+  /* inner frosted ring + ambient shadow */
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.28),
+    inset 0 -16px 32px rgba(255,255,255,.08),
+    0 10px 24px rgba(0,0,0,.10);
 }
 
+/* elongated specular highlight */
+.stat-bubble::before {
+  content: "";
+  position: absolute;
+  top: -25%;
+  left: -30%;
+  width: 170%;
+  height: 70%;
+  transform: rotate(-14deg);
+  border-radius: 55% 45% 50% 50% / 50% 50% 45% 55%;
+  background:
+    radial-gradient(60% 85% at 20% 10%, rgba(255, 255, 255, 0.308), rgba(255,255,255,.08) 60%, transparent 75%),
+    radial-gradient(80% 100% at 0% 0%, rgba(255,255,255,.28), transparent 60%);
+  mix-blend-mode: screen;
+  filter: blur(6px) saturate(112%);
+  opacity: .45;
+  pointer-events: none;
+  z-index: 0;
+
+  backdrop-filter: blur(1px) saturate(120%);
+  
+}
+
+/* caustics/tint overlay (per-variant adds color) */
 .stat-bubble::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  /* default no additional tint; variants add overlays */
-}
-
-.stat-bubble::before {
-  content: "";
-  position: absolute;
-  top: -10%;
-  left: -10%;
-  width: 65%;
-  height: 55%;
-  border-radius: 50% 50% 40% 40% / 55% 55% 45% 45%;
   background:
-    radial-gradient(120% 90% at 40% 0%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.10) 60%, transparent 75%),
-    radial-gradient(120% 100% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 60%);
+    /* faint top-right tint band (color via variants) */
+    radial-gradient(130% 120% at 95% 0%, rgba(59,130,246,.10), rgba(59,130,246,0) 55%),
+    /* glass ripples/caustics */
+    conic-gradient(from 210deg at 85% 10%, rgba(255,255,255,.10), rgba(255,255,255,0) 20%, rgba(255,255,255,.08) 32%, rgba(255,255,255,0) 62%, rgba(255,255,255,.06) 78%, rgba(255,255,255,0) 100%);
+  z-index: 0;
+
   mix-blend-mode: screen;
-  filter: blur(0.3px) saturate(110%);
-  opacity: .45;
-  pointer-events: none;
+  opacity: .32;
+  filter: blur(3px) saturate(120%);
 }
 
 .stat-bubble h6 {
@@ -413,24 +438,28 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
   font-weight: 700;
 }
 
-.stat-bubble:hover {
-  transform: translateY(-3px) scale(var(--bubble-scale)) rotateX(var(--bubble-tilt)) rotateY(calc(var(--bubble-tilt) * -1));
-  box-shadow: var(--bubble-shadow);
+/* ensure content stays above decorative layers */
+.stat-bubble > * {
+  position: relative;
+  z-index: 1;
 }
 
-.stat-bubble:hover::before {
-  opacity: .55;
-  filter: blur(0.6px) saturate(115%);
+.stat-bubble:hover {
+  /* remove 3D tilt to keep text crisp */
+  transform: translateY(-3px) scale(var(--bubble-scale));
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.14);
 }
+
+/* .stat-bubble:hover::before { opacity: .58; filter: blur(.8px) saturate(116%); } */
 
 [data-theme="dark"] .stat-bubble,
 body.dark-mode .stat-bubble {
   background:
-    radial-gradient(120% 120% at 20% 10%, rgba(255, 255, 255, 0.06), transparent 40%),
-    radial-gradient(100% 100% at 90% 10%, rgba(96, 165, 250, 0.14), transparent 55%),
-    linear-gradient(180deg, rgba(17, 24, 39, 0.7), rgba(17, 24, 39, 0.5));
+    radial-gradient(120% 120% at 20% 8%, rgba(255,255,255,.06), transparent 45%),
+    radial-gradient(140% 120% at 110% 0%, rgba(96,165,250,.14), transparent 55%),
+    linear-gradient(180deg, rgba(17,24,39,.70), rgba(17,24,39,.50));
   border: 1px solid rgba(148, 163, 184, 0.20);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 14px 32px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
 }
 
 /* Motion/accessibility: reduce aggressive transforms if user prefers less motion */
@@ -450,7 +479,32 @@ body.dark-mode .stat-bubble {
   .stat-bubble {
     backdrop-filter: saturate(130%) blur(calc(var(--glass-blur-mobile)));
     -webkit-backdrop-filter: saturate(130%) blur(calc(var(--glass-blur-mobile)));
+
+    min-height: 60px;
+    padding: 12px 10px;
+    border-radius: 14px;
   }
+
+  .stat-bubble::before {
+    /* have more mobile friendly view */
+    filter: blur(4px) saturate(112%);
+
+    top: -30%;
+    left: -40%;
+    width: 130%;
+    height: 80%;
+    border-radius: 60% 40% 50% 50% / 50% 50% 40% 60%;
+  }
+
+  .stat-bubble::after {
+    background:
+      radial-gradient(70% 90% at 20% 10%, rgba(255, 255, 255, 0.208), rgba(255,255,255,.06) 60%, transparent 75%),
+      radial-gradient(90% 110% at 0% 0%, rgba(255,255,255,.18), transparent 60%);
+
+    filter: blur(12px) saturate(110%);
+  }
+
+
 
   .glassy-nav {
     backdrop-filter: saturate(130%) blur(calc(var(--glass-blur-mobile)));
@@ -463,50 +517,35 @@ body.dark-mode .stat-bubble {
   }
 }
 
-/* Stat bubble color tints: subtle, for quick mental parsing */
+/* Stat bubble color tints: quick mental parsing (green, red, blue) */
 .stat-bubble--income {
-  border-color: rgba(var(--success-rgb), 0.35);
+  border-color: rgba(var(--success-rgb), .35);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 10px 24px rgba(0,0,0,.10), 0 16px 30px rgba(var(--success-rgb), .12);
 }
-
-.stat-bubble--income {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10), 0 16px 30px rgba(var(--success-rgb), 0.12);
-}
-
 .stat-bubble--income::after {
   background:
-    radial-gradient(120% 120% at 50% 0%, rgba(var(--success-rgb), 0.10), rgba(var(--success-rgb), 0.00) 62%),
-    radial-gradient(160% 140% at 110% 120%, rgba(var(--success-rgb), 0.12), rgba(0, 0, 0, 0) 55%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--success-rgb), 0.10), rgba(255, 255, 255, 0) 25%, rgba(var(--success-rgb), 0.08) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--success-rgb), 0.06) 75%, rgba(255, 255, 255, 0) 100%);
+    radial-gradient(125% 115% at 90% 0%, rgba(var(--success-rgb), .12), rgba(var(--success-rgb), 0) 58%),
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--success-rgb), .10), rgba(255,255,255,0) 25%, rgba(var(--success-rgb), .08) 35%, rgba(255,255,255,0) 60%, rgba(var(--success-rgb), .06) 78%, rgba(255,255,255,0) 100%);
 }
 
 .stat-bubble--expenses {
-  border-color: rgba(var(--danger-rgb), 0.35);
+  border-color: rgba(var(--danger-rgb), .35);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 10px 24px rgba(0,0,0,.10), 0 16px 30px rgba(var(--danger-rgb), .12);
 }
-
-.stat-bubble--expenses {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10), 0 16px 30px rgba(var(--danger-rgb), 0.12);
-}
-
 .stat-bubble--expenses::after {
   background:
-    radial-gradient(120% 120% at 50% 0%, rgba(var(--danger-rgb), 0.10), rgba(var(--danger-rgb), 0.00) 62%),
-    radial-gradient(160% 140% at 110% 120%, rgba(var(--danger-rgb), 0.12), rgba(0, 0, 0, 0) 55%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--danger-rgb), 0.10), rgba(255, 255, 255, 0) 25%, rgba(var(--danger-rgb), 0.08) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--danger-rgb), 0.06) 75%, rgba(255, 255, 255, 0) 100%);
+    radial-gradient(125% 115% at 90% 0%, rgba(var(--danger-rgb), .12), rgba(var(--danger-rgb), 0) 58%),
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--danger-rgb), .10), rgba(255,255,255,0) 25%, rgba(var(--danger-rgb), .08) 35%, rgba(255,255,255,0) 60%, rgba(var(--danger-rgb), .06) 78%, rgba(255,255,255,0) 100%);
 }
 
 .stat-bubble--savings {
-  border-color: rgba(var(--info-rgb), 0.35);
+  border-color: rgba(var(--info-rgb), .35);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 10px 24px rgba(0,0,0,.10), 0 16px 30px rgba(var(--info-rgb), .12);
 }
-
-.stat-bubble--savings {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10), 0 16px 30px rgba(var(--info-rgb), 0.12);
-}
-
 .stat-bubble--savings::after {
   background:
-    radial-gradient(120% 120% at 50% 0%, rgba(var(--info-rgb), 0.10), rgba(var(--info-rgb), 0.00) 62%),
-    radial-gradient(160% 140% at 110% 120%, rgba(var(--info-rgb), 0.12), rgba(0, 0, 0, 0) 55%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), 0.10), rgba(255, 255, 255, 0) 25%, rgba(var(--info-rgb), 0.08) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--info-rgb), 0.06) 75%, rgba(255, 255, 255, 0) 100%);
+    radial-gradient(125% 115% at 90% 0%, rgba(var(--info-rgb), .12), rgba(var(--info-rgb), 0) 58%),
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), .10), rgba(255,255,255,0) 25%, rgba(var(--info-rgb), .08) 35%, rgba(255,255,255,0) 60%, rgba(var(--info-rgb), .06) 78%, rgba(255,255,255,0) 100%);
 }
 
 [data-theme="dark"] .stat-bubble--income,
@@ -548,7 +587,7 @@ body.dark-mode .stat-bubble--savings::after {
   background:
     radial-gradient(120% 120% at 50% 0%, rgba(var(--info-rgb), 0.08), rgba(var(--info-rgb), 0.00) 62%),
     radial-gradient(160% 140% at 110% 120%, rgba(var(--info-rgb), 0.10), rgba(0, 0, 0, 0) 55%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), 0.08), rgba(255, 255, 255, 0) 25%, rgba(var(--info-rgb), 0.06) 35%, rgba(255, 255, 255), 0 60%, rgba(var(--info-rgb), 0.05) 75%, rgba(255, 255, 255, 0) 100%);
+  conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), 0.08), rgba(255, 255, 255, 0) 25%, rgba(var(--info-rgb), 0.06) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--info-rgb), 0.05) 75%, rgba(255, 255, 255, 0) 100%);
 }
 
 .table {
@@ -1144,9 +1183,3 @@ body.dark-mode .bg-light,
   }
 }
 
-/* Page hero/spacey background helpers (optional) */
-.breezy-bg {
-  background: radial-gradient(800px 600px at 20% 0%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(700px 500px at 80% 0%, rgba(20, 184, 166, 0.12), transparent 60%),
-    linear-gradient(180deg, var(--bg-primary), var(--bg-tertiary));
-}
