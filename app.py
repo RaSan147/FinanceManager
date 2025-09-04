@@ -15,6 +15,7 @@ from bson import ObjectId
 import json
 from models.user import User
 from models.transaction import Transaction
+from models.loan import Loan
 from models.goal import Goal, GoalCreate, GoalUpdate, GoalInDB
 from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
@@ -404,7 +405,12 @@ def add_transaction():
             'created_at': datetime.now(timezone.utc)
         }
 
-        Transaction.create_transaction(transaction_data, mongo.db)
+        tx_id = Transaction.create_transaction(transaction_data, mongo.db)
+        # Update loan tracker based on loan-related categories
+        try:
+            Loan.process_transaction(current_user.id, mongo.db, transaction_data, tx_id)
+        except Exception as e:
+            app.logger.error(f"Loan processing failed for tx {tx_id}: {e}")
         flash('Transaction added successfully.', 'success')
         return redirect(url_for('transactions'))
 
@@ -414,7 +420,16 @@ def add_transaction():
 @app.route('/transactions/<transaction_id>/delete', methods=['POST'])
 @login_required
 def delete_transaction(transaction_id):
+    # Fetch transaction first to know if it affects loans
+    tx = mongo.db.transactions.find_one({'_id': ObjectId(transaction_id), 'user_id': current_user.id})
     Transaction.delete_transaction(current_user.id, ObjectId(transaction_id), mongo.db)
+    try:
+        if tx and (tx.get('category') or '').lower() in {'lent out', 'borrowed', 'repaid by me', 'repaid to me'}:
+            cp = tx.get('related_person')
+            if cp:
+                Loan.recompute_counterparty(current_user.id, mongo.db, cp)
+    except Exception as e:
+        app.logger.error(f"Failed to recompute loans after tx delete: {e}")
     flash('Transaction deleted successfully.', 'success')
     return redirect(url_for('transactions'))
 
@@ -901,6 +916,35 @@ def handle_any_exception(err):  # noqa: D401
         traceback_str=tb_str,
         show_details=show_details
     ), status_code
+
+# ---------------------- LOANS ROUTES ----------------------
+@app.route('/loans')
+@login_required
+def loans():
+    if mongo.db is None:
+        flash('Database connection error.', 'danger')
+        return redirect(url_for('index'))
+    items = Loan.list_user_loans(current_user.id, mongo.db, include_closed=True)
+    return render_template('loans.html', loans=items)
+
+
+@app.route('/api/loans/counterparties')
+@login_required
+def api_loan_counterparties():
+    kind = request.args.get('kind')  # repaid_by_me | repaid_to_me | None
+    names = Loan.list_open_counterparties(current_user.id, mongo.db, kind=kind)
+    return jsonify({'items': names})
+
+
+@app.route('/api/loans/<loan_id>/close', methods=['POST'])
+@login_required
+def api_close_loan(loan_id):
+    payload = request.get_json(silent=True) or {}
+    note = request.form.get('note') or payload.get('note')
+    ok = Loan.close_loan(ObjectId(loan_id), current_user.id, mongo.db, note=note)
+    if not ok:
+        return jsonify({'success': False}), 400
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     app.run(debug=True)

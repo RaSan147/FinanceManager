@@ -77,14 +77,19 @@
                             <input type="date" class="form-control" id="date" name="date" 
                                    value="{{ now.strftime('%Y-%m-%d') }}" required>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="related_person" class="form-label">Related Person (Optional)</label>
-                            <input type="text" class="form-control" id="related_person" name="related_person">
-                        </div>
+                                                <div class="col-md-6 mb-3">
+                                                        <label for="related_person" class="form-label">Related Person (Optional)</label>
+                                                        <input list="person_options" class="form-control" id="related_person" name="related_person" placeholder="Type or select a name">
+                                                        <datalist id="person_options"></datalist>
+                                                        <div class="form-text">Tip: For loan-related categories, you can select a counterparty from your open loans.</div>
+                                                </div>
                     </div>
 
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">Add Transaction</button>
+                                                <div class="d-flex gap-2">
+                                                    <button type="submit" class="btn btn-primary">Add Transaction</button>
+                                                    <a class="btn btn-outline-secondary" href="{{ url_for('loans') }}">View Loans</a>
+                                                </div>
                     </div>
                 </form>
             </div>
@@ -143,6 +148,39 @@ document.addEventListener('DOMContentLoaded', function() {
         update();
     }
 });
+
+// Populate datalist with counterparties for selected loan categories
+const categoryEl = document.getElementById('category');
+const personList = document.getElementById('person_options');
+function kindForCategory(cat) {
+    const v = (cat || '').toLowerCase();
+    if (v === 'repaid by me') return 'repaid_by_me';
+    if (v === 'repaid to me') return 'repaid_to_me';
+    // For initiating loans, we don't restrict; show all open counterparties
+    if (v === 'borrowed' || v === 'lent out') return null;
+    return undefined; // not a loan category
+}
+
+async function refreshCounterparties() {
+    const cat = categoryEl?.value;
+    const kind = kindForCategory(cat);
+    if (typeof kind === 'undefined') { personList.innerHTML=''; return; }
+    try {
+        const url = new URL("{{ url_for('api_loan_counterparties') }}", window.location.origin);
+        if (kind) url.searchParams.set('kind', kind);
+        const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' }});
+        const data = await res.json();
+        personList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
+    } catch(e) {
+        personList.innerHTML = '';
+    }
+}
+
+if (categoryEl) {
+    categoryEl.addEventListener('change', refreshCounterparties);
+    // initial
+    refreshCounterparties();
+}
 </script>
 {% endblock %}
 {% endblock %}
