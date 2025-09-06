@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-4" data-purchase-advisor-root>
     <div class="row">
         <!-- Main Form Column -->
         <div class="col-lg-8">
@@ -116,13 +116,13 @@
         </div>
         <div class="card-body">
             <div class="btn-group">
-                <button id="export-csv" class="btn btn-outline-secondary">
+                <button id="export-csv" class="btn btn-outline-secondary export-btn">
                     <i class="bi bi-file-earmark-spreadsheet"></i> CSV
                 </button>
-                <button id="export-json" class="btn btn-outline-secondary">
+                <button id="export-json" class="btn btn-outline-secondary export-btn">
                     <i class="bi bi-code-square"></i> JSON
                 </button>
-                <button id="export-pdf" class="btn btn-outline-secondary">
+                <button id="export-pdf" class="btn btn-outline-secondary export-btn">
                     <i class="bi bi-file-earmark-pdf"></i> PDF
                 </button>
             </div>

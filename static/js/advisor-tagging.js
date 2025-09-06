@@ -8,6 +8,7 @@ class TagManager {
         const input = document.getElementById('tags');
         const tagList = document.getElementById('tag-list');
 
+        // Add tag on Enter or comma key press
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ',') {
                 e.preventDefault();
@@ -17,6 +18,7 @@ class TagManager {
             }
         });
 
+        // Add tag on input blur
         input.addEventListener('blur', () => {
             const tag = input.value.trim();
             if (tag) this.addTag(tag);
@@ -40,19 +42,19 @@ class TagManager {
         const tagList = document.getElementById('tag-list');
         tagList.innerHTML = '';
 
+        // Render each tag as a badge with a remove button
         this.tags.forEach(tag => {
             const element = document.createElement('span');
-            element.className = 'badge bg-primary me-1 mb-1';
-            element.innerHTML = `
-                ${tag}
-                <button type="button" class="btn-close btn-close-white ms-1" 
-                        aria-label="Remove"></button>
-            `;
-            
-            element.querySelector('button').addEventListener('click', () => {
-                this.removeTag(tag);
-            });
-            
+            element.className = 'badge bg-primary me-1 mb-1 d-inline-flex align-items-center';
+            element.appendChild(document.createTextNode(tag));
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-close btn-close-white ms-1';
+            btn.setAttribute('aria-label', 'Remove');
+            btn.addEventListener('click', () => this.removeTag(tag));
+
+            element.appendChild(btn);
             tagList.appendChild(element);
         });
     }
@@ -62,4 +64,6 @@ class TagManager {
     }
 }
 
+// Expose for other modules (e.g., PurchaseAdvisor)
+window.TagManager = TagManager;
 document.addEventListener('DOMContentLoaded', () => TagManager.init());

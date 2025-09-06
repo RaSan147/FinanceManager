@@ -1,0 +1,17 @@
+/* Pagination */
+.pagination .page-item .page-link {
+	color: var(--text-primary);
+	background-color: var(--bg-secondary);
+	border: 1px solid var(--border-color);
+}
+
+.pagination .page-item.active .page-link {
+	color: #fff;
+	background: linear-gradient(135deg, rgba(var(--accent-primary-rgb), .9), rgba(var(--accent-primary-bright-rgb), .85));
+	border-color: rgba(var(--accent-primary-rgb), .6);
+	box-shadow: 0 6px 16px rgba(var(--accent-primary-rgb), .35);
+}
+
+.pagination .page-item .page-link:hover {
+	background-color: var(--hover-bg);
+}

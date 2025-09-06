@@ -34,6 +34,8 @@ class User(UserMixin):
         self.id = str(user_data['_id'])
         self.email = user_data['email']
         self.name = user_data.get('name', '')
+        # UI / localization preferences
+        self.language = user_data.get('language', 'en')  # default English
         self.created_at = user_data.get('created_at')
         self.occupation = user_data.get('occupation', '')
         self.usual_income_date = user_data.get('usual_income_date', None)
@@ -82,3 +84,17 @@ class User(UserMixin):
         - total_transactions
         """
         return calculate_lifetime_transaction_summary(self.id, self.db)
+
+    @classmethod
+    def get_by_email(cls, email: str, db: Database):
+        user_doc = db.users.find_one({'email': email})
+        if not user_doc:
+            return None
+        return cls(user_doc, db)
+
+    @classmethod
+    def get_by_id(cls, user_id: str, db: Database):
+        user_doc = db.users.find_one({'_id': ObjectId(user_id)})
+        if not user_doc:
+            return None
+        return cls(user_doc, db)

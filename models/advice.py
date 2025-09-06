@@ -33,7 +33,8 @@ class PurchaseAdvice:
     @staticmethod
     def get_recent_advices(user_id, db, limit=10):
         return list(db.purchase_advice.find(
-            {'user_id': user_id, 'is_archived': False}
+            {'user_id': user_id, 'is_archived': False},
+            {'advice': 0}
         ).sort('created_at', -1).limit(limit))
 
     @staticmethod
@@ -103,26 +104,61 @@ class PurchaseAdvice:
 
     @staticmethod
     async def archive_old_entries(user_id, db, pastebin_client=None):
-        # Archive entries older than 30 days
+        """Archive (offload) entries older than 30 days to Pastebin and delete body from DB.
+
+        Behavior:
+        - If pastebin client available: create paste for each, store URL, mark archived, and remove 'advice' field heavy content.
+        - If not: simply mark archived but keep data local.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         old_entries = list(db.purchase_advice.find({
             'user_id': user_id,
-            'created_at': {'$lt': datetime.now(timezone.utc) - timedelta(days=30)},
+            'created_at': {'$lt': cutoff},
             'is_archived': False
         }))
 
+        if not old_entries:
+            return 0
+
+        migrated = 0
         if pastebin_client:
             for entry in old_entries:
-                paste_url = await pastebin_client.create_paste(
-                    title=f"Finance Advice {entry['_id']}",
-                    content=json.dumps(entry, default=str),
-                    private=True
-                )
-                db.purchase_advice.update_one(
-                    {'_id': entry['_id']},
-                    {'$set': {'is_archived': True, 'pastebin_url': paste_url}}
-                )
+                try:
+                    payload = json.dumps(entry, default=str)
+                    paste_url = await pastebin_client.create_paste(
+                        title=f"Finance Advice {entry['_id']}",
+                        content=payload,
+                        private=True
+                    )
+                except Exception:
+                    paste_url = None
+                update_doc = {'is_archived': True, 'archived_at': datetime.now(timezone.utc)}
+                if paste_url:
+                    update_doc['pastebin_url'] = paste_url
+                    # Remove bulky inline content after offload (shallow scrub)
+                    update_doc['advice_offloaded'] = True
+                db.purchase_advice.update_one({'_id': entry['_id']}, {'$set': update_doc, '$unset': {'advice': ''}})
+                migrated += 1
         else:
             db.purchase_advice.update_many(
-                {'user_id': user_id, 'created_at': {'$lt': datetime.now(timezone.utc) - timedelta(days=30)}},
-                {'$set': {'is_archived': True}}
+                {'user_id': user_id, 'created_at': {'$lt': cutoff}},
+                {'$set': {'is_archived': True, 'archived_at': datetime.now(timezone.utc)}}
             )
+            migrated = len(old_entries)
+        return migrated
+
+    @staticmethod
+    async def delete_remote_if_any(entry: dict, pastebin_client=None):
+        """Attempt to delete remote paste for a purchase advice entry if present."""
+        if not pastebin_client:
+            return False
+        url = entry.get('pastebin_url')
+        if not url:
+            return False
+        key = pastebin_client.extract_paste_key(url)
+        if not key:
+            return False
+        try:
+            return await pastebin_client.delete_paste(key)
+        except Exception:
+            return False

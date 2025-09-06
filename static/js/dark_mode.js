@@ -1,3 +1,4 @@
+// Improved readability with proper indentation and comments
 class DarkMode {
     static init() {
         this.loadPreference();
@@ -29,7 +30,6 @@ class DarkMode {
 
         // Initialize toggle state
         const currentTheme = document.documentElement.getAttribute('data-theme');
-        // If theme is not dark (light or unset), consider toggle ON (light)
         toggle.checked = currentTheme !== 'dark';
     }
 
@@ -42,7 +42,6 @@ class DarkMode {
     }
 
     static enableLightMode() {
-        // Keep explicit attribute for consistency with initial loader
         document.documentElement.setAttribute('data-theme', 'light');
         document.body.classList.remove('dark-mode');
         localStorage.setItem('darkMode', 'light');

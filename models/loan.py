@@ -5,6 +5,14 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
 
+# Transaction category constants (centralized to avoid magic strings)
+CAT_LENT_OUT = 'lent out'
+CAT_BORROWED = 'borrowed'
+CAT_REPAID_BY_ME = 'repaid by me'
+CAT_REPAID_TO_ME = 'repaid to me'
+LOAN_RELATED_CATEGORIES = [CAT_LENT_OUT, CAT_BORROWED, CAT_REPAID_BY_ME, CAT_REPAID_TO_ME]
+
+
 
 @dataclass
 class Loan:
@@ -120,7 +128,7 @@ class Loan:
         """Update or create loan entries based on a transaction.
 
         Expected transaction fields:
-        - category: 'lent out' | 'borrowed' | 'repaid by me' | 'repaid to me'
+        - category: loan-related transaction category constant
         - amount (base currency)
         - base_currency
         - related_person (counterparty)
@@ -131,120 +139,89 @@ class Loan:
         amount = float(tx.get('amount') or 0.0)
         base_currency = (tx.get('base_currency') or 'USD').upper()
         if amount <= 0 or not counterparty:
-            return  # Cannot map loan without positive amount and counterparty
+            return
 
-        if category == 'lent out':
-            # I gave a loan -> direction 'given' increases outstanding
+        if category == CAT_LENT_OUT:
             existing = Loan._get_open_loan(db, user_id, 'given', counterparty)
             if existing:
                 db.loans.update_one({'_id': existing['_id']}, {
-                    '$inc': {
-                        'principal_amount': amount,
-                        'outstanding_amount': amount
-                    }
+                    '$inc': {'principal_amount': amount, 'outstanding_amount': amount}
                 })
                 Loan._append_tx(db, existing['_id'], tx_id)
             else:
                 Loan._create_new(db, user_id=user_id, direction='given', counterparty=counterparty, amount=amount, base_currency=base_currency, tx_id=tx_id)
-
-        elif category == 'borrowed':
-            # I took a loan -> direction 'taken' increases outstanding
+        elif category == CAT_BORROWED:
             existing = Loan._get_open_loan(db, user_id, 'taken', counterparty)
             if existing:
                 db.loans.update_one({'_id': existing['_id']}, {
-                    '$inc': {
-                        'principal_amount': amount,
-                        'outstanding_amount': amount
-                    }
+                    '$inc': {'principal_amount': amount, 'outstanding_amount': amount}
                 })
                 Loan._append_tx(db, existing['_id'], tx_id)
             else:
                 Loan._create_new(db, user_id=user_id, direction='taken', counterparty=counterparty, amount=amount, base_currency=base_currency, tx_id=tx_id)
-
-        elif category == 'repaid by me':
-            # I repay to counterparty -> reduce 'taken' loan
+        elif category == CAT_REPAID_BY_ME:
             existing = Loan._get_open_loan(db, user_id, 'taken', counterparty)
             if existing:
                 new_out = max(0.0, float(existing.get('outstanding_amount', 0.0)) - amount)
-                updates: Dict[str, Any] = {
-                    '$set': {'outstanding_amount': new_out}
-                }
+                updates: Dict[str, Any] = {'$set': {'outstanding_amount': new_out}}
                 if tx_id:
                     updates['$addToSet'] = {'transactions': tx_id}
                 db.loans.update_one({'_id': existing['_id']}, updates)
                 if new_out <= 0.00001:
-                    db.loans.update_one({'_id': existing['_id']}, {
-                        '$set': {'status': 'closed', 'closed_at': datetime.now(timezone.utc), 'outstanding_amount': 0.0}
-                    })
-
-        elif category == 'repaid to me':
-            # Counterparty repays me -> reduce 'given' loan
+                    db.loans.update_one({'_id': existing['_id']}, {'$set': {'status': 'closed', 'closed_at': datetime.now(timezone.utc), 'outstanding_amount': 0.0}})
+        elif category == CAT_REPAID_TO_ME:
             existing = Loan._get_open_loan(db, user_id, 'given', counterparty)
             if existing:
                 new_out = max(0.0, float(existing.get('outstanding_amount', 0.0)) - amount)
-                updates: Dict[str, Any] = {
-                    '$set': {'outstanding_amount': new_out}
-                }
+                updates: Dict[str, Any] = {'$set': {'outstanding_amount': new_out}}
                 if tx_id:
                     updates['$addToSet'] = {'transactions': tx_id}
                 db.loans.update_one({'_id': existing['_id']}, updates)
                 if new_out <= 0.00001:
-                    db.loans.update_one({'_id': existing['_id']}, {
-                        '$set': {'status': 'closed', 'closed_at': datetime.now(timezone.utc), 'outstanding_amount': 0.0}
-                    })
-
-        # ignore other categories
+                    db.loans.update_one({'_id': existing['_id']}, {'$set': {'status': 'closed', 'closed_at': datetime.now(timezone.utc), 'outstanding_amount': 0.0}})
+        # other categories ignored
 
     @staticmethod
     def recompute_counterparty(user_id: str, db, counterparty: str) -> None:
-        """Rebuild loan(s) for a counterparty from remaining transactions.
-
-        Computes two independent directions:
-        - given: sum('lent out') - sum('repaid to me')
-        - taken: sum('borrowed') - sum('repaid by me')
-        Updates or deletes corresponding loan docs accordingly.
-        """
+        """Rebuild loan(s) for a counterparty from remaining transactions."""
         cp = Loan._normalize_name(counterparty)
         if not cp:
             return
-        cats = ['lent out', 'borrowed', 'repaid by me', 'repaid to me']
-        txs = list(db.transactions.find({'user_id': user_id, 'related_person': cp, 'category': {'$in': cats}}))
+        txs = list(db.transactions.find({
+            'user_id': user_id,
+            'related_person': cp,
+            'category': {'$in': LOAN_RELATED_CATEGORIES}
+        }))
 
-        def sum_amount(filter_fn):
-            s = 0.0
+        def sum_amount(fn):
+            total = 0.0
             for t in txs:
-                if filter_fn(t):
-                    try:
-                        s += float(t.get('amount', 0.0))
-                    except Exception:
-                        pass
-            return s
+                try:
+                    if fn(t):
+                        total += float(t.get('amount', 0.0))
+                except Exception:
+                    pass
+            return total
 
-        base_currency = None
+        base_currency = 'USD'
         for t in txs:
             bc = t.get('base_currency')
             if isinstance(bc, str) and bc:
                 base_currency = bc.upper()
                 break
-        if not base_currency:
-            base_currency = 'USD'
 
-        # given direction
-        given_principal = sum_amount(lambda t: (t.get('category') or '').lower() == 'lent out')
-        given_repaid = sum_amount(lambda t: (t.get('category') or '').lower() == 'repaid to me')
+        given_principal = sum_amount(lambda t: (t.get('category') or '').lower() == CAT_LENT_OUT)
+        given_repaid = sum_amount(lambda t: (t.get('category') or '').lower() == CAT_REPAID_TO_ME)
         given_out = max(0.0, given_principal - given_repaid)
-        given_tx_ids = [t['_id'] for t in txs if (t.get('category') or '').lower() in {'lent out', 'repaid to me'}]
+        given_tx_ids = [t['_id'] for t in txs if (t.get('category') or '').lower() in {CAT_LENT_OUT, CAT_REPAID_TO_ME}]
 
-        # taken direction
-        taken_principal = sum_amount(lambda t: (t.get('category') or '').lower() == 'borrowed')
-        taken_repaid = sum_amount(lambda t: (t.get('category') or '').lower() == 'repaid by me')
+        taken_principal = sum_amount(lambda t: (t.get('category') or '').lower() == CAT_BORROWED)
+        taken_repaid = sum_amount(lambda t: (t.get('category') or '').lower() == CAT_REPAID_BY_ME)
         taken_out = max(0.0, taken_principal - taken_repaid)
-        taken_tx_ids = [t['_id'] for t in txs if (t.get('category') or '').lower() in {'borrowed', 'repaid by me'}]
+        taken_tx_ids = [t['_id'] for t in txs if (t.get('category') or '').lower() in {CAT_BORROWED, CAT_REPAID_BY_ME}]
 
-        # Upsert helper
         def upsert(direction: str, principal: float, outstanding: float, tx_ids: list[ObjectId]):
             if principal <= 0.0 and outstanding <= 0.0 and not tx_ids:
-                # Remove any stale loan docs for this direction
                 db.loans.delete_many({'user_id': user_id, 'direction': direction, 'counterparty': cp})
                 return
             status = 'closed' if outstanding <= 0.00001 else 'open'
@@ -260,9 +237,7 @@ class Loan:
                         'closed_at': now if status == 'closed' else None,
                         'transactions': tx_ids
                     },
-                    '$setOnInsert': {
-                        'created_at': now
-                    }
+                    '$setOnInsert': {'created_at': now}
                 },
                 upsert=True
             )
