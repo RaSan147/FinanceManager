@@ -81,7 +81,8 @@
         const payload = Object.fromEntries(fd.entries());
         const res = await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
         if(!res.ok) throw new Error('HTTP '+res.status);
-        await res.json();
+  const raw = await res.json();
+  const data = raw && raw.data ? raw.data : raw;
         window.flash && window.flash('Transaction saved','success');
         bsModal.hide();
         // If dashboard live refresh available
@@ -126,6 +127,10 @@
       idInput.value='';
       titleEl.textContent='Add Goal';
       submitBtn.textContent='Save';
+  // Sanitize any stale aria-hidden left if previously force-closed
+  modalEl.removeAttribute('aria-hidden');
+  modalEl.setAttribute('aria-modal','true');
+  modalEl.setAttribute('role','dialog');
       updateSymbol();
       bsModal.show();
     }
@@ -138,11 +143,23 @@
         const payload = Object.fromEntries(fd.entries());
         const res = await fetch('/api/goals', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
         if(!res.ok) throw new Error('HTTP '+res.status);
-        await res.json();
+        let created = null;
+        try {
+          const raw = await res.json();
+          created = raw && raw.data ? (raw.data.item || raw.data.goal || raw.data) : raw;
+        } catch(_) {}
         window.flash && window.flash('Goal saved','success');
         bsModal.hide();
         // Refresh goals if on goals page or dashboard
-        if(window.GoalsModule?.loadGoals) window.GoalsModule.loadGoals(1);
+        if(window.GoalsModule?.loadGoals) {
+          window.GoalsModule.loadGoals(1);
+        } else {
+          // If module not ready yet, schedule retries
+          setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 300);
+          setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 1200);
+        }
+        // Broadcast creation so any listeners (e.g., goals page already loaded) can react
+        try { window.dispatchEvent(new CustomEvent('goal:created')); } catch(_) {}
         if(window.DashboardTransactionsModule?.refreshDashboardData) window.DashboardTransactionsModule.refreshDashboardData();
       } catch(err){ window.flash && window.flash('Save failed','danger'); }
       finally { submitBtn.disabled=false; delete form.dataset.submitting; }

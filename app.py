@@ -21,6 +21,11 @@ from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
 from typing import Any
 from utils.currency import currency_service
+from services.transaction_service import TransactionService
+from schemas.transaction import TransactionCreate, TransactionPatch
+from core.errors import ValidationError, NotFoundError
+from pydantic import ValidationError as PydValidationError
+from core.response import json_success, json_error
 from utils.tools import is_allowed_email
 from config import Config
 # Added centralized timezone helpers
@@ -581,78 +586,39 @@ def edit_transaction(transaction_id):
 @app.route('/api/transactions/<transaction_id>', methods=['PATCH'])
 @login_required
 def api_update_transaction(transaction_id):
-    """JSON edit endpoint mirroring form edit; returns updated item + summaries."""
+    """PATCH a transaction using service layer (refactored)."""
     try:
         from bson import ObjectId
         oid = ObjectId(transaction_id)
     except Exception:
-        return jsonify({'error': 'Invalid id'}), 400
-    tx = Transaction.get_transaction(current_user.id, oid, mongo.db)
-    if not tx:
-        return jsonify({'error': 'Not found'}), 404
+        return json_error("Invalid id", status=400)
     data = request.get_json(silent=True) or {}
-    updates = {}
-    raw_amount = data.get('amount')
-    if raw_amount is not None:
-        try:
-            amt = float(raw_amount)
-            if amt <= 0: raise ValueError
-            updates['amount_original'] = amt
-        except (TypeError, ValueError):
-            return jsonify({'error': 'Invalid amount'}), 400
-    if 'currency' in data and data['currency']:
-        updates['currency'] = str(data['currency']).upper()
-    if 'type' in data:
-        t_type = (data.get('type') or '').lower()
-        if t_type not in {'income', 'expense'}:
-            return jsonify({'error': 'Invalid type'}), 400
-        updates['type'] = t_type
-    if 'category' in data:
-        updates['category'] = data.get('category') or ''
-    if 'description' in data:
-        desc = (data.get('description') or '').strip()
-        if len(desc) < 3:
-            return jsonify({'error': 'Description too short'}), 400
-        updates['description'] = desc
-    if 'date' in data:
-        dstr = data.get('date')
-        from datetime import datetime as _dt, timezone as _tz
-        try:
-            if dstr and len(dstr) == 10:
-                updates['date'] = _dt.strptime(dstr, '%Y-%m-%d').replace(tzinfo=_tz.utc)
-        except ValueError:
-            return jsonify({'error': 'Invalid date'}), 400
-    if 'related_person' in data:
-        updates['related_person'] = data.get('related_person') or ''
-
-    # Currency conversion update
-    if 'amount_original' in updates or 'currency' in updates:
-        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
-        amt_orig = updates.get('amount_original', tx.get('amount_original'))
-        try:
-            amt_float = float(amt_orig)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
-            return jsonify({'error': 'Invalid amount'}), 400
-        cur_code = (updates.get('currency') or tx.get('currency') or user_default_code).upper()
-        updates['base_currency'] = user_default_code
-        updates['amount'] = currency_service.convert_amount(amt_float, cur_code, user_default_code)
-        updates['currency'] = cur_code
-
-    updated = Transaction.update_transaction(current_user.id, oid, updates, mongo.db)
+    # Pre-clean legacy / extraneous fields
+    had_id = ('_id' in data)
+    if had_id:
+        data.pop('_id', None)
+    # Normalize date string (YYYY-MM-DD) to ensure parsing consistency
+    dval = data.get('date')
+    if isinstance(dval, str) and len(dval) == 10:
+        # leave as string (Pydantic will parse) but strip whitespace
+        data['date'] = dval.strip()
+    elif dval in {'', None}:
+        data['date'] = None
     try:
-        cat_eff = (updates.get('category') or tx.get('category') or '').lower()
-        rp_eff = updates.get('related_person') or tx.get('related_person')
-        if cat_eff in {'lent out', 'borrowed', 'repaid by me', 'repaid to me'} and rp_eff:
-            Loan.recompute_counterparty(current_user.id, mongo.db, rp_eff)
+        patch_payload = TransactionPatch(**data)
     except Exception as e:
-        app.logger.error(f"Loan recompute failed after api edit {transaction_id}: {e}")
-
-    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-    lifetime = calculate_lifetime_transaction_summary(current_user.id, mongo.db)
-    if updated and '_id' in updated:
-        updated['_id'] = str(updated['_id'])
-    return jsonify({'item': updated, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
+        return json_error("Validation failed", details=str(e), status=400)
+    svc = TransactionService(mongo.db)
+    try:
+        updated, monthly_summary, lifetime = svc.patch(current_user.id, oid, patch_payload)
+    except NotFoundError:
+        return json_error("Not found", status=404)
+    except ValidationError as ve:
+        return json_error(str(ve), status=400)
+    except Exception as e:
+        app.logger.error(f"Transaction patch failed: {e}\n{traceback.format_exc()}")
+        return json_error("Internal error", code="internal_error", status=500)
+    return json_success({'item': updated, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
 
 
 @app.route('/transactions/<transaction_id>/delete', methods=['POST'])
@@ -883,72 +849,40 @@ def api_transactions_list():
 @app.route('/api/transactions', methods=['POST'])
 @login_required
 def api_create_transaction():
-    """Create a transaction via JSON. Mirrors logic of form POST but returns JSON.
+    """Create a transaction (refactored service-based implementation).
 
-    Body JSON: amount, currency, type, category, description, date (YYYY-MM-DD), related_person
+    Backward-compatible: returns legacy keys (item, monthly_summary, lifetime)
+    plus new envelope under data for future clients.
     """
-    data = request.get_json(silent=True) or {}
-    errors = []
-    raw_amount = data.get('amount')
-    amount = None
-    if raw_amount is None:
-        errors.append('Invalid amount.')
+    data = request.get_json(force=True, silent=True) or {}
     try:
-        amount = float(raw_amount)  # type: ignore[arg-type]
-        if amount <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        amount = None
-        errors.append('Invalid amount.')
+        payload = TransactionCreate(**data)
+    except PydValidationError as ve:
+        errs = [
+            {
+                'field': '.'.join(str(x) for x in e['loc']),
+                'msg': e['msg'],
+                'type': e.get('type')
+            } for e in ve.errors()
+        ]
+        app.logger.info(f"Transaction create validation failed payload={data} errors={errs}")
+        return json_error("Validation failed", details=errs, status=400)
 
-    t_type = (data.get('type') or '').lower()
-    if t_type not in {'income', 'expense'}:
-        errors.append('Invalid type.')
-    category = data.get('category') or ''
-    description = (data.get('description') or '').strip()
-    if len(description) < 3:
-        errors.append('Description too short.')
-    date_str = data.get('date')
-    from datetime import timezone as _tz
-    if date_str:
-        try:
-            date_val = datetime.strptime(date_str, '%Y-%m-%d')
-        except ValueError:
-            date_val = datetime.now(_tz.utc)
-    else:
-        date_val = datetime.now(_tz.utc)
-    related_person = data.get('related_person', '')
-    if errors:
-        return jsonify({'errors': errors}), 400
-    # Currency handling
-    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
-    input_code = (data.get('currency') or user_default_code).upper()
-    # At this point amount is validated (not None)
-    converted_amount = currency_service.convert_amount(amount, input_code, user_default_code)  # type: ignore[arg-type]
-    tx_doc = {
-        'user_id': current_user.id,
-        'amount': converted_amount,
-        'amount_original': amount,
-        'currency': input_code,
-        'base_currency': user_default_code,
-        'type': t_type,
-        'category': category,
-        'description': description,
-        'date': date_val,
-        'related_person': related_person,
-        'created_at': now_utc()
-    }
-    tx_id = Transaction.create_transaction(tx_doc, mongo.db)
+    service = TransactionService(mongo.db)
     try:
-        Loan.process_transaction(current_user.id, mongo.db, tx_doc, tx_id)
-    except Exception as e:
-        app.logger.error(f"Loan processing failed for tx {tx_id}: {e}")
-    tx_doc['_id'] = str(tx_id)
-    # Return updated lightweight summaries (monthly + lifetime) for live UI refresh
-    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-    lifetime = calculate_lifetime_transaction_summary(current_user.id, mongo.db)
-    return jsonify({'item': tx_doc, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
+        tx_doc, monthly_summary, lifetime = service.create(current_user.id, payload)
+    except ValidationError as ve:
+        return json_error(str(ve), status=400)
+    except Exception as e:  # unexpected
+        app.logger.error(f"Transaction create failed: {e}\n{traceback.format_exc()}")
+        return json_error("Internal error", code="internal_error", status=500)
+
+    payload = {
+        'item': tx_doc,
+        'monthly_summary': monthly_summary,
+        'lifetime': lifetime
+    }
+    return json_success(payload)
 
 @app.route('/api/transactions/<transaction_id>', methods=['DELETE'])
 @login_required
@@ -956,22 +890,16 @@ def api_delete_transaction(transaction_id):
     try:
         oid = ObjectId(transaction_id)
     except Exception:
-        return jsonify({'error': 'Invalid id'}), 400
-    tx = mongo.db.transactions.find_one({'_id': oid, 'user_id': current_user.id})
-    if not tx:
-        return jsonify({'error': 'Not found'}), 404
-    Transaction.delete_transaction(current_user.id, oid, mongo.db)
+        return json_error("Invalid id", status=400)
+    svc = TransactionService(mongo.db)
     try:
-        if tx and (tx.get('category') or '').lower() in {'lent out', 'borrowed', 'repaid by me', 'repaid to me'}:
-            cp = tx.get('related_person')
-            if cp:
-                Loan.recompute_counterparty(current_user.id, mongo.db, cp)
+        _, monthly_summary, lifetime = svc.delete(current_user.id, oid)
+    except NotFoundError:
+        return json_error("Not found", status=404)
     except Exception as e:
-        app.logger.error(f"Loan recompute failed after delete {transaction_id}: {e}")
-    # Provide updated summary counts for UI to refresh
-    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-    lifetime = calculate_lifetime_transaction_summary(current_user.id, mongo.db)
-    return jsonify({'success': True, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
+        app.logger.error(f"Transaction delete failed: {e}\n{traceback.format_exc()}")
+        return json_error("Internal error", code="internal_error", status=500)
+    return json_success({'success': True, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
 
 @app.route('/api/dashboard', methods=['GET'])
 @login_required
@@ -1056,6 +984,15 @@ def api_goals_list():
     user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
     allocations = Goal.compute_allocations(current_user.id, mongo.db)
     items = []
+    # Determine which of the page goals actually have an ai_plan stored (but excluded by projection)
+    page_goal_ids = [ObjectId(gm.id) for gm in goal_models]
+    if page_goal_ids:
+        existing_plan_ids = set(doc['_id'] for doc in mongo.db.goals.find({
+            '_id': {'$in': page_goal_ids},
+            'ai_plan': {'$exists': True, '$ne': None}
+        }, {'_id': 1}))
+    else:
+        existing_plan_ids = set()
     for gm in goal_models:
         alloc_amt = allocations.get(gm.id, None)
         progress = Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)
@@ -1064,47 +1001,29 @@ def api_goals_list():
         if isinstance(td, datetime):
             gdict['target_date'] = td.isoformat()
         gdict['progress'] = progress
+        # has_ai_plan True if plan present locally (even though body excluded) OR offloaded
+        gdict['has_ai_plan'] = (ObjectId(gm.id) in existing_plan_ids) or bool(gdict.get('ai_plan_paste_url'))
         items.append(gdict)
     return jsonify({'items': items, 'total': total, 'page': page, 'per_page': per_page, 'sort': sort_param or 'created_desc'})
 
 @app.route('/api/goals', methods=['POST'])
 @login_required
 def api_goal_create():
-    data = request.get_json(silent=True) or {}
-    required_fields = ['goal_type', 'target_amount', 'description', 'target_date']
-    missing = [f for f in required_fields if not data.get(f)]
-    if missing:
-        return jsonify({'errors': [f'Missing: {", ".join(missing)}']}), 400
-    raw_ta = data.get('target_amount')
-    if raw_ta is None:
-        return jsonify({'errors': ['Invalid target_amount']}), 400
+    data = request.get_json(force=True, silent=True) or {}
     try:
-        target_amount = float(raw_ta)  # type: ignore[arg-type]
-        if target_amount <= 0:
-            raise ValueError
-    except (TypeError, ValueError):
-        return jsonify({'errors': ['Invalid target_amount']}), 400
-    goal_type = data.get('goal_type')
-    if goal_type not in ('savings', 'purchase'):
-        return jsonify({'errors': ['Invalid goal_type']}), 400
-    td_str = data.get('target_date')
-    try:
-        parsed_date = ensure_utc(datetime.strptime(td_str, '%Y-%m-%d')) if td_str else None
-    except Exception:
-        return jsonify({'errors': ['Invalid target_date']}), 400
-    if parsed_date is None:
-        return jsonify({'errors': ['Invalid target_date']}), 400
-    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
-    input_code = (data.get('target_currency') or user_default_code).upper()
-    goal_data = GoalCreate(
-        user_id=current_user.id,
-        type=goal_type,
-        target_amount=target_amount,
-        currency=input_code,
-        description=data.get('description', '').strip(),
-        target_date=parsed_date
-    )
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+        payload = {
+            'user_id': current_user.id,
+            'type': data.get('goal_type'),  # frontend sends goal_type
+            'target_amount': data.get('target_amount'),
+            'currency': (data.get('target_currency') or user_default_code).upper(),
+            'description': (data.get('description') or '').strip(),
+            'target_date': data.get('target_date'),
+        }
+        goal_data = GoalCreate(**payload)
+    except PydValidationError as ve:
+        return jsonify({'errors': ve.errors()}), 400
     goal = Goal.create(goal_data, mongo.db)
     Goal.enhance_goal_background(goal, mongo.db, ai_engine)
     return jsonify({'item': goal.model_dump(by_alias=True)})
@@ -1112,27 +1031,22 @@ def api_goal_create():
 @app.route('/api/goals/<goal_id>', methods=['PATCH'])
 @login_required
 def api_goal_update(goal_id):
-    payload = request.get_json(silent=True) or {}
-    update = GoalUpdate(
-        target_amount=payload.get('target_amount'),
-        description=payload.get('description'),
-        target_date=ensure_utc(datetime.strptime(payload['target_date'], '%Y-%m-%d')) if payload.get('target_date') else None,
-        current_amount=payload.get('current_amount'),
-        is_completed=payload.get('is_completed'),
-    )
-    goal = Goal.update(goal_id, current_user.id, update, mongo.db)
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        goal_update = GoalUpdate(**data)
+    except PydValidationError as ve:
+        return jsonify({'errors': ve.errors()}), 400
+    goal = Goal.update(goal_id, current_user.id, goal_update, mongo.db)
     if not goal:
         return jsonify({'error': 'Not found or no changes'}), 404
-    # Trigger background AI revalidation automatically after an edit
+    # Background revalidation
     try:
         threading.Thread(
-            target=lambda: asyncio.run(
-                Goal._ai_enhance_goal(goal_id, goal, mongo.db, ai_engine)
-            ),
+            target=lambda: asyncio.run(Goal._ai_enhance_goal(goal.id, goal, mongo.db, ai_engine)),
             daemon=True
         ).start()
         reval_started = True
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - defensive
         app.logger.error(f"Failed to start goal revalidation after update {goal_id}: {e}")
         reval_started = False
     return jsonify({'item': goal.model_dump(by_alias=True), 'revalidation_started': reval_started})
@@ -1149,6 +1063,12 @@ def api_goal_complete(goal_id):
 @app.route('/api/goals/<goal_id>', methods=['DELETE'])
 @login_required
 def api_goal_delete(goal_id):
+    goal_doc = mongo.db.goals.find_one({'_id': ObjectId(goal_id), 'user_id': current_user.id})
+    if goal_doc and goal_doc.get('ai_plan_paste_url'):
+        async def _del_remote():
+            from models.goal import Goal as GoalModel
+            await GoalModel.delete_remote_ai_plan_if_any(goal_doc, pastebin_client)
+        threading.Thread(target=lambda: asyncio.run(_del_remote()), daemon=True).start()
     ok = Goal.delete(goal_id, current_user.id, mongo.db)
     if not ok:
         return jsonify({'error': 'Not found'}), 404
@@ -1160,6 +1080,12 @@ def api_goal_revalidate(goal_id):
     goal = mongo.db.goals.find_one({'_id': ObjectId(goal_id), 'user_id': current_user.id})
     if not goal:
         return jsonify({'error': 'Not found'}), 404
+    # If plan was offloaded remotely, delete old paste to reduce orphaned pastes
+    if goal.get('ai_plan_paste_url'):
+        async def _del_remote():
+            from models.goal import Goal as GoalModel
+            await GoalModel.delete_remote_ai_plan_if_any(goal, pastebin_client)
+        threading.Thread(target=lambda: asyncio.run(_del_remote()), daemon=True).start()
     thread = threading.Thread(
         target=lambda: asyncio.run(
             Goal._ai_enhance_goal(ObjectId(goal_id), goal, mongo.db, ai_engine)
@@ -1273,18 +1199,109 @@ def api_summary():
 from models.advice import PurchaseAdvice
 from utils.pastebin_client import PastebinClient
 
-# Initialize Pastebin client (optional)
-pastebin_client = PastebinClient(Config.PASTEBIN_API_KEY)
+# Initialize Pastebin client with optional user credentials for deletion
+pastebin_client = PastebinClient(
+    Config.PASTEBIN_API_KEY,
+    os.getenv('PASTEBIN_USERNAME'),
+    os.getenv('PASTEBIN_PASSWORD')
+)
+
+# Simple daily archival scheduler (lightweight alternative to APScheduler)
+_ARCHIVE_INTERVAL_SECONDS = 24 * 3600
+def _run_archival_cycle():  # pragma: no cover (background)
+    try:
+        users = list(mongo.db.users.find({}, {'_id': 1}))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        async def _do_all():
+            total_adv = 0
+            total_goals = 0
+            for u in users:
+                uid = str(u['_id'])
+                try:
+                    total_adv += await PurchaseAdvice.archive_old_entries(uid, mongo.db, pastebin_client)
+                except Exception:
+                    pass
+                try:
+                    from models.goal import Goal as GoalModel
+                    total_goals += await GoalModel.offload_old_ai_plans(uid, mongo.db, pastebin_client)
+                except Exception:
+                    pass
+            print(f"[ArchiveCycle] Migrated {total_adv} purchase advices and {total_goals} goal plans.")
+        loop.run_until_complete(_do_all())
+    except Exception as e:
+        print(f"Archive cycle error: {e}")
+    finally:
+        T = threading.Timer(_ARCHIVE_INTERVAL_SECONDS, _run_archival_cycle)
+        T.daemon = True
+        T.start()
+
+# Start first archival run shortly after startup
+_archival_T = threading.Timer(5, _run_archival_cycle)
+_archival_T.daemon = True
+_archival_T.start()
 
 
 @app.route('/api/ai/advice/<advice_id>', methods=['DELETE'])
 @login_required
 def delete_advice(advice_id):
-    mongo.db.purchase_advice.delete_one({
-        '_id': ObjectId(advice_id),
-        'user_id': current_user.id
-    })
+    entry = mongo.db.purchase_advice.find_one({'_id': ObjectId(advice_id), 'user_id': current_user.id})
+    if entry and entry.get('pastebin_url'):
+        async def _del_remote():
+            await PurchaseAdvice.delete_remote_if_any(entry, pastebin_client)
+        threading.Thread(target=lambda: asyncio.run(_del_remote()), daemon=True).start()
+    mongo.db.purchase_advice.delete_one({'_id': ObjectId(advice_id), 'user_id': current_user.id})
     return jsonify({'success': True})
+
+# Lazy load purchase advice content (offloaded retrieval)
+@app.route('/api/ai/advice/<advice_id>', methods=['GET'])
+@login_required
+def get_advice_content(advice_id):
+    doc = mongo.db.purchase_advice.find_one({'_id': ObjectId(advice_id), 'user_id': current_user.id})
+    if not doc:
+        return jsonify({'error': 'Not found'}), 404
+    # If advice present locally
+    if 'advice' in doc and doc['advice'] is not None:
+        return jsonify({'advice': doc['advice'], 'offloaded': False})
+    # Try remote fetch
+    url = doc.get('pastebin_url')
+    if url:
+        key = pastebin_client.extract_paste_key(url) if pastebin_client else None
+        if key:
+            try:
+                raw = asyncio.run(pastebin_client.read_paste(key))  # safe small run (I/O bound)
+                if raw:
+                    try:
+                        remote_obj = json.loads(raw)
+                        advice = remote_obj.get('advice') if isinstance(remote_obj, dict) else None
+                        if advice is not None:
+                            return jsonify({'advice': advice, 'offloaded': True})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    return jsonify({'error': 'Advice content unavailable'}), 404
+
+# Lazy load goal AI plan (offloaded retrieval)
+@app.route('/api/goals/<goal_id>/ai-plan', methods=['GET'])
+@login_required
+def get_goal_ai_plan(goal_id):
+    goal_doc = mongo.db.goals.find_one({'_id': ObjectId(goal_id), 'user_id': current_user.id})
+    if not goal_doc:
+        return jsonify({'error': 'Not found'}), 404
+    if goal_doc.get('ai_plan'):
+        return jsonify({'plan': goal_doc.get('ai_plan'), 'offloaded': False})
+    url = goal_doc.get('ai_plan_paste_url')
+    if url and pastebin_client:
+        key = pastebin_client.extract_paste_key(url)
+        if key:
+            try:
+                raw = asyncio.run(pastebin_client.read_paste(key))
+                if raw:
+                    return jsonify({'plan': raw, 'offloaded': True})
+            except Exception:
+                pass
+    return jsonify({'error': 'Plan unavailable'}), 404
 
 @app.route('/api/ai/archive-old', methods=['POST'])
 @login_required
@@ -1424,7 +1441,7 @@ def get_advice_history():
 
     total = mongo.db.purchase_advice.count_documents({'user_id': user_id, 'is_archived': False})
     advices = list(
-        mongo.db.purchase_advice.find({'user_id': user_id, 'is_archived': False})
+        mongo.db.purchase_advice.find({'user_id': user_id, 'is_archived': False}, {'advice': 0})
         .sort('created_at', -1)
         .skip(skip)
         .limit(page_size)
@@ -1483,6 +1500,12 @@ def revalidate_goal(goal_id):
             flash('Goal not found.', 'danger')
             return redirect(url_for('goals'))
         
+        # Delete remote offloaded plan if exists to avoid stale paste, then re-run AI enhancement
+        if goal.get('ai_plan_paste_url'):
+            async def _del_remote():
+                from models.goal import Goal as GoalModel
+                await GoalModel.delete_remote_ai_plan_if_any(goal, pastebin_client)
+            threading.Thread(target=lambda: asyncio.run(_del_remote()), daemon=True).start()
         # Run AI enhancement in background
         thread = threading.Thread(
             target=lambda: asyncio.run(

@@ -3,7 +3,7 @@
   .transactions-table thead, .loans-table thead { display:none; }
   .transactions-table tbody tr, .loans-table tbody tr { display:block; margin-bottom:.9rem; border:1px solid var(--border-color); border-radius:12px; padding:.65rem .75rem; background:var(--bg-tertiary); position:relative; }
   .transactions-table tbody tr:hover, .loans-table tbody tr:hover { background:var(--hover-bg)!important; }
-  .transactions-table tbody tr td, .loans-table tbody tr td { display:flex; justify-content:space-between; padding:.35rem 0!important; border:none!important; font-size:.875rem; }
+  .transactions-table tbody tr td, .loans-table tbody tr td { display:flex; justify-content:space-between; padding:.35rem 0!important; border:none!important; font-size:.875rem; font-weight: 500;}
   .loans-table tbody tr td { font-size:.8125rem; }
   .transactions-table tbody tr td:first-child, .loans-table tbody tr td:first-child { padding-top:0!important; }
   .transactions-table tbody tr td:last-child, .loans-table tbody tr td:last-child { padding-bottom:0!important; }

@@ -110,14 +110,15 @@
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      let data = null;
-      try { data = await res.json(); } catch(_) {}
+  let raw = null;
+  try { raw = await res.json(); } catch(_) {}
+  const data = raw && raw.data ? raw.data : raw; // unwrap envelope
       flash('Transaction saved', 'success');
       bsModal.hide();
       // If module available, reload page for consistency
       if (window.DashboardTransactionsModule && typeof window.DashboardTransactionsModule.loadTransactionsPage === 'function') {
         window.DashboardTransactionsModule.loadTransactionsPage(currentPage());
-      } else if (id && data && data.item) {
+  } else if (id && data && data.item) {
         // Fallback: update the specific row inline without full reload
         try {
           const tbody = qs('[data-transactions-body]');
@@ -157,7 +158,7 @@
             }
           }
         } catch (err) { console.warn('Inline row update failed', err); }
-      } else if (!id && data && data.item) {
+  } else if (!id && data && data.item) {
         // New item created but no module: simplest is full page reload
         location.reload();
       }

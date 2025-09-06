@@ -167,8 +167,9 @@ class DashboardTransactionsModule {
     if (!tableRoot) return;
     const perPage = parseInt(tableRoot.getAttribute('data-per-page') || '10', 10);
     try {
-      const data = await fetchJSON(`/api/transactions/list?page=${page}&per_page=${perPage}`);
-      this.renderTransactionsTable(data);
+  const raw = await fetchJSON(`/api/transactions/list?page=${page}&per_page=${perPage}`);
+  const data = raw && raw.data ? raw.data : raw; // support envelope or plain
+  this.renderTransactionsTable(data);
     } catch (err) {
       console.error('Failed to load transactions page', err);
     }
@@ -223,9 +224,10 @@ class DashboardTransactionsModule {
   }
 
   static async deleteTransaction(id) {
-    const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('Delete failed');
-    return res.json();
+  const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('Delete failed');
+  const raw = await res.json();
+  return raw && raw.data ? raw.data : raw;
   }
 }
 
