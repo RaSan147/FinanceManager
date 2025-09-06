@@ -56,7 +56,8 @@
   --text-primary: #e5e7eb;
   --text-secondary: #94a3b8;
   /* Brighter hint text for contrast on dark surfaces */
-  --text-hint: #cbd5e1; /* slate-300 */
+  --text-hint: #cbd5e1;
+  /* slate-300 */
   --accent-primary: #60a5fa;
   --accent-secondary: #64748b;
   --border-color: #233046;
@@ -101,6 +102,13 @@ body {
   /* reserve for sticky nav */
   background-color: transparent;
   /* allow gradient overlay to show */
+}
+
+/* on mobile no padding top */
+@media (max-width: 768px) {
+  body {
+    padding-top: 0;
+  }
 }
 
 /* Breezy background overlay: covers viewport consistently without content-height conflicts */
@@ -375,17 +383,17 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
   /* frosted glass base */
   background:
     /* soft white sheen */
-    radial-gradient(120% 120% at 20% 8%, rgba(255,255,255,.55), rgba(255,255,255,.20) 40%, transparent 60%),
+    radial-gradient(120% 120% at 20% 8%, rgba(255, 255, 255, .55), rgba(255, 255, 255, .20) 40%, transparent 60%),
     /* cool sky tint for depth */
-    radial-gradient(140% 120% at 110% 0%, rgba(59,130,246,.12), transparent 55%),
+    radial-gradient(140% 120% at 110% 0%, rgba(59, 130, 246, .12), transparent 55%),
     /* subtle vertical glass gradient */
-    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.32));
+    linear-gradient(180deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .32));
   border: 1px solid rgba(148, 163, 184, 0.35);
   /* inner frosted ring + ambient shadow */
   box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,.28),
-    inset 0 -16px 32px rgba(255,255,255,.08),
-    0 10px 24px rgba(0,0,0,.10);
+    inset 0 0 0 1px rgba(255, 255, 255, .28),
+    inset 0 -16px 32px rgba(255, 255, 255, .08),
+    0 10px 24px rgba(0, 0, 0, .10);
 }
 
 /* elongated specular highlight */
@@ -399,8 +407,8 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
   transform: rotate(-14deg);
   border-radius: 55% 45% 50% 50% / 50% 50% 45% 55%;
   background:
-    radial-gradient(60% 85% at 20% 10%, rgba(255, 255, 255, 0.308), rgba(255,255,255,.08) 60%, transparent 75%),
-    radial-gradient(80% 100% at 0% 0%, rgba(255,255,255,.28), transparent 60%);
+    radial-gradient(60% 85% at 20% 10%, rgba(255, 255, 255, 0.308), rgba(255, 255, 255, .08) 60%, transparent 75%),
+    radial-gradient(80% 100% at 0% 0%, rgba(255, 255, 255, .28), transparent 60%);
   mix-blend-mode: screen;
   filter: blur(6px) saturate(112%);
   opacity: .45;
@@ -408,7 +416,7 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
   z-index: 0;
 
   backdrop-filter: blur(1px) saturate(120%);
-  
+
 }
 
 /* caustics/tint overlay (per-variant adds color) */
@@ -420,9 +428,9 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
   border-radius: inherit;
   background:
     /* faint top-right tint band (color via variants) */
-    radial-gradient(130% 120% at 95% 0%, rgba(59,130,246,.10), rgba(59,130,246,0) 55%),
+    radial-gradient(130% 120% at 95% 0%, rgba(59, 130, 246, .10), rgba(59, 130, 246, 0) 55%),
     /* glass ripples/caustics */
-    conic-gradient(from 210deg at 85% 10%, rgba(255,255,255,.10), rgba(255,255,255,0) 20%, rgba(255,255,255,.08) 32%, rgba(255,255,255,0) 62%, rgba(255,255,255,.06) 78%, rgba(255,255,255,0) 100%);
+    conic-gradient(from 210deg at 85% 10%, rgba(255, 255, 255, .10), rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, .08) 32%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, .06) 78%, rgba(255, 255, 255, 0) 100%);
   z-index: 0;
 
   mix-blend-mode: screen;
@@ -443,7 +451,7 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
 }
 
 /* ensure content stays above decorative layers */
-.stat-bubble > * {
+.stat-bubble>* {
   position: relative;
   z-index: 1;
 }
@@ -459,11 +467,11 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
 [data-theme="dark"] .stat-bubble,
 body.dark-mode .stat-bubble {
   background:
-    radial-gradient(120% 120% at 20% 8%, rgba(255,255,255,.06), transparent 45%),
-    radial-gradient(140% 120% at 110% 0%, rgba(96,165,250,.14), transparent 55%),
-    linear-gradient(180deg, rgba(17,24,39,.70), rgba(17,24,39,.50));
+    radial-gradient(120% 120% at 20% 8%, rgba(255, 255, 255, .06), transparent 45%),
+    radial-gradient(140% 120% at 110% 0%, rgba(96, 165, 250, .14), transparent 55%),
+    linear-gradient(180deg, rgba(17, 24, 39, .70), rgba(17, 24, 39, .50));
   border: 1px solid rgba(148, 163, 184, 0.20);
-  box-shadow: 0 14px 32px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
 
 /* Motion/accessibility: reduce aggressive transforms if user prefers less motion */
@@ -502,8 +510,8 @@ body.dark-mode .stat-bubble {
 
   .stat-bubble::after {
     background:
-      radial-gradient(70% 90% at 20% 10%, rgba(255, 255, 255, 0.208), rgba(255,255,255,.06) 60%, transparent 75%),
-      radial-gradient(90% 110% at 0% 0%, rgba(255,255,255,.18), transparent 60%);
+      radial-gradient(70% 90% at 20% 10%, rgba(255, 255, 255, 0.208), rgba(255, 255, 255, .06) 60%, transparent 75%),
+      radial-gradient(90% 110% at 0% 0%, rgba(255, 255, 255, .18), transparent 60%);
 
     filter: blur(12px) saturate(110%);
   }
@@ -524,32 +532,35 @@ body.dark-mode .stat-bubble {
 /* Stat bubble color tints: quick mental parsing (green, red, blue) */
 .stat-bubble--income {
   border-color: rgba(var(--success-rgb), .35);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 10px 24px rgba(0,0,0,.10), 0 16px 30px rgba(var(--success-rgb), .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 10px 24px rgba(0, 0, 0, .10), 0 16px 30px rgba(var(--success-rgb), .12);
 }
+
 .stat-bubble--income::after {
   background:
     radial-gradient(125% 115% at 90% 0%, rgba(var(--success-rgb), .12), rgba(var(--success-rgb), 0) 58%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--success-rgb), .10), rgba(255,255,255,0) 25%, rgba(var(--success-rgb), .08) 35%, rgba(255,255,255,0) 60%, rgba(var(--success-rgb), .06) 78%, rgba(255,255,255,0) 100%);
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--success-rgb), .10), rgba(255, 255, 255, 0) 25%, rgba(var(--success-rgb), .08) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--success-rgb), .06) 78%, rgba(255, 255, 255, 0) 100%);
 }
 
 .stat-bubble--expenses {
   border-color: rgba(var(--danger-rgb), .35);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 10px 24px rgba(0,0,0,.10), 0 16px 30px rgba(var(--danger-rgb), .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 10px 24px rgba(0, 0, 0, .10), 0 16px 30px rgba(var(--danger-rgb), .12);
 }
+
 .stat-bubble--expenses::after {
   background:
     radial-gradient(125% 115% at 90% 0%, rgba(var(--danger-rgb), .12), rgba(var(--danger-rgb), 0) 58%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--danger-rgb), .10), rgba(255,255,255,0) 25%, rgba(var(--danger-rgb), .08) 35%, rgba(255,255,255,0) 60%, rgba(var(--danger-rgb), .06) 78%, rgba(255,255,255,0) 100%);
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--danger-rgb), .10), rgba(255, 255, 255, 0) 25%, rgba(var(--danger-rgb), .08) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--danger-rgb), .06) 78%, rgba(255, 255, 255, 0) 100%);
 }
 
 .stat-bubble--savings {
   border-color: rgba(var(--info-rgb), .35);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), 0 10px 24px rgba(0,0,0,.10), 0 16px 30px rgba(var(--info-rgb), .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), 0 10px 24px rgba(0, 0, 0, .10), 0 16px 30px rgba(var(--info-rgb), .12);
 }
+
 .stat-bubble--savings::after {
   background:
     radial-gradient(125% 115% at 90% 0%, rgba(var(--info-rgb), .12), rgba(var(--info-rgb), 0) 58%),
-    conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), .10), rgba(255,255,255,0) 25%, rgba(var(--info-rgb), .08) 35%, rgba(255,255,255,0) 60%, rgba(var(--info-rgb), .06) 78%, rgba(255,255,255,0) 100%);
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), .10), rgba(255, 255, 255, 0) 25%, rgba(var(--info-rgb), .08) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--info-rgb), .06) 78%, rgba(255, 255, 255, 0) 100%);
 }
 
 [data-theme="dark"] .stat-bubble--income,
@@ -591,7 +602,7 @@ body.dark-mode .stat-bubble--savings::after {
   background:
     radial-gradient(120% 120% at 50% 0%, rgba(var(--info-rgb), 0.08), rgba(var(--info-rgb), 0.00) 62%),
     radial-gradient(160% 140% at 110% 120%, rgba(var(--info-rgb), 0.10), rgba(0, 0, 0, 0) 55%),
-  conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), 0.08), rgba(255, 255, 255, 0) 25%, rgba(var(--info-rgb), 0.06) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--info-rgb), 0.05) 75%, rgba(255, 255, 255, 0) 100%);
+    conic-gradient(from 200deg at 90% 10%, rgba(var(--info-rgb), 0.08), rgba(255, 255, 255, 0) 25%, rgba(var(--info-rgb), 0.06) 35%, rgba(255, 255, 255, 0) 60%, rgba(var(--info-rgb), 0.05) 75%, rgba(255, 255, 255, 0) 100%);
 }
 
 
@@ -770,7 +781,8 @@ small.form-text {
 input::placeholder,
 textarea::placeholder {
   color: var(--text-hint) !important;
-  opacity: 0.95; /* ensure readable contrast */
+  opacity: 0.95;
+  /* ensure readable contrast */
 }
 
 /* Slightly dim placeholder on focus to reduce distraction */
@@ -1138,16 +1150,12 @@ body.dark-mode .goal-item {
 }
 
 /* Export buttons: make them cohesive */
-.btn-group #export-csv,
-.btn-group #export-json,
-.btn-group #export-pdf {
+.btn-group.export-btn {
   border-radius: 8px;
   padding: .5rem .8rem;
 }
 
-.btn-group #export-csv i,
-.btn-group #export-json i,
-.btn-group #export-pdf i {
+.btn-group.export-btn i {
   margin-right: .35rem;
 }
 
@@ -1186,6 +1194,27 @@ body.dark-mode .nav-link,
 [data-theme="dark"] .dropdown-item {
   color: var(--nav-color) !important;
   transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Unified small action buttons (loans, goals, transactions) */
+.action-btn {
+  padding: .3rem .55rem;
+  font-size: .9rem;
+  line-height: 1.1;
+  align-items: center;
+  gap: .35rem;
+  text-align: center;
+}
+
+.action-btn i {
+  font-size: .85rem;
+}
+
+@media (max-width: 640px) {
+  .action-btn {
+    font-size: .85rem;
+    padding: .28rem .5rem;
+  }
 }
 
 /* Hover states */
@@ -1227,3 +1256,255 @@ body.dark-mode .bg-light,
   }
 }
 
+/* =======================
+   Responsive: Transactions Table -> Card stack on small screens
+   ======================= */
+@media (max-width: 640px) {
+  .transactions-table thead {
+    display: none;
+  }
+
+  .transactions-table tbody tr {
+    display: block;
+    margin-bottom: 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: .65rem .75rem;
+    background: var(--bg-tertiary);
+    position: relative;
+  }
+
+  .transactions-table tbody tr:hover {
+    background: var(--hover-bg) !important;
+  }
+
+  .transactions-table tbody tr td {
+    display: flex;
+    justify-content: space-between;
+    padding: .35rem 0 !important;
+    border: none !important;
+    font-size: 0.875rem;
+  }
+
+  .transactions-table tbody tr td:first-child {
+    padding-top: 0 !important;
+  }
+
+  .transactions-table tbody tr td:last-child {
+    padding-bottom: 0 !important;
+  }
+
+  .transactions-table tbody tr td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding-right: .75rem;
+    flex: 0 0 42%;
+    text-align: left;
+  }
+
+  .transactions-table tbody tr td[data-label='Actions'] {
+    justify-content: flex-end;
+  }
+
+  .transactions-table tbody tr td[data-label='Actions']::before {
+    content: '';
+    display: none;
+  }
+
+  .transactions-table tbody tr td button {
+    margin-left: .5rem;
+  }
+
+  /* Loans table responsive stack */
+  .loans-table thead {
+    display: none;
+  }
+
+  .loans-table tbody tr {
+    display: block;
+    margin-bottom: 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: .65rem .75rem;
+    background: var(--bg-tertiary);
+  }
+
+  .loans-table tbody tr:hover {
+    background: var(--hover-bg) !important;
+  }
+
+  .loans-table tbody tr td {
+    display: flex;
+    justify-content: space-between;
+    padding: .35rem 0 !important;
+    border: none !important;
+    font-size: 0.8125rem;
+  }
+
+  .loans-table tbody tr td:first-child {
+    padding-top: 0 !important;
+  }
+
+  .loans-table tbody tr td:last-child {
+    padding-bottom: 0 !important;
+  }
+
+  .loans-table tbody tr td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding-right: .6rem;
+    flex: 0 0 46%;
+    text-align: left;
+  }
+
+  .loans-table tbody tr td[data-label='Actions'] {
+    justify-content: flex-end;
+  }
+
+  .loans-table tbody tr td[data-label='Actions']::before {
+    content: '';
+    display: none;
+  }
+
+  .loans-table tbody tr td button {
+    margin-left: .4rem;
+  }
+}
+
+/* Transactions header mobile tweaks */
+@media (max-width: 640px) {
+  .transactions-header {
+    gap: .5rem;
+  }
+
+  .transactions-header h4.card-title {
+    font-size: 1.05rem;
+    margin: 0;
+  }
+
+  .transactions-header .add-transaction-btn {
+    padding: .35rem .55rem;
+    font-size: .75rem;
+  }
+
+  .transactions-header .add-transaction-btn .btn-label {
+    display: none;
+  }
+
+  .transactions-header .add-transaction-btn i {
+    margin-right: 0 !important;
+    font-size: 1rem;
+  }
+}
+
+/* =======================
+   Responsive: Goals list compact adjustments
+   ======================= */
+@media (max-width: 640px) {
+  .goals-list .list-group-item {
+    padding: .85rem .9rem;
+  }
+
+  .goals-list .list-group-item h5 {
+    font-size: 1rem;
+  }
+
+  .goals-list .list-group-item .progress {
+    height: 16px !important;
+  }
+
+  .goals-list .list-group-item .progress-bar {
+    font-size: .85rem;
+  }
+
+  .goals-list .list-group-item .d-flex.justify-content-between {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: .25rem;
+  }
+
+  .goals-list .list-group-item .text-end {
+    text-align: left !important;
+    min-width: 100% !important;
+  }
+
+  .goals-list .list-group-item .text-end .small {
+    font-size: .7rem;
+  }
+
+  .goals-list .list-group-item .d-flex.justify-content-end {
+    flex-wrap: wrap;
+  }
+
+  .goals-list .list-group-item .d-flex.justify-content-end .btn {
+    flex: 1 1 48%;
+    margin: 2px 0;
+  }
+}
+
+/* Goals meta block width on wider screens */
+@media (min-width: 641px) {
+  .goal-meta-block {
+    min-width: 230px;
+  }
+}
+
+/* =======================
+   Modal (Transaction Add/Edit) Theming
+   ======================= */
+.modal-content {
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-tertiary));
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.12);
+  backdrop-filter: blur(calc(var(--glass-blur) - 2px)) saturate(140%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) - 2px)) saturate(140%);
+  overflow: hidden;
+  position: relative;
+  z-index: 1056; /* slightly above .modal (1055) but below tooltips if any */
+}
+
+.modal-header {
+  background: linear-gradient(135deg, var(--header-grad-1), var(--header-grad-2));
+  border-bottom: 1px solid rgba(59,130,246,0.25);
+}
+
+[data-theme="dark"] .modal-header,
+body.dark-mode .modal-header {
+  border-bottom-color: rgba(96,165,250,0.35);
+}
+
+.modal-title { font-weight: 600; }
+
+.modal-footer { border-top: 1px solid var(--border-color); }
+
+.modal-content input,
+.modal-content select,
+.modal-content textarea {
+  box-shadow: none !important;
+}
+
+.modal-backdrop.show { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index:1050; }
+
+/* Ensure modal container stacking */
+.modal { z-index: 1055; }
+
+/* Fix accidental pointer-events blocking */
+.modal-backdrop { pointer-events: auto; }
+
+[data-theme="dark"] .modal-content,
+body.dark-mode .modal-content {
+  box-shadow: 0 18px 46px rgba(0,0,0,0.6), 0 6px 18px rgba(0,0,0,0.4);
+}
+
+.modal .input-group-text { background-color: var(--bg-tertiary); border-color: var(--border-color); }
+
+.modal [data-symbol-prefix] { min-width: 42px; justify-content: center; }
+
+.modal .form-text { font-size: 0.725rem; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .modal.fade .modal-dialog { transition: transform .3s ease, opacity .3s ease; }
+}

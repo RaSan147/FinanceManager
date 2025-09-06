@@ -1,3 +1,4 @@
+// Improved readability with proper indentation and comments
 class FinanceVisualizer {
     static init() {
         this.charts = {};
@@ -9,6 +10,7 @@ class FinanceVisualizer {
     static initImpactChart() {
         const ctx = document.getElementById('impactChart');
         if (!ctx) return;
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js is not loaded');
             return;
@@ -21,12 +23,16 @@ class FinanceVisualizer {
                     const datasets = chart?.data?.datasets || [];
                     const values = (datasets[0]?.data || []).map(Number);
                     const sum = values.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+
                     if (sum > 0) return;
+
                     const { ctx: c, chartArea } = chart;
                     if (!chartArea) return;
+
                     const { left, right, top, bottom } = chartArea;
                     const x = (left + right) / 2;
                     const y = (top + bottom) / 2;
+
                     c.save();
                     c.textAlign = 'center';
                     c.textBaseline = 'middle';
@@ -75,12 +81,15 @@ class FinanceVisualizer {
                     const ds0 = chart?.data?.datasets?.[0]?.data || [];
                     const ds1 = chart?.data?.datasets?.[1]?.data || [];
                     const total = [...ds0, ...ds1].reduce((a, b) => a + (Number(b) || 0), 0);
+
                     if ((labels.length === 0) || total === 0) {
                         const { ctx: c, chartArea } = chart;
                         if (!chartArea) return;
+
                         const { left, right, top, bottom } = chartArea;
                         const x = (left + right) / 2;
                         const y = (top + bottom) / 2;
+
                         c.save();
                         c.textAlign = 'center';
                         c.textBaseline = 'middle';
@@ -89,7 +98,9 @@ class FinanceVisualizer {
                         c.fillText('No category data', x, y);
                         c.restore();
                     }
-                } catch (_) { /* noop */ }
+                } catch (_) {
+                    // noop
+                }
             }
         };
 
@@ -114,7 +125,7 @@ class FinanceVisualizer {
                     y: {
                         beginAtZero: true,
                         ticks: {
-                            callback: function(value){
+                            callback: function(value) {
                                 return window.formatNumber ? window.formatNumber(value, 0) : value;
                             }
                         }
@@ -151,7 +162,7 @@ class FinanceVisualizer {
                 scales: {
                     y: {
                         ticks: {
-                            callback: function(value){
+                            callback: function(value) {
                                 return window.formatNumber ? window.formatNumber(value, 0) : value;
                             }
                         }

@@ -7,15 +7,14 @@
   <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
     <h4 class="card-title mb-0">Loans</h4>
     <div>
-      <a href="{{ url_for('add_transaction') }}" class="btn btn-light">
+      <button type="button" class="btn btn-light" data-loans-open-tx>
         <i class="bi bi-plus"></i> Add Transaction
-      </a>
+      </button>
     </div>
   </div>
   <div class="card-body">
-    {% if loans %}
-    <div class="table-responsive">
-      <table class="table table-hover">
+    <div class="table-responsive" data-loans-table>
+  <table class="table table-hover loans-table">
         <thead>
           <tr>
             <th>Status</th>
@@ -29,61 +28,26 @@
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody>
-        {% for l in loans %}
-          <tr>
-            <td>
-              {% if l.status == 'open' %}<span class="badge bg-success">Open</span>{% else %}<span class="badge bg-secondary">Closed</span>{% endif %}
-            </td>
-            <td>{{ l.direction|capitalize }}</td>
-            <td>{{ l.counterparty }}</td>
-            <td>{{ currency_symbol }}{{ '%.2f'|format(l.principal_amount) }}</td>
-            <td>{{ currency_symbol }}{{ '%.2f'|format(l.outstanding_amount) }}</td>
-            <td>{{ l.base_currency }}</td>
-            <td>{{ l.created_at.strftime('%b %d, %Y') if l.created_at }}</td>
-            <td>{{ l.closed_at.strftime('%b %d, %Y') if l.closed_at }}</td>
-            <td>
-              {% if l.status == 'open' %}
-              <form class="d-inline" method="POST" onsubmit="return closeLoan('{{ l._id }}', this);">
-                <input type="hidden" name="note" value="Closed manually">
-                <button type="submit" class="btn btn-sm btn-outline-danger">End Loan</button>
-              </form>
-              {% else %}
-              <span class="text-muted">—</span>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
+        <tbody data-loans-body>
+          <tr><td colspan="9" class="text-muted text-center">Loading...</td></tr>
         </tbody>
       </table>
     </div>
-    {% else %}
-      <p class="text-muted">No loan entries yet. Add a transaction with category "Lent Out", "Borrowed", or repayment categories to start tracking.</p>
-    {% endif %}
   </div>
 </div>
 
+<!-- Dynamic behavior handled by loans.js -->
+{% block extra_js %}
 <script>
-async function closeLoan(id, form) {
-  try {
-    const fd = new FormData(form);
-    const note = fd.get('note');
-    const res = await fetch(`{{ url_for('api_close_loan', loan_id='__ID__') }}`.replace('__ID__', id), {
-      method: 'POST',
-      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      body: fd
-    });
-    const data = await res.json();
-    if (data.success) {
-      location.reload();
-    } else {
-      alert('Failed to close loan');
-    }
-  } catch (e) {
-    alert('Error closing loan');
-  }
-  return false;
-}
-
+document.addEventListener('DOMContentLoaded', function(){
+  const btn = document.querySelector('[data-loans-open-tx]');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    const url = new URL(window.location.origin + '/transactions');
+    url.searchParams.set('openModal','1');
+    window.location.href = url.toString();
+  });
+});
 </script>
+{% endblock %}
 {% endblock %}

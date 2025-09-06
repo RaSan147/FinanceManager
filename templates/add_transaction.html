@@ -38,31 +38,18 @@
 
                     <div class="mb-3">
                         <label for="category" class="form-label">Category</label>
-                        <select class="form-select" id="category" name="category" required>
+                        <select class="form-select" id="category" name="category" required data-categories='{{ tx_categories | tojson }}'>
                             <option value="">Select a category</option>
                             <optgroup label="Income">
-                                <option value="salary">Salary</option>
-                                <option value="freelance">Freelance</option>
-                                <option value="investment">Investment</option>
-                                <option value="gift">Gift</option>
-                                <option value="borrowed">Borrowed (Loan Taken)</option>
-                                <option value="repaid to me">Repaid to Me (Debt Received)</option>
-                                <option value="other">Other Income</option>
+                                {% for val,labels in tx_categories['income'].items() %}
+                                <option value="{{ val }}">{{ labels.get('en') }}</option>
+                                {% endfor %}
                             </optgroup>
                             <optgroup label="Expense">
-                                <option value="housing">Housing</option>
-                                <option value="food">Food</option>
-                                <option value="transportation">Transportation</option>
-                                <option value="entertainment">Entertainment</option>
-                                <option value="health">Health</option>
-                                <option value="education">Education</option>
-                                <option value="shopping">Shopping</option>
-                                <option value="work">Work</option>
-                                <option value="lent out">Lent Out (Loan Given)</option>
-                                <option value="repaid by me">Repaid by Me (Debt Payment)</option>
-                                <option value="other">Other Expense</option>
+                                {% for val,labels in tx_categories['expense'].items() %}
+                                <option value="{{ val }}">{{ labels.get('en') }}</option>
+                                {% endfor %}
                             </optgroup>
-
                         </select>
                     </div>
 
@@ -99,43 +86,16 @@
 
 {% block extra_js %}
 <script>
+const TX_CATEGORIES = JSON.parse(document.getElementById('category').dataset.categories || '{}');
+document.getElementById('category').dataset.initialized = '1';
 document.getElementById('type').addEventListener('change', function() {
-    const categorySelect = document.getElementById('category');
-    const selectedType = this.value;
-    
-    // Reset category options
-    categorySelect.innerHTML = '<option value="">Select a category</option>';
-    
-    // Add appropriate options based on type
-    if (selectedType === 'income') {
-        categorySelect.innerHTML += `
-            <optgroup label="Income">
-                <option value="salary">Salary</option>
-                <option value="freelance">Freelance</option>
-                <option value="investment">Investment</option>
-                <option value="gift">Gift</option>
-                <option value="borrowed">Borrowed (Loan Taken)</option>
-                <option value="repaid to me">Repaid to Me (Debt Received)</option>
-                <option value="other">Other Income</option>
-            </optgroup>
-        `;
-    } else {
-        categorySelect.innerHTML += `
-            <optgroup label="Expense">
-                <option value="housing">Housing</option>
-                <option value="food">Food</option>
-                <option value="transportation">Transportation</option>
-                <option value="entertainment">Entertainment</option>
-                <option value="health">Health</option>
-                <option value="education">Education</option>
-                <option value="shopping">Shopping</option>
-                <option value="work">Work</option>
-                <option value="lent out">Lent Out (Loan Given)</option>
-                <option value="repaid by me">Repaid by Me (Debt Payment)</option>
-                <option value="other">Other Expense</option>
-            </optgroup>
-        `;
-    }
+    const catSel = document.getElementById('category');
+    const kind = this.value === 'income' ? 'income' : 'expense';
+    const groups = [];
+    const catObj = TX_CATEGORIES[kind] || {};
+    const opts = Object.entries(catObj).map(([val, labels]) => `<option value="${val}">${(labels && labels.en) || val}</option>`).join('');
+    groups.push(`<optgroup label="${kind.charAt(0).toUpperCase()+kind.slice(1)}">${opts}</optgroup>`);
+    catSel.innerHTML = '<option value="">Select a category</option>' + groups.join('');
 });
 
 // Update currency symbol prefix when currency selection changes

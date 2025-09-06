@@ -14,11 +14,12 @@ from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 import json
 from models.user import User
-from models.transaction import Transaction
+from models.transaction import Transaction, TRANSACTION_CATEGORIES
 from models.loan import Loan
 from models.goal import Goal, GoalCreate, GoalUpdate, GoalInDB
 from utils.ai_helper import get_ai_analysis, get_goal_plan
 from utils.finance_calculator import calculate_monthly_summary,  calculate_lifetime_transaction_summary
+from typing import Any
 from utils.currency import currency_service
 from utils.tools import is_allowed_email
 from config import Config
@@ -239,6 +240,8 @@ def index():
         summary=monthly_summary,
         balance=full_balance,  # Now passing the complete balance object
     days_until_income=days_until_income,
+    tx_categories=TRANSACTION_CATEGORIES,
+    user_language=(user or {}).get('language','en'),
     perf_metrics=metrics_summary()
     )
 
@@ -407,82 +410,244 @@ def transactions():
     transactions = Transaction.get_user_transactions(current_user.id, mongo.db, page, per_page)
     total_transactions = Transaction.count_user_transactions(current_user.id, mongo.db)
     
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
     return render_template('transactions.html', 
                          transactions=transactions,
                          page=page,
                          per_page=per_page,
                          total_transactions=total_transactions,
+                         tx_categories=TRANSACTION_CATEGORIES,
+                         user_language=(user_doc or {}).get('language','en'),
                          perf_metrics=metrics_summary())
 
-@app.route('/transactions/add', methods=['GET', 'POST'])
+@app.route('/transactions/add', methods=['POST'])
 @login_required
 def add_transaction():
-    if request.method == 'POST':
-        amount_raw = request.form.get('amount')
-        input_currency_code = request.form.get('currency')
-        try:
-            amount = float(amount_raw) if amount_raw is not None else None
-        except (TypeError, ValueError):
-            amount = None
-        if amount is None:
-            flash('Invalid amount.', 'danger')
-            return redirect(url_for('add_transaction'))
+    """Legacy POST endpoint retained for backwards compatibility.
 
-        if amount <= 0:
-            flash('Amount must be positive.', 'danger')
-            return redirect(url_for('add_transaction'))
-
-        transaction_type = request.form.get('type')
-        category = request.form.get('category')
-        description = request.form.get('description')
-        date_str = request.form.get('date')
-        related_person = request.form.get('related_person', '')
-
-        # Require a description
-        if not description or len(description.strip()) < 3:
-            flash('Please provide a more descriptive description.', 'danger')
-            return redirect(url_for('add_transaction'))
-
-        # Ensure date is not in the future (optional) or not in the distant past
-        if date_str:
-            try:
-                date = datetime.strptime(date_str, '%Y-%m-%d')
-            except ValueError:
-                date = datetime.now(timezone.utc)
-        else:
-            date = datetime.now(timezone.utc)
-
-        # Determine user's base/default currency
-        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
-        input_code = (input_currency_code or user_default_code).upper()
-        # Convert amount to user's default currency for storage/analytics
-        converted_amount = currency_service.convert_amount(amount, input_code, user_default_code)
-
-        transaction_data = {
-            'user_id': current_user.id,
-            'amount': converted_amount,
-            'amount_original': amount,
-            'currency': input_code,
-            'base_currency': user_default_code,
-            'type': transaction_type,
-            'category': category,
-            'description': description.strip(),
-            'date': date,
-            'related_person': related_person,
-            'created_at': datetime.now(timezone.utc)
-        }
-
-        tx_id = Transaction.create_transaction(transaction_data, mongo.db)
-        # Update loan tracker based on loan-related categories
-        try:
-            Loan.process_transaction(current_user.id, mongo.db, transaction_data, tx_id)
-        except Exception as e:
-            app.logger.error(f"Loan processing failed for tx {tx_id}: {e}")
-        flash('Transaction added successfully.', 'success')
+    New UI uses /api/transactions via AJAX modal. This route simply mirrors
+    the old POST handling and redirects back to /transactions with flashes.
+    """
+    amount_raw = request.form.get('amount')
+    input_currency_code = request.form.get('currency')
+    try:
+        amount = float(amount_raw) if amount_raw is not None else None
+    except (TypeError, ValueError):
+        amount = None
+    if amount is None:
+        flash('Invalid amount.', 'danger')
         return redirect(url_for('transactions'))
 
-    return render_template('add_transaction.html', perf_metrics=metrics_summary())
+    if amount <= 0:
+        flash('Amount must be positive.', 'danger')
+        return redirect(url_for('transactions'))
+
+    transaction_type = (request.form.get('type') or '').lower().strip()
+    if transaction_type not in {'income', 'expense'}:
+        flash('Invalid transaction type.', 'danger')
+        return redirect(url_for('transactions'))
+
+    category = (request.form.get('category') or '').lower().strip()
+    if not Transaction.is_valid_category(transaction_type, category):
+        flash('Invalid category for selected type.', 'danger')
+        return redirect(url_for('transactions'))
+
+    description = request.form.get('description')
+    date_str = request.form.get('date')
+    related_person = request.form.get('related_person', '')
+
+    if not description or len(description.strip()) < 3:
+        flash('Please provide a more descriptive description.', 'danger')
+        return redirect(url_for('transactions'))
+
+    if date_str and len(date_str) == 10:
+        try:
+            parsed = datetime.strptime(date_str, '%Y-%m-%d')
+            date = parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            date = datetime.now(timezone.utc)
+    else:
+        date = datetime.now(timezone.utc)
+    now_ = datetime.now(timezone.utc)
+    if date > now_ + timedelta(seconds=5):
+        flash('Date cannot be in the future.', 'danger')
+        return redirect(url_for('transactions'))
+
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    input_code = (input_currency_code or user_default_code).upper()
+    converted_amount = currency_service.convert_amount(amount, input_code, user_default_code)
+
+    transaction_data = {
+        'user_id': current_user.id,
+        'amount': converted_amount,
+        'amount_original': amount,
+        'currency': input_code,
+        'base_currency': user_default_code,
+        'type': transaction_type,
+        'category': category,
+        'description': description.strip(),
+        'date': date,
+        'related_person': related_person,
+        'created_at': datetime.now(timezone.utc)
+    }
+
+    tx_id = Transaction.create_transaction(transaction_data, mongo.db)
+    try:
+        Loan.process_transaction(current_user.id, mongo.db, transaction_data, tx_id)
+    except Exception as e:
+        app.logger.error(f"Loan processing failed for tx {tx_id}: {e}")
+    flash('Transaction saved (legacy form)', 'success')
+    return redirect(url_for('transactions'))
+
+@app.route('/transactions/<transaction_id>/edit', methods=['POST'])
+@login_required
+def edit_transaction(transaction_id):
+    """Edit a transaction via form submission (modal). Redirect back to /transactions.
+
+    Form fields: amount, currency, type, category, description, date (YYYY-MM-DD), related_person
+    """
+    try:
+        from bson import ObjectId
+        oid = ObjectId(transaction_id)
+    except Exception:
+        flash('Invalid transaction id.', 'danger')
+        return redirect(url_for('transactions'))
+    tx = Transaction.get_transaction(current_user.id, oid, mongo.db)
+    if not tx:
+        flash('Transaction not found.', 'danger')
+        return redirect(url_for('transactions'))
+
+    amount_raw = request.form.get('amount')
+    try:
+        amount_val = float(amount_raw) if amount_raw is not None else None
+    except (TypeError, ValueError):
+        amount_val = None
+    if amount_val is None or amount_val <= 0:
+        flash('Invalid amount.', 'danger')
+        return redirect(url_for('transactions'))
+    currency_code = (request.form.get('currency') or tx.get('currency') or '').upper() or app.config['DEFAULT_CURRENCY']
+    t_type = (request.form.get('type') or tx.get('type') or '').lower()
+    if t_type not in {'income', 'expense'}:
+        flash('Invalid type.', 'danger')
+        return redirect(url_for('transactions'))
+    category = request.form.get('category') or tx.get('category') or ''
+    description = (request.form.get('description') or tx.get('description') or '').strip()
+    if len(description) < 3:
+        flash('Description too short.', 'danger')
+        return redirect(url_for('transactions'))
+    date_str = request.form.get('date')
+    # Client supplies local date portion; treat as date-only -> midnight UTC
+    from datetime import datetime as _dt, timezone as _tz
+    if date_str and len(date_str) == 10:
+        try:
+            date_val = _dt.strptime(date_str, '%Y-%m-%d').replace(tzinfo=_tz.utc)
+        except ValueError:
+            date_val = tx.get('date')
+    else:
+        date_val = tx.get('date')
+    related_person = request.form.get('related_person', tx.get('related_person', ''))
+
+    # Recompute base currency amount if currency or amount changed
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    converted_amount = currency_service.convert_amount(amount_val, currency_code, user_default_code)
+    update_fields = {
+        'amount': converted_amount,
+        'amount_original': amount_val,
+        'currency': currency_code,
+        'base_currency': user_default_code,
+        'type': t_type,
+        'category': category,
+        'description': description,
+        'date': date_val,
+        'related_person': related_person,
+    }
+    Transaction.update_transaction(current_user.id, oid, update_fields, mongo.db)
+    # For loan related categories, recompute counterparty loans safely
+    try:
+        if (category or '').lower() in {'lent out', 'borrowed', 'repaid by me', 'repaid to me'} and related_person:
+            Loan.recompute_counterparty(current_user.id, mongo.db, related_person)
+    except Exception as e:
+        app.logger.error(f"Loan recompute failed after edit {transaction_id}: {e}")
+    flash('Transaction saved', 'success')
+    return redirect(url_for('transactions'))
+
+@app.route('/api/transactions/<transaction_id>', methods=['PATCH'])
+@login_required
+def api_update_transaction(transaction_id):
+    """JSON edit endpoint mirroring form edit; returns updated item + summaries."""
+    try:
+        from bson import ObjectId
+        oid = ObjectId(transaction_id)
+    except Exception:
+        return jsonify({'error': 'Invalid id'}), 400
+    tx = Transaction.get_transaction(current_user.id, oid, mongo.db)
+    if not tx:
+        return jsonify({'error': 'Not found'}), 404
+    data = request.get_json(silent=True) or {}
+    updates = {}
+    raw_amount = data.get('amount')
+    if raw_amount is not None:
+        try:
+            amt = float(raw_amount)
+            if amt <= 0: raise ValueError
+            updates['amount_original'] = amt
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Invalid amount'}), 400
+    if 'currency' in data and data['currency']:
+        updates['currency'] = str(data['currency']).upper()
+    if 'type' in data:
+        t_type = (data.get('type') or '').lower()
+        if t_type not in {'income', 'expense'}:
+            return jsonify({'error': 'Invalid type'}), 400
+        updates['type'] = t_type
+    if 'category' in data:
+        updates['category'] = data.get('category') or ''
+    if 'description' in data:
+        desc = (data.get('description') or '').strip()
+        if len(desc) < 3:
+            return jsonify({'error': 'Description too short'}), 400
+        updates['description'] = desc
+    if 'date' in data:
+        dstr = data.get('date')
+        from datetime import datetime as _dt, timezone as _tz
+        try:
+            if dstr and len(dstr) == 10:
+                updates['date'] = _dt.strptime(dstr, '%Y-%m-%d').replace(tzinfo=_tz.utc)
+        except ValueError:
+            return jsonify({'error': 'Invalid date'}), 400
+    if 'related_person' in data:
+        updates['related_person'] = data.get('related_person') or ''
+
+    # Currency conversion update
+    if 'amount_original' in updates or 'currency' in updates:
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+        amt_orig = updates.get('amount_original', tx.get('amount_original'))
+        try:
+            amt_float = float(amt_orig)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Invalid amount'}), 400
+        cur_code = (updates.get('currency') or tx.get('currency') or user_default_code).upper()
+        updates['base_currency'] = user_default_code
+        updates['amount'] = currency_service.convert_amount(amt_float, cur_code, user_default_code)
+        updates['currency'] = cur_code
+
+    updated = Transaction.update_transaction(current_user.id, oid, updates, mongo.db)
+    try:
+        cat_eff = (updates.get('category') or tx.get('category') or '').lower()
+        rp_eff = updates.get('related_person') or tx.get('related_person')
+        if cat_eff in {'lent out', 'borrowed', 'repaid by me', 'repaid to me'} and rp_eff:
+            Loan.recompute_counterparty(current_user.id, mongo.db, rp_eff)
+    except Exception as e:
+        app.logger.error(f"Loan recompute failed after api edit {transaction_id}: {e}")
+
+    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
+    lifetime = calculate_lifetime_transaction_summary(current_user.id, mongo.db)
+    if updated and '_id' in updated:
+        updated['_id'] = str(updated['_id'])
+    return jsonify({'item': updated, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
 
 
 @app.route('/transactions/<transaction_id>/delete', methods=['POST'])
@@ -530,28 +695,28 @@ def goals():
 def profile():
     user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
 
-
     if request.method == 'POST':
         monthly_income = request.form.get('monthly_income')
         usual_income_date = request.form.get('usual_income_date')
         occupation = request.form.get('occupation')
         default_currency = request.form.get('default_currency')
         monthly_income_currency = request.form.get('monthly_income_currency')
+        language = request.form.get('language')
 
         update_data = {}
+
+        # Monthly income handling
         if monthly_income:
             try:
                 mi_val = float(monthly_income)
-                # Determine target default currency
                 dc = (default_currency or user.get('default_currency')).upper()
                 mic = (monthly_income_currency or dc).upper()
-                # Always store monthly income in the user's default/base currency (dc)
                 update_data['monthly_income'] = currency_service.convert_amount(mi_val, mic, dc)
-                # Track the currency of the stored monthly_income, not the input source
                 update_data['monthly_income_currency'] = dc
             except ValueError:
                 flash('Monthly income must be a number.', 'danger')
 
+        # Usual income date validation
         if usual_income_date:
             try:
                 day = int(usual_income_date)
@@ -562,42 +727,38 @@ def profile():
             except ValueError:
                 flash('Usual income date must be a number between 1 and 31.', 'danger')
 
+        # Occupation
         if occupation is not None:
             update_data['occupation'] = occupation.strip()
 
+        # Default currency migration
         if default_currency:
             new_dc = default_currency.upper()
             old_dc = (user.get('default_currency') or app.config['DEFAULT_CURRENCY']).upper()
             update_data['default_currency'] = new_dc
-            # If currency actually changes, migrate existing amounts
             if new_dc != old_dc:
-                # Convert stored monthly_income if not explicitly provided above
                 if 'monthly_income' not in update_data and user.get('monthly_income') is not None:
                     try:
                         update_data['monthly_income'] = currency_service.convert_amount(float(user['monthly_income']), old_dc, new_dc)
                         update_data['monthly_income_currency'] = new_dc
                     except Exception:
                         pass
-                # Migrate all transactions to new base currency
                 try:
                     cursor = mongo.db.transactions.find({'user_id': current_user.id})
                     for tx in cursor:
                         amt = float(tx.get('amount', 0))
                         tx_base = (tx.get('base_currency') or old_dc).upper()
                         new_amt = currency_service.convert_amount(amt, tx_base, new_dc)
-                        mongo.db.transactions.update_one(
-                            {'_id': tx['_id']},
-                            {'$set': {'amount': new_amt, 'base_currency': new_dc}}
-                        )
+                        mongo.db.transactions.update_one({'_id': tx['_id']}, {'$set': {'amount': new_amt, 'base_currency': new_dc}})
                 except Exception:
-                    # Non-fatal; user can refresh to retry
                     pass
 
+        # Language
+        if language:
+            update_data['language'] = (language or 'en').lower()
+
         if update_data:
-            mongo.db.users.update_one(
-                {'_id': ObjectId(current_user.id)},
-                {'$set': update_data}
-            )
+            mongo.db.users.update_one({'_id': ObjectId(current_user.id)}, {'$set': update_data})
             flash('Profile updated successfully.', 'success')
             return redirect(url_for('profile'))
 
@@ -686,6 +847,390 @@ def run_ai_analysis():
 def api_transactions():
     transactions = list(mongo.db.transactions.find({'user_id': current_user.id}).sort('date', -1))
     return jsonify(transactions)
+
+@app.route('/api/transactions/list', methods=['GET'])
+@login_required
+def api_transactions_list():
+    """Paginated transactions list for dynamic fetch UI.
+
+    Query params: page (1-based), per_page. Returns items + total + page info.
+    """
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    if per_page > 100:
+        per_page = 100  # safety cap
+    tx = Transaction.get_user_transactions(current_user.id, mongo.db, page, per_page)
+    total = Transaction.count_user_transactions(current_user.id, mongo.db)
+    # Convert ObjectId and datetimes (JSONEncoder handles datetimes)
+    items = []
+    for t in tx:
+        t = dict(t)
+        if '_id' in t:
+            t['_id'] = str(t['_id'])
+        items.append(t)
+    return jsonify({
+        'items': items,
+        'total': total,
+        'page': page,
+        'per_page': per_page
+    })
+
+@app.route('/api/transactions', methods=['POST'])
+@login_required
+def api_create_transaction():
+    """Create a transaction via JSON. Mirrors logic of form POST but returns JSON.
+
+    Body JSON: amount, currency, type, category, description, date (YYYY-MM-DD), related_person
+    """
+    data = request.get_json(silent=True) or {}
+    errors = []
+    raw_amount = data.get('amount')
+    amount = None
+    if raw_amount is None:
+        errors.append('Invalid amount.')
+    try:
+        amount = float(raw_amount)  # type: ignore[arg-type]
+        if amount <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        amount = None
+        errors.append('Invalid amount.')
+
+    t_type = (data.get('type') or '').lower()
+    if t_type not in {'income', 'expense'}:
+        errors.append('Invalid type.')
+    category = data.get('category') or ''
+    description = (data.get('description') or '').strip()
+    if len(description) < 3:
+        errors.append('Description too short.')
+    date_str = data.get('date')
+    from datetime import timezone as _tz
+    if date_str:
+        try:
+            date_val = datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            date_val = datetime.now(_tz.utc)
+    else:
+        date_val = datetime.now(_tz.utc)
+    related_person = data.get('related_person', '')
+    if errors:
+        return jsonify({'errors': errors}), 400
+    # Currency handling
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    input_code = (data.get('currency') or user_default_code).upper()
+    # At this point amount is validated (not None)
+    converted_amount = currency_service.convert_amount(amount, input_code, user_default_code)  # type: ignore[arg-type]
+    tx_doc = {
+        'user_id': current_user.id,
+        'amount': converted_amount,
+        'amount_original': amount,
+        'currency': input_code,
+        'base_currency': user_default_code,
+        'type': t_type,
+        'category': category,
+        'description': description,
+        'date': date_val,
+        'related_person': related_person,
+        'created_at': now_utc()
+    }
+    tx_id = Transaction.create_transaction(tx_doc, mongo.db)
+    try:
+        Loan.process_transaction(current_user.id, mongo.db, tx_doc, tx_id)
+    except Exception as e:
+        app.logger.error(f"Loan processing failed for tx {tx_id}: {e}")
+    tx_doc['_id'] = str(tx_id)
+    # Return updated lightweight summaries (monthly + lifetime) for live UI refresh
+    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
+    lifetime = calculate_lifetime_transaction_summary(current_user.id, mongo.db)
+    return jsonify({'item': tx_doc, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
+
+@app.route('/api/transactions/<transaction_id>', methods=['DELETE'])
+@login_required
+def api_delete_transaction(transaction_id):
+    try:
+        oid = ObjectId(transaction_id)
+    except Exception:
+        return jsonify({'error': 'Invalid id'}), 400
+    tx = mongo.db.transactions.find_one({'_id': oid, 'user_id': current_user.id})
+    if not tx:
+        return jsonify({'error': 'Not found'}), 404
+    Transaction.delete_transaction(current_user.id, oid, mongo.db)
+    try:
+        if tx and (tx.get('category') or '').lower() in {'lent out', 'borrowed', 'repaid by me', 'repaid to me'}:
+            cp = tx.get('related_person')
+            if cp:
+                Loan.recompute_counterparty(current_user.id, mongo.db, cp)
+    except Exception as e:
+        app.logger.error(f"Loan recompute failed after delete {transaction_id}: {e}")
+    # Provide updated summary counts for UI to refresh
+    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
+    lifetime = calculate_lifetime_transaction_summary(current_user.id, mongo.db)
+    return jsonify({'success': True, 'monthly_summary': monthly_summary, 'lifetime': lifetime})
+
+@app.route('/api/dashboard', methods=['GET'])
+@login_required
+def api_dashboard():
+    """Aggregate dashboard data for fetch-based dynamic refresh."""
+    if mongo.db is None:
+        return jsonify({'error': 'Database connection error'}), 500
+    user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    recent_transactions = Transaction.get_recent_transactions(current_user.id, mongo.db)
+    # Convert ObjectIds
+    rtx = []
+    for t in recent_transactions:
+        t = dict(t)
+        if '_id' in t:
+            t['_id'] = str(t['_id'])
+        rtx.append(t)
+    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
+    full_balance = User(user, mongo.db).get_lifetime_transaction_summary()
+    # Goals (active)
+    active_goal_models = Goal.get_active_goals(current_user.id, mongo.db)
+    allocations = Goal.compute_allocations(current_user.id, mongo.db)
+    user_default_code = (user or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    goals = []
+    for gm in active_goal_models:
+        alloc_amt = allocations.get(gm.id, None)
+        progress = Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)
+        gd = gm.model_dump(by_alias=True)
+        td = gd.get('target_date')
+        if isinstance(td, datetime):
+            gd['target_date'] = td.isoformat()
+        gd['progress'] = progress
+        if alloc_amt is not None:
+            gd['allocated_amount'] = alloc_amt
+        if '_id' in gd:
+            gd['_id'] = str(gd['_id'])
+        goals.append(gd)
+    # Days until income
+    days_until_income = None
+    if user.get('usual_income_date'):
+        today = now_utc().day
+        income_day = int(user['usual_income_date'])
+        if today <= income_day:
+            days_until_income = income_day - today
+        else:
+            from calendar import monthrange
+            now = now_utc()
+            last_day = monthrange(now.year, now.month)[1]
+            days_until_income = (last_day - today) + income_day
+    return jsonify({
+        'monthly_summary': monthly_summary,
+        'lifetime': full_balance,
+        'recent_transactions': rtx,
+        'goals': goals,
+        'days_until_income': days_until_income,
+        'currency': {
+            'code': user_default_code,
+            'symbol': currency_service.get_currency_symbol(user_default_code)
+        }
+    })
+
+# ---------------- GOALS JSON API -----------------
+@app.route('/api/goals/list')
+@login_required
+def api_goals_list():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 5, type=int)
+    per_page =  min(per_page, 50)
+    skip = (page - 1) * per_page
+    total = mongo.db.goals.count_documents({'user_id': current_user.id})
+    goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page)
+    monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    allocations = Goal.compute_allocations(current_user.id, mongo.db)
+    items = []
+    for gm in goal_models:
+        alloc_amt = allocations.get(gm.id, None)
+        progress = Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)
+        gdict = gm.model_dump(by_alias=True)
+        td = gdict.get('target_date')
+        if isinstance(td, datetime):
+            gdict['target_date'] = td.isoformat()
+        gdict['progress'] = progress
+        items.append(gdict)
+    return jsonify({'items': items, 'total': total, 'page': page, 'per_page': per_page})
+
+@app.route('/api/goals', methods=['POST'])
+@login_required
+def api_goal_create():
+    data = request.get_json(silent=True) or {}
+    required_fields = ['goal_type', 'target_amount', 'description', 'target_date']
+    missing = [f for f in required_fields if not data.get(f)]
+    if missing:
+        return jsonify({'errors': [f'Missing: {", ".join(missing)}']}), 400
+    raw_ta = data.get('target_amount')
+    if raw_ta is None:
+        return jsonify({'errors': ['Invalid target_amount']}), 400
+    try:
+        target_amount = float(raw_ta)  # type: ignore[arg-type]
+        if target_amount <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({'errors': ['Invalid target_amount']}), 400
+    goal_type = data.get('goal_type')
+    if goal_type not in ('savings', 'purchase'):
+        return jsonify({'errors': ['Invalid goal_type']}), 400
+    td_str = data.get('target_date')
+    try:
+        parsed_date = ensure_utc(datetime.strptime(td_str, '%Y-%m-%d')) if td_str else None
+    except Exception:
+        return jsonify({'errors': ['Invalid target_date']}), 400
+    if parsed_date is None:
+        return jsonify({'errors': ['Invalid target_date']}), 400
+    user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    user_default_code = (user_doc or {}).get('default_currency', app.config['DEFAULT_CURRENCY'])
+    input_code = (data.get('target_currency') or user_default_code).upper()
+    goal_data = GoalCreate(
+        user_id=current_user.id,
+        type=goal_type,
+        target_amount=target_amount,
+        currency=input_code,
+        description=data.get('description', '').strip(),
+        target_date=parsed_date
+    )
+    goal = Goal.create(goal_data, mongo.db)
+    Goal.enhance_goal_background(goal, mongo.db, ai_engine)
+    return jsonify({'item': goal.model_dump(by_alias=True)})
+
+@app.route('/api/goals/<goal_id>', methods=['PATCH'])
+@login_required
+def api_goal_update(goal_id):
+    payload = request.get_json(silent=True) or {}
+    update = GoalUpdate(
+        target_amount=payload.get('target_amount'),
+        description=payload.get('description'),
+        target_date=ensure_utc(datetime.strptime(payload['target_date'], '%Y-%m-%d')) if payload.get('target_date') else None,
+        current_amount=payload.get('current_amount'),
+        is_completed=payload.get('is_completed'),
+    )
+    goal = Goal.update(goal_id, current_user.id, update, mongo.db)
+    if not goal:
+        return jsonify({'error': 'Not found or no changes'}), 404
+    return jsonify({'item': goal.model_dump(by_alias=True)})
+
+@app.route('/api/goals/<goal_id>/complete', methods=['POST'])
+@login_required
+def api_goal_complete(goal_id):
+    upd = GoalUpdate(is_completed=True, completed_date=now_utc())
+    goal = Goal.update(goal_id, current_user.id, upd, mongo.db)
+    if not goal:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({'item': goal.model_dump(by_alias=True)})
+
+@app.route('/api/goals/<goal_id>', methods=['DELETE'])
+@login_required
+def api_goal_delete(goal_id):
+    ok = Goal.delete(goal_id, current_user.id, mongo.db)
+    if not ok:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({'success': True})
+
+@app.route('/api/goals/<goal_id>/revalidate', methods=['POST'])
+@login_required
+def api_goal_revalidate(goal_id):
+    goal = mongo.db.goals.find_one({'_id': ObjectId(goal_id), 'user_id': current_user.id})
+    if not goal:
+        return jsonify({'error': 'Not found'}), 404
+    thread = threading.Thread(
+        target=lambda: asyncio.run(
+            Goal._ai_enhance_goal(ObjectId(goal_id), goal, mongo.db, ai_engine)
+        ),
+        daemon=True
+    )
+    thread.start()
+    return jsonify({'success': True, 'message': 'Revalidation started'})
+
+# ---------------- PROFILE JSON API -----------------
+def _sanitize_user(doc: dict) -> dict:
+    if not doc: return {}
+    safe = {k: v for k, v in doc.items() if k not in {'password'}}
+    if '_id' in safe:
+        safe['_id'] = str(safe['_id'])
+    return safe
+
+@app.route('/api/profile', methods=['GET'])
+@login_required
+def api_profile_get():
+    user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({'user': _sanitize_user(user)})
+
+@app.route('/api/profile', methods=['PATCH'])
+@login_required
+def api_profile_update():
+    user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    data = request.get_json(silent=True) or {}
+    update_data: dict[str, Any] = {}
+    # Reuse logic from HTML route (simplified for API)
+    if 'monthly_income' in data and data['monthly_income'] is not None:
+        try:
+            mi_val = float(data['monthly_income'])
+            dc = (data.get('default_currency') or user.get('default_currency') or app.config['DEFAULT_CURRENCY']).upper()
+            mic = (data.get('monthly_income_currency') or dc).upper()
+            update_data['monthly_income'] = currency_service.convert_amount(mi_val, mic, dc)
+            update_data['monthly_income_currency'] = dc
+        except ValueError:
+            return jsonify({'error': 'monthly_income must be a number'}), 400
+    if 'usual_income_date' in data and data['usual_income_date'] is not None:
+        try:
+            day = int(data['usual_income_date'])
+            if 1 <= day <= 31:
+                update_data['usual_income_date'] = day
+            else:
+                return jsonify({'error': 'usual_income_date must be 1-31'}), 400
+        except ValueError:
+            return jsonify({'error': 'usual_income_date must be int'}), 400
+    if 'occupation' in data:
+        update_data['occupation'] = (data.get('occupation') or '').strip()
+    if 'default_currency' in data and data['default_currency']:
+        new_dc = data['default_currency'].upper()
+        old_dc = (user.get('default_currency') or app.config['DEFAULT_CURRENCY']).upper()
+        update_data['default_currency'] = new_dc
+        if new_dc != old_dc:
+            if 'monthly_income' not in update_data and user.get('monthly_income') is not None:
+                try:
+                    update_data['monthly_income'] = currency_service.convert_amount(float(user['monthly_income']), old_dc, new_dc)
+                    update_data['monthly_income_currency'] = new_dc
+                except Exception:
+                    pass
+            try:
+                cursor = mongo.db.transactions.find({'user_id': current_user.id})
+                for tx in cursor:
+                    amt = float(tx.get('amount', 0))
+                    tx_base = (tx.get('base_currency') or old_dc).upper()
+                    new_amt = currency_service.convert_amount(amt, tx_base, new_dc)
+                    mongo.db.transactions.update_one({'_id': tx['_id']}, {'$set': {'amount': new_amt, 'base_currency': new_dc}})
+            except Exception:
+                pass
+    if update_data:
+        if 'language' in data and data['language']:
+            update_data['language'] = (data['language'] or 'en').lower()
+        mongo.db.users.update_one({'_id': ObjectId(current_user.id)}, {'$set': update_data})
+        user.update(update_data)
+    return jsonify({'user': _sanitize_user(user)})
+
+# ---------------- LOANS JSON API -----------------
+@app.route('/api/loans/list')
+@login_required
+def api_loans_list():
+    include_closed = request.args.get('include_closed', 'true').lower() != 'false'
+    loans = Loan.list_user_loans(current_user.id, mongo.db, include_closed=include_closed)
+    # Convert _id
+    out = []
+    for l in loans:
+        d = dict(l)
+        if d.get('_id'):
+            d['_id'] = str(d['_id'])
+        out.append(d)
+    return jsonify({'items': out})
 
 @app.route('/api/summary', methods=['GET'])
 @login_required

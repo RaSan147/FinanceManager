@@ -4,7 +4,7 @@
 <div class="container mt-4">
   <h2>Profile Settings</h2>
 
-  <form method="POST" class="needs-validation" novalidate>
+  <form method="POST" class="needs-validation" novalidate data-profile-form>
     <div class="mb-3">
       <label class="form-label">Email</label>
       <input type="email" class="form-control" value="{{ user.email }}" disabled>
@@ -40,6 +40,13 @@
     <div class="mb-3">
       <label for="occupation" class="form-label">Occupation</label>
       <input type="text" name="occupation" class="form-control" value="{{ user.occupation or '' }}" placeholder="e.g. University student, freelancer, junior Python dev">
+    </div>
+
+    <div class="mb-3">
+      <label for="language" class="form-label">Language</label>
+      <select class="form-select" name="language" id="language">
+        <option value="en" selected>English</option>
+      </select>
     </div>
 
   <button type="submit" class="btn btn-glassy">Update</button>

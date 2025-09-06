@@ -123,7 +123,19 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 	<script src="{{ url_for('static', filename='js/currency.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/app_core.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/transaction_model.js') }}" defer></script>
+		<script>
+			// Expose currency metadata globally for dynamic modules
+			window.currencySymbols = {{ currency_symbols|tojson|safe }};
+			window.currencyCode = {{ currency_code|tojson|safe }};
+			window.currencySymbol = {{ currency_symbol|tojson|safe }};
+		</script>
+	<script src="{{ url_for('static', filename='js/dynamic_app.js') }}" defer></script>
+		<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
+		<script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
+		<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>
