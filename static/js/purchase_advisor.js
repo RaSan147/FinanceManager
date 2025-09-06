@@ -215,7 +215,7 @@ class PurchaseAdvisor {
                         </div>
                         <div class="d-flex align-items-center">
                             <small class="text-muted me-2">${date}</small>
-                            <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${item._id}">
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${item._id}">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
@@ -251,7 +251,7 @@ class PurchaseAdvisor {
                     actionBtns.appendChild(btn);
                 });
                 element.querySelector('.d-flex > div:last-child').appendChild(actionBtns);
-                element.addEventListener('click', (e) => {
+                element.addEventListener('click', async (e) => {
                     if (!e.target.closest('.delete-btn') && !e.target.closest('.btn-group') && !e.target.closest('a')) {
                         // Toggle inline details like an accordion
                         const details = element.querySelector(`#${detailsId}`);
@@ -261,8 +261,20 @@ class PurchaseAdvisor {
                             if (d !== details) d.classList.add('d-none');
                         });
                         if (isHidden) {
-                            // Render advice into this details container and show
-                            this.displayAdvice(item.advice, details);
+                            // Lazy load if offloaded (no local advice key but pastebin_url present)
+                            if(!item.advice && item.pastebin_url){
+                                details.innerHTML = '<div class="text-muted small">Loading archived advice...</div>';
+                                try {
+                                    const resp = await fetch(`/api/ai/advice/${item._id}`);
+                                    if(resp.ok){
+                                        const data = await resp.json();
+                                        if(data.advice){
+                                            item.advice = data.advice; // cache for this session
+                                        }
+                                    }
+                                } catch(e){ console.error('Failed to load archived advice', e); }
+                            }
+                            this.displayAdvice(item.advice || { recommendation: 'unknown', reasoning: 'Unavailable.' }, details);
                             details.classList.remove('d-none');
                         } else {
                             details.classList.add('d-none');

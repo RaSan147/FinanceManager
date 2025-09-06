@@ -1,0 +1,62 @@
+/* Alerts */
+/* Base tweak: ensure alert text always uses themed primary text color for consistency */
+.alert {
+	color: var(--text-primary);
+}
+
+/* Light mode keeps Bootstrap defaults except success/danger background overrides */
+.alert-success {
+	background-color: var(--success-bg);
+}
+
+.alert-danger {
+	background-color: var(--danger-bg);
+}
+
+/* Dark mode accessibility improvements */
+/* Provide higher contrast backgrounds + borders and force readable text colors */
+body.dark-mode .alert,
+[data-theme="dark"] .alert {
+	color: var(--text-primary) !important;
+	background-color: rgba(255, 255, 255, 0.05);
+	border-color: rgba(255, 255, 255, 0.12);
+	backdrop-filter: blur(var(--glass-blur));
+}
+
+body.dark-mode .alert-success,
+[data-theme="dark"] .alert-success {
+	background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(6, 78, 59, 0.85));
+	border-color: rgba(16, 185, 129, 0.45);
+	color: #d1fae5 !important;
+}
+
+body.dark-mode .alert-danger,
+[data-theme="dark"] .alert-danger {
+	background: linear-gradient(135deg, rgba(239, 68, 68, 0.20), rgba(127, 29, 29, 0.85));
+	border-color: rgba(239, 68, 68, 0.45);
+	color: #fee2e2 !important;
+}
+
+/* Improve visibility of close button (Bootstrap .btn-close uses background-image SVG) */
+body.dark-mode .btn-close,
+[data-theme="dark"] .btn-close {
+	filter: invert(1) grayscale(100%) brightness(180%);
+	opacity: .85;
+}
+
+body.dark-mode .btn-close:hover,
+[data-theme="dark"] .btn-close:hover {
+	opacity: 1;
+}
+
+/* Alert links inside dark mode */
+body.dark-mode .alert a,
+[data-theme="dark"] .alert a {
+	color: var(--accent-primary);
+	text-decoration: underline;
+}
+
+body.dark-mode .alert a:hover,
+[data-theme="dark"] .alert a:hover {
+	color: #fff;
+}

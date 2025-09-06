@@ -1,0 +1,60 @@
+/* Goals component */
+.goal-item {
+	border-radius: 12px;
+	padding: .75rem .9rem;
+	background: linear-gradient(180deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .35));
+	border: 1px solid rgba(148, 163, 184, .35);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, .06);
+}
+
+.goal-item+.goal-item {
+	margin-top: 1rem;
+}
+
+[data-theme="dark"] .goal-item,
+body.dark-mode .goal-item {
+	background: linear-gradient(180deg, rgba(17, 24, 39, .6), rgba(17, 24, 39, .45));
+	border-color: rgba(148, 163, 184, .18);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+}
+
+/* Unified header action buttons (reusable) */
+.header-actions .btn {
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.header-actions .btn i {
+	font-size: 1.05rem;
+}
+
+@media (max-width: 575.98px) {
+	.header-actions .btn {
+		padding: .65rem .8rem;
+		border-radius: 10px;
+	}
+
+	.header-actions .btn i {
+		font-size: 1.3rem;
+	}
+
+	.header-actions .btn span {
+		display: none !important;
+	}
+
+	.header-actions .dropdown-menu {
+		font-size: .95rem;
+	}
+}
+
+.header-actions .btn:active {
+	transform: scale(.94);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.header-actions .btn {
+		transition: background-color .18s ease, transform .15s ease;
+	}
+}

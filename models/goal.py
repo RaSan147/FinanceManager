@@ -3,12 +3,13 @@ and background AI enrichment for financial goals.
 """
 
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Union, Literal
 from pydantic import BaseModel, Field, field_validator
 from models.user import User
-from utils.timezone_utils import now_utc, ensure_utc
+from utils.timezone_utils import now_utc, ensure_utc, parse_date_only, parse_datetime_any
 from utils.finance_calculator import calculate_lifetime_transaction_summary
+from utils.currency import currency_service
 from pymongo import ReturnDocument
 import asyncio
 import threading
@@ -21,8 +22,24 @@ import traceback
 
 # TargetDate validator mixin (no fields)
 class TargetDateUtcMixin:
+    # Pre-parse strings into aware datetimes
+    @field_validator('target_date', mode='before')
+    def _parse_target_date(cls, v):  # type: ignore[override]
+        if v is None:
+            return v
+        if isinstance(v, str):
+            raw = v.strip()
+            # Heuristic: date-only if length <= 10 (YYYY-MM-DD or similar)
+            try:
+                if len(raw) <= 10:
+                    return parse_date_only(raw)
+                return parse_datetime_any(raw)
+            except Exception as e:  # pragma: no cover - defensive
+                raise ValueError(f"Invalid target_date format: {raw}") from e
+        return v
+
     @field_validator('target_date', mode='after')
-    def _ensure_target_date_utc(cls, v):
+    def _ensure_target_date_utc(cls, v):  # type: ignore[override]
         return ensure_utc(v) if v is not None else None
 
 class GoalBase(TargetDateUtcMixin, BaseModel):
@@ -85,6 +102,9 @@ class GoalInDB(GoalBase):
     id: str = Field(..., alias="_id")
     ai_priority: Optional[float] = None
     ai_plan: Optional[str] = None
+    ai_plan_paste_url: Optional[str] = None  # Remote offloaded plan
+    ai_plan_offloaded: Optional[bool] = None
+    ai_plan_archived_at: Optional[datetime] = None
     ai_urgency: Optional[float] = None
     ai_impact: Optional[float] = None
     ai_health_impact: Optional[float] = None
@@ -189,15 +209,61 @@ class Goal:
 
     @staticmethod
     def get_user_goals(user_id: str, db, skip: int = 0, limit: int = 10) -> List[GoalInDB]:
-        """List goals for a user with pagination."""
-        goals = db.goals.find({"user_id": user_id}).skip(skip).limit(limit)
-        return [GoalInDB(**goal) for goal in goals]
+        """List goals for a user with pagination and deterministic sorting.
+
+        Default order: newest first (created_at desc).
+
+        Supports lightweight sort modes via a special key placed in the cursor's
+        comment (for easier future explain / profiling) and simple mapping to
+        Mongo sort tuples.
+
+        Accepted sort values (case-insensitive):
+            - created_desc (default)
+            - created_asc
+            - target_date (soonest first)
+            - target_date_desc
+            - priority (ai_priority desc then created_at desc)
+
+        Args:
+            user_id: Owner id
+            db: Mongo database handle
+            skip: Pagination offset
+            limit: Page size
+
+        Returns:
+            List[GoalInDB]
+        """
+        sort_mode = getattr(db, '_goal_sort_mode', 'created_desc')  # ephemeral attr optionally set by caller
+        sort_mode = (sort_mode or 'created_desc').lower()
+        sort_map: dict[str, list[tuple[str, int]]] = {
+            'created_desc': [('created_at', -1)],
+            'created_asc': [('created_at', 1)],
+            'target_date': [('target_date', 1), ('created_at', -1)],
+            'target_date_desc': [('target_date', -1), ('created_at', -1)],
+            'priority': [('ai_priority', -1), ('created_at', -1)],
+        }
+        mongo_sort = sort_map.get(sort_mode, sort_map['created_desc'])
+        cursor = db.goals.find({"user_id": user_id}, {  # projection excludes large plan body
+            'ai_plan': 0
+        }).sort(mongo_sort).skip(skip).limit(limit)
+        return [GoalInDB(**g) for g in cursor]
 
     @staticmethod
     def get_active_goals(user_id: str, db) -> List[GoalInDB]:
-        """List non-completed goals for a user."""
-        goals = db.goals.find({"user_id": user_id, "is_completed": False})
-        return [GoalInDB(**goal) for goal in goals]
+        """List non-completed goals with deterministic ordering.
+
+        Uses ai_priority desc then target_date asc then created_at desc so that
+        newly added goals without AI data naturally fall toward the end but
+        still appear before very old, far future goals if priorities tie.
+        """
+        cursor = (db.goals
+                  .find({"user_id": user_id, "is_completed": False}, {'ai_plan': 0})
+                  .sort([
+                      ('ai_priority', -1),
+                      ('target_date', 1),
+                      ('created_at', -1)
+                  ]))
+        return [GoalInDB(**g) for g in cursor]
 
     @staticmethod
     def calculate_goal_progress(goal: GoalInDB, monthly_summary: Dict[str, Any], override_current_amount: float | None = None, base_currency_code: str = 'USD') -> Dict[str, Any]:
@@ -249,7 +315,8 @@ class Goal:
                 (goal.target_amount - progress_data["current_amount"]) / max(remaining_months, 1)
             )
             monthly_savings_base = float(monthly_summary.get("savings", 0) or 0)
-            progress_data["current_monthly"] = _convert(monthly_savings_base, base_currency_code, goal_currency)
+            # Convert monthly savings (base currency) into goal currency
+            progress_data["current_monthly"] = currency_service.convert_amount(monthly_savings_base, base_currency_code, goal_currency)
             progress_data["currency"] = goal_currency
 
         return progress_data
@@ -288,10 +355,8 @@ class Goal:
         user_doc = db.users.find_one({'_id': ObjectId(user_id)})
         base_ccy = (user_doc or {}).get('default_currency', 'USD').upper()
 
-        from utils.currency import currency_service
-
-        # Fetch active goals
-        goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False})
+        # Fetch active goals (exclude large ai_plan field for performance)
+        goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
         # Sort in Python to avoid index requirements
         goals_list = list(GoalInDB(**g) for g in goals_cursor)
         if sort_by == 'algorithmic':
@@ -436,13 +501,9 @@ class Goal:
 
     @staticmethod
     def get_prioritized(user_id: str, db) -> List[dict]:
-        """Return goals sorted by ai_priority descending.
-
-        Returns:
-            List of goal dicts (with aliases) in prioritized order.
-        """
-        goals = db.goals.find({'user_id': user_id}).sort('ai_priority', -1)
-        return [GoalInDB(**g).model_dump(by_alias=True) for g in goals]
+        """Return goals sorted by ai_priority descending (excluding large ai_plan body)."""
+        cursor = db.goals.find({'user_id': user_id}, {'ai_plan': 0}).sort('ai_priority', -1)
+        return [GoalInDB(**g).model_dump(by_alias=True) for g in cursor]
 
     @staticmethod
     def mark_as_completed(user_id: str, goal_id: ObjectId, db):
@@ -451,6 +512,67 @@ class Goal:
             {'_id': goal_id, 'user_id': user_id},
             {'$set': {'is_completed': True, 'completed_date': now_utc(), 'last_updated': now_utc()}}
         )
+
+    # ---------- AI PLAN OFFLOADING (Pastebin) ----------
+    @staticmethod
+    async def offload_old_ai_plans(user_id: str, db, pastebin_client=None, days:int=30):
+        """Offload ai_plan HTML older than N days to Pastebin.
+
+        Process:
+        - Find goals for user having ai_plan, not offloaded, last_updated older than cutoff.
+        - Create paste per plan; store url; remove ai_plan content (to reduce DB bloat).
+        - Mark ai_plan_offloaded True and record ai_plan_archived_at.
+        Returns count of migrated goals.
+        """
+        if not pastebin_client:
+            return 0
+        cutoff = now_utc() - timedelta(days=days)
+        cursor = db.goals.find({
+            'user_id': user_id,
+            'ai_plan': {'$exists': True, '$ne': None},
+            '$or': [
+                {'ai_plan_offloaded': {'$exists': False}},
+                {'ai_plan_offloaded': False}
+            ],
+            'last_updated': {'$lt': cutoff}
+        })
+        migrated = 0
+        for g in cursor:
+            try:
+                paste_url = await pastebin_client.create_paste(
+                    title=f"GoalPlan {g.get('description','goal')} {g['_id']}",
+                    content=g.get('ai_plan') or '',
+                    private=True
+                ) if pastebin_client else None
+            except Exception:
+                paste_url = None
+            update_doc = {
+                'ai_plan_offloaded': bool(paste_url),
+                'ai_plan_archived_at': now_utc(),
+                'last_updated': now_utc()
+            }
+            if paste_url:
+                update_doc['ai_plan_paste_url'] = paste_url
+            # Remove local content if successfully offloaded
+            unset = {'ai_plan': ''} if paste_url else {}
+            db.goals.update_one({'_id': g['_id']}, {'$set': update_doc, '$unset': unset})
+            migrated += 1
+        return migrated
+
+    @staticmethod
+    async def delete_remote_ai_plan_if_any(goal_doc: dict, pastebin_client=None):
+        if not pastebin_client:
+            return False
+        url = goal_doc.get('ai_plan_paste_url')
+        if not url:
+            return False
+        key = pastebin_client.extract_paste_key(url)
+        if not key:
+            return False
+        try:
+            return await pastebin_client.delete_paste(key)
+        except Exception:
+            return False
 
     @staticmethod
     def compact_dict(goal: GoalInDB|dict) -> dict:
