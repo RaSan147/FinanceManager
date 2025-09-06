@@ -481,7 +481,16 @@ def handle_any_exception(err):  # noqa: D401
 
 """Loans HTML & actions moved to loans blueprint."""
 
-if __name__ == '__main__':
+# -------------------------------------------------------------
+# Blueprint registration (must occur even when not __main__)
+# -------------------------------------------------------------
+def register_blueprints():
+    """Idempotently register all blueprints.
+
+    When running under a WSGI server or `flask run`, __name__ != '__main__',
+    so blueprints must still be registered; otherwise url_for endpoints like
+    'dashboard.index' are missing (causing BuildError).
+    """
     from routes.transactions import init_transactions_blueprint
     from routes.goals import init_goals_blueprint
     from routes.profile import init_profile_blueprint
@@ -489,11 +498,27 @@ if __name__ == '__main__':
     from routes.analysis import init_analysis_blueprint
     from routes.loans import init_loans_blueprint
     from routes.ai_features import init_ai_blueprint
-    app.register_blueprint(init_dashboard_blueprint(mongo))
-    app.register_blueprint(init_transactions_blueprint(mongo))
-    app.register_blueprint(init_goals_blueprint(mongo, ai_engine, pastebin_client))
-    app.register_blueprint(init_profile_blueprint(mongo))
-    app.register_blueprint(init_analysis_blueprint(mongo, ai_engine))
-    app.register_blueprint(init_loans_blueprint(mongo))
-    app.register_blueprint(init_ai_blueprint(mongo, spending_advisor, pastebin_client))
+
+    # Only register if not already present (debug reloader imports twice)
+    if 'dashboard' not in app.blueprints:
+        app.register_blueprint(init_dashboard_blueprint(mongo))
+    if 'transactions_routes' not in app.blueprints:
+        app.register_blueprint(init_transactions_blueprint(mongo))
+    if 'goals_bp' not in app.blueprints:
+        app.register_blueprint(init_goals_blueprint(mongo, ai_engine, pastebin_client))
+    if 'profile_bp' not in app.blueprints:
+        app.register_blueprint(init_profile_blueprint(mongo))
+    if 'analysis_bp' not in app.blueprints:
+        app.register_blueprint(init_analysis_blueprint(mongo, ai_engine))
+    if 'loans_bp' not in app.blueprints:
+        app.register_blueprint(init_loans_blueprint(mongo))
+    if 'ai_bp' not in app.blueprints:
+        app.register_blueprint(init_ai_blueprint(mongo, spending_advisor, pastebin_client))
+
+
+# Ensure blueprints are registered at import time
+register_blueprints()
+
+if __name__ == '__main__':
+    # Already registered above; run the dev server
     app.run(debug=True, host="0.0.0.0", port=5000)
