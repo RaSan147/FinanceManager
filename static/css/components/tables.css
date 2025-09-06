@@ -1,48 +1,125 @@
 /* Tables */
 /* Neutralize Bootstrap hover/accent background so no inner cell color leaks via --bs-table-hover-bg */
-.table { --bs-table-hover-bg:transparent; --bs-table-accent-bg:transparent; color:var(--text-primary); background-color:var(--bg-secondary); border-collapse:separate!important; border-spacing:0 8px; border-radius:8px; overflow:hidden; border:none; transition:background-color .3s; }
+.table {
+	--bs-table-hover-bg: transparent;
+	--bs-table-accent-bg: transparent;
+	color: var(--text-primary);
+	background-color: var(--bg-secondary);
+	border-collapse: separate !important;
+	border-spacing: 0 8px;
+	border-radius: 8px;
+	overflow: hidden;
+	border: none;
+	transition: background-color .3s;
+}
+
 /* Extra safety: ensure cells don't pick up any bootstrap-provided hover bg */
-.table-hover>tbody>tr:hover>* { background-color:transparent!important; }
-.table th { border-top:none; background-color:var(--bg-tertiary); color:var(--text-primary); padding:12px 16px; font-weight:600; letter-spacing:.02em; border-bottom:1px solid var(--border-color); }
+.table-hover>tbody>tr:hover>* {
+	background-color: transparent !important;
+}
+
+.table th {
+	border-top: none;
+	background-color: var(--bg-tertiary);
+	color: var(--text-primary);
+	padding: 12px 16px;
+	font-weight: 600;
+	letter-spacing: .02em;
+	border-bottom: 1px solid var(--border-color);
+}
+
 /* Base row styling */
-.table tbody tr { background-color:var(--bg-tertiary); color:var(--text-primary); border-radius:6px; transition:background-color .25s; -webkit-tap-highlight-color:transparent; }
+.table tbody tr {
+	background-color: var(--bg-tertiary);
+	color: var(--text-primary);
+	border-radius: 6px;
+	transition: background-color .25s;
+	-webkit-tap-highlight-color: transparent;
+}
+
 /* Remove tap highlight from all children too */
-.table tbody tr * { -webkit-tap-highlight-color:transparent; }
+.table tbody tr * {
+	-webkit-tap-highlight-color: transparent;
+}
+
 /* Make cells transparent so only the row supplies background (prevents inner highlight block) */
-.table tbody tr>* { background:transparent!important; color:var(--text-primary); transition:color .25s; }
+.table tbody tr>* {
+	background: transparent !important;
+	color: var(--text-primary);
+	transition: color .25s;
+}
+
 /* Hover/active only affect the row (card) */
 /* Pointer devices (actual hover available) get subtle hover */
-@media (hover:hover) and (pointer:fine){
-	.table tbody tr:hover { background-color:var(--hover-bg)!important; cursor:pointer; }
-	.table tbody tr:active { background-color:var(--hover-bg)!important; }
+@media (hover:hover) and (pointer:fine) {
+	.table tbody tr:hover {
+		background-color: var(--hover-bg) !important;
+		cursor: pointer;
+	}
+
+	.table tbody tr:active {
+		background-color: var(--hover-bg) !important;
+	}
 }
+
 /* Touch devices: suppress color change entirely */
-@media (hover:none), (pointer:coarse){
-	.table tbody tr:hover, .table tbody tr:active { background-color:var(--bg-tertiary)!important; }
+@media (hover:none),
+(pointer:coarse) {
+
+	.table tbody tr:hover,
+	.table tbody tr:active {
+		background-color: var(--bg-tertiary) !important;
+	}
 }
-.table td, .table th { border:none!important; padding:12px 16px!important; }
-tr:first-child td:first-child { border-top-left-radius:var(--border-radius); }
-tr:first-child td:last-child { border-top-right-radius:var(--border-radius); }
-tr:last-child td:first-child { border-bottom-left-radius:var(--border-radius); }
-tr:last-child td:last-child { border-bottom-right-radius:var(--border-radius); }
+
+.table td,
+.table th {
+	border: none !important;
+	padding: 12px 16px !important;
+}
+
+tr:first-child td:first-child {
+	border-top-left-radius: var(--border-radius);
+}
+
+tr:first-child td:last-child {
+	border-top-right-radius: var(--border-radius);
+}
+
+tr:last-child td:first-child {
+	border-bottom-left-radius: var(--border-radius);
+}
+
+tr:last-child td:last-child {
+	border-bottom-right-radius: var(--border-radius);
+}
 
 /* High-contrast action buttons (edit/delete) inside transactions table */
 body.dark-mode .transactions-table td[data-label='Actions'] .btn-outline-secondary,
 [data-theme='dark'] .transactions-table td[data-label='Actions'] .btn-outline-secondary {
-	border-color: rgba(255,255,255,.28) !important;
-	color: rgba(255,255,255,.82) !important;
-	background: rgba(255,255,255,.04);
+	border-color: rgba(255, 255, 255, .28) !important;
+	color: rgba(255, 255, 255, .82) !important;
+	background: rgba(255, 255, 255, .04);
 	backdrop-filter: blur(2px);
 }
+
 body.dark-mode .transactions-table td[data-label='Actions'] .btn-outline-secondary i,
-[data-theme='dark'] .transactions-table td[data-label='Actions'] .btn-outline-secondary i { color: currentColor !important; text-shadow:0 0 3px rgba(0,0,0,.6); }
+[data-theme='dark'] .transactions-table td[data-label='Actions'] .btn-outline-secondary i {
+	color: currentColor !important;
+	text-shadow: 0 0 3px rgba(0, 0, 0, .6);
+}
+
 body.dark-mode .transactions-table tbody tr:hover td[data-label='Actions'] .btn-outline-secondary,
 [data-theme='dark'] .transactions-table tbody tr:hover td[data-label='Actions'] .btn-outline-secondary,
 body.dark-mode .transactions-table td[data-label='Actions'] .btn-outline-secondary:hover,
 [data-theme='dark'] .transactions-table td[data-label='Actions'] .btn-outline-secondary:hover {
-	border-color: rgba(255,255,255,.55) !important;
-	color:#fff !important;
-	background: rgba(255,255,255,.10);
+	border-color: rgba(255, 255, 255, .55) !important;
+	color: #fff !important;
+	background: rgba(255, 255, 255, .10);
 }
+
 body.dark-mode .transactions-table td[data-label='Actions'] .btn-outline-secondary:focus-visible,
-[data-theme='dark'] .transactions-table td[data-label='Actions'] .btn-outline-secondary:focus-visible { outline:2px solid rgba(255,255,255,.5); outline-offset:2px; }
+[data-theme='dark'] .transactions-table td[data-label='Actions'] .btn-outline-secondary:focus-visible {
+	outline: 2px solid rgba(255, 255, 255, .5);
+	outline-offset: 2px;
+}

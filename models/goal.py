@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from models.user import User
 from utils.timezone_utils import now_utc, ensure_utc, parse_date_only, parse_datetime_any
 from utils.finance_calculator import calculate_lifetime_transaction_summary
+from utils.currency import currency_service
 from pymongo import ReturnDocument
 import asyncio
 import threading
@@ -353,8 +354,6 @@ class Goal:
         # Determine user's base currency for conversions
         user_doc = db.users.find_one({'_id': ObjectId(user_id)})
         base_ccy = (user_doc or {}).get('default_currency', 'USD').upper()
-
-        from utils.currency import currency_service
 
         # Fetch active goals (exclude large ai_plan field for performance)
         goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})

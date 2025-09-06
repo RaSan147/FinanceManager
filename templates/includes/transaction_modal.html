@@ -37,16 +37,28 @@
             <label class="form-label">Category</label>
             <select class="form-select" name="category" required data-category-select>
               <option value="">Select a category</option>
-              <optgroup label="Income" data-group-income>
-                {% for val,labels in tx_categories['income'].items() %}
-                <option value="{{ val }}">{{ labels.get('en') }}</option>
-                {% endfor %}
-              </optgroup>
-              <optgroup label="Expense" data-group-expense>
-                {% for val,labels in tx_categories['expense'].items() %}
-                <option value="{{ val }}">{{ labels.get('en') }}</option>
-                {% endfor %}
-              </optgroup>
+              {% if tx_categories is mapping %}
+                <optgroup label="Income" data-group-income>
+                  {% for val,labels in tx_categories['income'].items() %}
+                  <option value="{{ val }}">{{ labels.get('en') }}</option>
+                  {% endfor %}
+                </optgroup>
+                <optgroup label="Expense" data-group-expense>
+                  {% for val,labels in tx_categories['expense'].items() %}
+                  <option value="{{ val }}">{{ labels.get('en') }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% else %}
+                <!-- Fallback simple options -->
+                <optgroup label="Income" data-group-income>
+                  <option value="salary">Salary</option>
+                  <option value="other">Other Income</option>
+                </optgroup>
+                <optgroup label="Expense" data-group-expense>
+                  <option value="food">Food</option>
+                  <option value="other">Other Expense</option>
+                </optgroup>
+              {% endif %}
             </select>
           </div>
           <div class="mb-3">

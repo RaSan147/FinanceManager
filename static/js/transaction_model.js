@@ -86,7 +86,7 @@
         const editBtn = createEl('button', { class:'btn btn-sm btn-outline-secondary', 'data-edit-id': this.id() });
         try { editBtn.setAttribute('data-edit-json', JSON.stringify(this.toEditPayload())); } catch(_){ }
         editBtn.appendChild(createEl('i', { class:'bi bi-pencil' }));
-        const delBtn = createEl('button', { class:'btn btn-sm btn-outline-danger', 'data-delete-id': this.id() });
+        const delBtn = createEl('button', { class:'btn btn-sm btn-danger', 'data-delete-id': this.id() });
         delBtn.appendChild(createEl('i', { class:'bi bi-trash' }));
         actions.appendChild(editBtn); actions.appendChild(delBtn);
         row.appendChild(actions);

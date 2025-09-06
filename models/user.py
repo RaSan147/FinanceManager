@@ -84,3 +84,17 @@ class User(UserMixin):
         - total_transactions
         """
         return calculate_lifetime_transaction_summary(self.id, self.db)
+
+    @classmethod
+    def get_by_email(cls, email: str, db: Database):
+        user_doc = db.users.find_one({'email': email})
+        if not user_doc:
+            return None
+        return cls(user_doc, db)
+
+    @classmethod
+    def get_by_id(cls, user_id: str, db: Database):
+        user_doc = db.users.find_one({'_id': ObjectId(user_id)})
+        if not user_doc:
+            return None
+        return cls(user_doc, db)

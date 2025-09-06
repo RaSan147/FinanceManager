@@ -45,6 +45,19 @@ class DashboardTransactionsModule {
     if (utils.qs('[data-dynamic-dashboard]')) {
       setInterval(() => this.refreshDashboardData(), 60_000);
     }
+    // If we're on the full transactions page, ensure initial pagination shows before any AJAX.
+    try {
+      const tableRoot = utils.qs('[data-transactions-table]');
+      if (tableRoot) {
+        const totalAttr = tableRoot.getAttribute('data-total-transactions');
+        if (totalAttr) {
+          const current = parseInt(tableRoot.getAttribute('data-current-page') || '1', 10);
+          const perPage = parseInt(tableRoot.getAttribute('data-per-page') || '10', 10);
+          const total = parseInt(totalAttr, 10);
+          this.renderPagination(current, perPage, total);
+        }
+      }
+    } catch (e) { /* non-fatal */ }
   }
 
   // Dashboard ----------------------------------------------------------------

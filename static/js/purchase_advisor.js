@@ -215,7 +215,7 @@ class PurchaseAdvisor {
                         </div>
                         <div class="d-flex align-items-center">
                             <small class="text-muted me-2">${date}</small>
-                            <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${item._id}">
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${item._id}">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>

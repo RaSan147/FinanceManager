@@ -90,8 +90,12 @@
                             <tr>
                                 <td data-label="Date">{{ t.date.strftime('%b %d') }}</td>
                                 <td data-label="Description">{{ t.description }}</td>
-                                {% set labels = tx_categories.get(t.type, {}).get(t.category, {}) %}
-                                <td data-label="Category">{{ labels.get('en', t.category) }}</td>
+                                {% if tx_categories is mapping %}
+                                    {% set labels = tx_categories.get(t.type, {}).get(t.category, {}) %}
+                                    <td data-label="Category">{{ labels.get('en', t.category) }}</td>
+                                {% else %}
+                                    <td data-label="Category">{{ t.category }}</td>
+                                {% endif %}
                                 <td data-label="Amount" class="{{ 'text-success' if t.type == 'income' else 'text-danger' }}">
                                     {{ '+' if t.type == 'income' else '-' }}{{ currency_symbol }}{{ "{:,.2f}".format(t.amount) }}
                                 </td>
@@ -101,7 +105,7 @@
                     </table>
                 </div>
                 <div class="text-end">
-                    <a href="{{ url_for('transactions') }}" class="btn btn-glassy">View All</a>
+                    <a href="{{ url_for('transactions_routes.transactions') }}" class="btn btn-glassy">View All</a>
                 </div>
                 {% else %}
                 <div class="text-center py-4">
@@ -118,7 +122,7 @@
                         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">Active Goals</h5>
                                 <div class="header-actions d-flex gap-2">
-                                    <a href="{{ url_for('goals') }}" class="btn btn-sm btn-light" aria-label="Add Goal" title="Add Goal">
+                                <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-sm btn-light" aria-label="Add Goal" title="Add Goal">
                                         <i class="fa-solid fa-plus"></i><span class="d-none d-md-inline ms-1">Add</span>
                                     </a>
                                 </div>
@@ -142,7 +146,7 @@
                     {% else %}
                     <div class="text-center py-4">
                         <p class="text-muted">No active goals.</p>
-                        <a href="{{ url_for('goals') }}" class="btn btn-primary">Set a Goal</a>
+                            <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-primary">Set a Goal</a>
                     </div>
                     {% endif %}
                 </div>
@@ -158,10 +162,10 @@
             <button type="button" class="btn btn-outline-primary quick-action" data-open-transaction-modal>
                         <i class="bi bi-plus-circle"></i> Add Transaction
                     </button>
-            <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary quick-action">
+                        <a href="{{ url_for('analysis_bp.analysis') }}" class="btn btn-outline-primary quick-action">
                         <i class="bi bi-graph-up"></i> View Analysis
                     </a>
-            <a href="{{ url_for('goals') }}" class="btn btn-outline-primary quick-action">
+                        <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-outline-primary quick-action">
                         <i class="bi bi-bullseye"></i> Manage Goals
                     </a>
                 </div>

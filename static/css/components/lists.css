@@ -1,24 +1,109 @@
 /* List group & recommendations */
-.list-group-item { position:relative; display:block; padding:1rem 1.25rem; color:var(--text-primary); background-color:var(--bg-secondary); border:1px solid var(--border-color); border-radius:var(--border-radius); margin-bottom:.75rem; transition:background-color .25s,color .25s; -webkit-tap-highlight-color:transparent; }
-.list-group-item>* { margin-bottom:.5rem; }
-.list-group-item .accordion-button { background-color:var(--bg-tertiary); color:var(--text-primary); border-radius:var(--border-radius); transition:background-color .3s; }
-/* Remove inner contrast when parent is active/hovered */
-.list-group-item:hover .accordion-button, .list-group-item:active .accordion-button { background-color:transparent; }
-/* Default hover (desktop) */
-.list-group-item:hover { background-color:var(--hover-bg); cursor:pointer; }
-/* Active (tap) */
-.list-group-item:active { background-color:var(--hover-bg); }
-@media (hover:none), (pointer:coarse){
-	.list-group-item:hover, .list-group-item:active { background-color:var(--bg-secondary)!important; }
-	.list-group-item .accordion-button, .list-group-item .progress { background-color:var(--bg-secondary)!important; }
+.list-group-item {
+	position: relative;
+	display: block;
+	padding: 1rem 1.25rem;
+	color: var(--text-primary);
+	background-color: var(--bg-secondary);
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius);
+	margin-bottom: .75rem;
+	transition: background-color .25s, color .25s;
+	-webkit-tap-highlight-color: transparent;
 }
-.list-group-item .progress { background-color:var(--bg-tertiary); border-radius:var(--border-radius); height:20px; }
-.list-group-item:hover .progress, .list-group-item:active .progress { background-color:transparent; }
-.list-group-item .progress-bar { background-color:var(--accent-primary); color:var(--text-primary); font-weight:600; }
-.recommendation-details .ai-advice { padding:.75rem 1rem; border:1px dashed var(--border-color); border-radius:var(--border-radius); background-color:var(--bg-tertiary); }
-.btn-group .btn.is-selected { color:#fff!important; box-shadow:0 0 0 .2rem rgba(13,110,253,.15); }
-.btn-group .btn-outline-success.is-selected { background:#198754; border-color:#198754; }
-.btn-group .btn-outline-secondary.is-selected { background:#6c757d; border-color:#6c757d; }
-.btn-group .btn.is-selected:disabled, .btn-group .btn.is-selected.disabled { opacity:1!important; }
-.list-group-item .btn, .list-group-item a, .list-group-item .delete-btn { cursor:default; }
-.list-group-item .d-flex { gap:.5rem; }
+
+.list-group-item>* {
+	margin-bottom: .5rem;
+}
+
+.list-group-item .accordion-button {
+	background-color: var(--bg-tertiary);
+	color: var(--text-primary);
+	border-radius: var(--border-radius);
+	transition: background-color .3s;
+}
+
+/* Remove inner contrast when parent is active/hovered */
+.list-group-item:hover .accordion-button,
+.list-group-item:active .accordion-button {
+	background-color: transparent;
+}
+
+/* Default hover (desktop) */
+.list-group-item:hover {
+	background-color: var(--hover-bg);
+	cursor: pointer;
+}
+
+/* Active (tap) */
+.list-group-item:active {
+	background-color: var(--hover-bg);
+}
+
+@media (hover:none),
+(pointer:coarse) {
+
+	.list-group-item:hover,
+	.list-group-item:active {
+		background-color: var(--bg-secondary) !important;
+	}
+
+	.list-group-item .accordion-button,
+	.list-group-item .progress {
+		background-color: var(--bg-secondary) !important;
+	}
+}
+
+.list-group-item .progress {
+	background-color: var(--bg-tertiary);
+	border-radius: var(--border-radius);
+	height: 20px;
+}
+
+.list-group-item:hover .progress,
+.list-group-item:active .progress {
+	background-color: transparent;
+}
+
+.list-group-item .progress-bar {
+	background-color: var(--accent-primary);
+	color: var(--text-primary);
+	font-weight: 600;
+}
+
+.recommendation-details .ai-advice {
+	padding: .75rem 1rem;
+	border: 1px dashed var(--border-color);
+	border-radius: var(--border-radius);
+	background-color: var(--bg-tertiary);
+}
+
+.btn-group .btn.is-selected {
+	color: #fff !important;
+	box-shadow: 0 0 0 .2rem rgba(13, 110, 253, .15);
+}
+
+.btn-group .btn-outline-success.is-selected {
+	background: #198754;
+	border-color: #198754;
+}
+
+.btn-group .btn-outline-secondary.is-selected {
+	background: #6c757d;
+	border-color: #6c757d;
+}
+
+.btn-group .btn.is-selected:disabled,
+.btn-group .btn.is-selected.disabled {
+	opacity: 1 !important;
+}
+
+.list-group-item .btn,
+.list-group-item a,
+.list-group-item .delete-btn {
+	cursor: default;
+}
+
+.list-group-item .d-flex {
+	gap: .5rem;
+}

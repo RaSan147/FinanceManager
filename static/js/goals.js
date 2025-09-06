@@ -298,7 +298,7 @@ class Goal {
             }, 'Edit'));
         }
         actions.appendChild(createEl('button', {
-            class: 'btn btn-sm btn-outline-danger action-btn',
+            class: 'btn btn-sm btn-danger action-btn',
             dataset: { goalDelete: g._id || g.id }
         }, 'Delete'));
 

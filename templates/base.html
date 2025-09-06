@@ -22,7 +22,7 @@
 	<main>
 		<nav class="navbar navbar-expand-lg glassy-nav">
 			<div class="container">
-				<a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+				<a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard.index') }}">
                     <i class="fa-solid fa-wallet"></i>
                     <span>Finance Tracker</span>
                 </a>
@@ -33,22 +33,23 @@
 					<ul class="navbar-nav me-auto">
 						{% if current_user.is_authenticated %}
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='index' %}active{% endif %}" href="{{ url_for('index') }}" {% if request.endpoint=='index' %}aria-current="page"{% endif %}><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+							<a class="nav-link {% if request.endpoint=='dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" {% if request.endpoint=='dashboard.index' %}aria-current="page"{% endif %}><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='transactions' %}active{% endif %}" href="{{ url_for('transactions') }}" {% if request.endpoint=='transactions' %}aria-current="page"{% endif %}><i class="fa-solid fa-receipt"></i> Transactions</a>
+							{# Adjusted for blueprint endpoint name #}
+							<a class="nav-link {% if request.endpoint=='transactions_routes.transactions' %}active{% endif %}" href="{{ url_for('transactions_routes.transactions') }}" {% if request.endpoint=='transactions_routes.transactions' %}aria-current="page"{% endif %}><i class="fa-solid fa-receipt"></i> Transactions</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='goals' %}active{% endif %}" href="{{ url_for('goals') }}" {% if request.endpoint=='goals' %}aria-current="page"{% endif %}><i class="fa-solid fa-bullseye"></i> Goals</a>
+							<a class="nav-link {% if request.endpoint=='goals_bp.goals' %}active{% endif %}" href="{{ url_for('goals_bp.goals') }}" {% if request.endpoint=='goals_bp.goals' %}aria-current="page"{% endif %}><i class="fa-solid fa-bullseye"></i> Goals</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='loans' %}active{% endif %}" href="{{ url_for('loans') }}" {% if request.endpoint=='loans' %}aria-current="page"{% endif %}><i class="fa-solid fa-scale-balanced"></i> Loans</a>
+							<a class="nav-link {% if request.endpoint=='loans_bp.loans' %}active{% endif %}" href="{{ url_for('loans_bp.loans') }}" {% if request.endpoint=='loans_bp.loans' %}aria-current="page"{% endif %}><i class="fa-solid fa-scale-balanced"></i> Loans</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='analysis' %}active{% endif %}" href="{{ url_for('analysis') }}" {% if request.endpoint=='analysis' %}aria-current="page"{% endif %}><i class="fa-solid fa-chart-line"></i> Analysis</a>
+							<a class="nav-link {% if request.endpoint=='analysis_bp.analysis' %}active{% endif %}" href="{{ url_for('analysis_bp.analysis') }}" {% if request.endpoint=='analysis_bp.analysis' %}aria-current="page"{% endif %}><i class="fa-solid fa-chart-line"></i> Analysis</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='purchase_advisor' %}active{% endif %}" href="{{ url_for('purchase_advisor') }}" {% if request.endpoint=='purchase_advisor' %}aria-current="page"{% endif %}><i class="fa-solid fa-robot"></i> Purchase Advisor</a>
+							<a class="nav-link {% if request.endpoint=='ai_bp.purchase_advisor' %}active{% endif %}" href="{{ url_for('ai_bp.purchase_advisor') }}" {% if request.endpoint=='ai_bp.purchase_advisor' %}aria-current="page"{% endif %}><i class="fa-solid fa-robot"></i> Purchase Advisor</a>
 						</li>
 						{% endif %}
 					</ul>
@@ -60,7 +61,7 @@
 							</a>
 							<ul class="dropdown-menu dropdown-menu-end">
 								<li>
-									<a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('profile') }}"><i class="fa-solid fa-user-gear"></i> <span>Profile</span></a>
+									<a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('profile_bp.profile') }}"><i class="fa-solid fa-user-gear"></i> <span>Profile</span></a>
 								</li>
 
 								<li><hr class="dropdown-divider"></li>

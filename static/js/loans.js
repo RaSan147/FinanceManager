@@ -40,7 +40,7 @@ class Loan {
     _createActionButton() {
         if (this.data.status === 'open') {
             const button = this._createElement('button', {
-                classes: ['btn', 'btn-sm', 'btn-outline-danger', 'action-btn'],
+                classes: ['btn', 'btn-sm', 'btn-danger', 'action-btn'],
                 text: 'End Loan'
             });
             button.dataset.closeLoan = this.data._id;
