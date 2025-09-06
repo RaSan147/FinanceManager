@@ -152,6 +152,11 @@ def inject_perf_metrics():
     except Exception:
         return {}
 
+@app.context_processor
+def inject_tx_categories():
+    # Provide transaction categories globally for modal availability on any page
+    return {'tx_categories': TRANSACTION_CATEGORIES}
+
 @login_manager.user_loader
 def load_user(user_id):
     user_data = mongo.db.users.find_one({'_id': ObjectId(user_id)})
@@ -1037,6 +1042,13 @@ def api_goals_list():
     per_page = request.args.get('per_page', 5, type=int)
     per_page =  min(per_page, 50)
     skip = (page - 1) * per_page
+    sort_param = (request.args.get('sort') or '').lower().strip()
+    # Whitelist allowed sort modes matching Goal.get_user_goals mapping
+    allowed_sorts = {'', 'created_desc', 'created_asc', 'target_date', 'target_date_desc', 'priority'}
+    if sort_param not in allowed_sorts:
+        sort_param = 'created_desc'
+    # Stash chosen sort mode on db handle (lightweight, request-scoped attr)
+    setattr(mongo.db, '_goal_sort_mode', sort_param or 'created_desc')
     total = mongo.db.goals.count_documents({'user_id': current_user.id})
     goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page)
     monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
@@ -1053,7 +1065,7 @@ def api_goals_list():
             gdict['target_date'] = td.isoformat()
         gdict['progress'] = progress
         items.append(gdict)
-    return jsonify({'items': items, 'total': total, 'page': page, 'per_page': per_page})
+    return jsonify({'items': items, 'total': total, 'page': page, 'per_page': per_page, 'sort': sort_param or 'created_desc'})
 
 @app.route('/api/goals', methods=['POST'])
 @login_required
@@ -1111,7 +1123,19 @@ def api_goal_update(goal_id):
     goal = Goal.update(goal_id, current_user.id, update, mongo.db)
     if not goal:
         return jsonify({'error': 'Not found or no changes'}), 404
-    return jsonify({'item': goal.model_dump(by_alias=True)})
+    # Trigger background AI revalidation automatically after an edit
+    try:
+        threading.Thread(
+            target=lambda: asyncio.run(
+                Goal._ai_enhance_goal(goal_id, goal, mongo.db, ai_engine)
+            ),
+            daemon=True
+        ).start()
+        reval_started = True
+    except Exception as e:
+        app.logger.error(f"Failed to start goal revalidation after update {goal_id}: {e}")
+        reval_started = False
+    return jsonify({'item': goal.model_dump(by_alias=True), 'revalidation_started': reval_started})
 
 @app.route('/api/goals/<goal_id>/complete', methods=['POST'])
 @login_required
@@ -1562,4 +1586,4 @@ def api_close_loan(loan_id):
     return jsonify({'success': True})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)

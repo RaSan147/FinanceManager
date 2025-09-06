@@ -189,15 +189,59 @@ class Goal:
 
     @staticmethod
     def get_user_goals(user_id: str, db, skip: int = 0, limit: int = 10) -> List[GoalInDB]:
-        """List goals for a user with pagination."""
-        goals = db.goals.find({"user_id": user_id}).skip(skip).limit(limit)
-        return [GoalInDB(**goal) for goal in goals]
+        """List goals for a user with pagination and deterministic sorting.
+
+        Default order: newest first (created_at desc).
+
+        Supports lightweight sort modes via a special key placed in the cursor's
+        comment (for easier future explain / profiling) and simple mapping to
+        Mongo sort tuples.
+
+        Accepted sort values (case-insensitive):
+            - created_desc (default)
+            - created_asc
+            - target_date (soonest first)
+            - target_date_desc
+            - priority (ai_priority desc then created_at desc)
+
+        Args:
+            user_id: Owner id
+            db: Mongo database handle
+            skip: Pagination offset
+            limit: Page size
+
+        Returns:
+            List[GoalInDB]
+        """
+        sort_mode = getattr(db, '_goal_sort_mode', 'created_desc')  # ephemeral attr optionally set by caller
+        sort_mode = (sort_mode or 'created_desc').lower()
+        sort_map: dict[str, list[tuple[str, int]]] = {
+            'created_desc': [('created_at', -1)],
+            'created_asc': [('created_at', 1)],
+            'target_date': [('target_date', 1), ('created_at', -1)],
+            'target_date_desc': [('target_date', -1), ('created_at', -1)],
+            'priority': [('ai_priority', -1), ('created_at', -1)],
+        }
+        mongo_sort = sort_map.get(sort_mode, sort_map['created_desc'])
+        cursor = db.goals.find({"user_id": user_id}).sort(mongo_sort).skip(skip).limit(limit)
+        return [GoalInDB(**g) for g in cursor]
 
     @staticmethod
     def get_active_goals(user_id: str, db) -> List[GoalInDB]:
-        """List non-completed goals for a user."""
-        goals = db.goals.find({"user_id": user_id, "is_completed": False})
-        return [GoalInDB(**goal) for goal in goals]
+        """List non-completed goals with deterministic ordering.
+
+        Uses ai_priority desc then target_date asc then created_at desc so that
+        newly added goals without AI data naturally fall toward the end but
+        still appear before very old, far future goals if priorities tie.
+        """
+        cursor = (db.goals
+                  .find({"user_id": user_id, "is_completed": False})
+                  .sort([
+                      ('ai_priority', -1),
+                      ('target_date', 1),
+                      ('created_at', -1)
+                  ]))
+        return [GoalInDB(**g) for g in cursor]
 
     @staticmethod
     def calculate_goal_progress(goal: GoalInDB, monthly_summary: Dict[str, Any], override_current_amount: float | None = None, base_currency_code: str = 'USD') -> Dict[str, Any]:
@@ -249,7 +293,8 @@ class Goal:
                 (goal.target_amount - progress_data["current_amount"]) / max(remaining_months, 1)
             )
             monthly_savings_base = float(monthly_summary.get("savings", 0) or 0)
-            progress_data["current_monthly"] = _convert(monthly_savings_base, base_currency_code, goal_currency)
+            # Convert monthly savings (base currency) into goal currency
+            progress_data["current_monthly"] = currency_service.convert_amount(monthly_savings_base, base_currency_code, goal_currency)
             progress_data["currency"] = goal_currency
 
         return progress_data

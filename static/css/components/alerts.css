@@ -1,0 +1,3 @@
+/* Alerts */
+.alert-success { background-color:var(--success-bg); }
+.alert-danger { background-color:var(--danger-bg); }

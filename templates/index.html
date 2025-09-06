@@ -64,13 +64,15 @@
             </div>
         </div>
 		
-    <div class="card mb-4" data-recent-transactions>
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Recent Transactions</h5>
-                <button type="button" class="btn btn-sm btn-light" data-dashboard-open-tx>
-                    <i class="bi bi-plus"></i> Add
-                </button>
-            </div>
+        <div class="card mb-4" data-recent-transactions>
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Recent Transactions</h5>
+                                <div class="header-actions d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-light" data-open-transaction-modal aria-label="Add Transaction" title="Add Transaction">
+                                        <i class="fa-solid fa-plus"></i><span class="d-none d-md-inline ms-1">Add</span>
+                                    </button>
+                                </div>
+                        </div>
             <div class="card-body">
                 {% if transactions %}
                 <div class="table-responsive">
@@ -104,7 +106,7 @@
                 {% else %}
                 <div class="text-center py-4">
                     <p class="text-muted">No transactions yet.</p>
-                    <button type="button" class="btn btn-glassy" data-dashboard-open-tx>Add Your First Transaction</button>
+                    <button type="button" class="btn btn-glassy" data-open-transaction-modal>Add Your First Transaction</button>
                 </div>
                 {% endif %}
             </div>
@@ -112,13 +114,15 @@
     </div>
 
     <div class="col-md-4">
-        <div class="card mb-4" data-active-goals-wrapper>
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Active Goals</h5>
-                <a href="{{ url_for('goals') }}" class="btn btn-sm btn-light">
-                    <i class="bi bi-plus"></i> Add
-                </a>
-            </div>
+                <div class="card mb-4" data-active-goals-wrapper>
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Active Goals</h5>
+                                <div class="header-actions d-flex gap-2">
+                                    <a href="{{ url_for('goals') }}" class="btn btn-sm btn-light" aria-label="Add Goal" title="Add Goal">
+                                        <i class="fa-solid fa-plus"></i><span class="d-none d-md-inline ms-1">Add</span>
+                                    </a>
+                                </div>
+                        </div>
             <div class="card-body">
                 <div data-active-goals>
                     {% if goals %}
@@ -151,7 +155,7 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-            <button type="button" class="btn btn-outline-primary quick-action" data-dashboard-open-tx>
+            <button type="button" class="btn btn-outline-primary quick-action" data-open-transaction-modal>
                         <i class="bi bi-plus-circle"></i> Add Transaction
                     </button>
             <a href="{{ url_for('analysis') }}" class="btn btn-outline-primary quick-action">
@@ -181,20 +185,6 @@ window.txCategoryLang = {{ user_language|default('en')|tojson|safe }};
 window.getTxCategoryLabel = function(type, code){
     try { return (window.txCategoryLabels?.[type]?.[code]?.[window.txCategoryLang]) || (window.txCategoryLabels?.[type]?.[code]?.en) || code; } catch(_){ return code; }
 };
-// Open transaction modal from dashboard: navigate to /transactions then open modal after load
-document.addEventListener('DOMContentLoaded', function(){
-    function openTxFlow(){
-        // If we're already on /transactions and modal script loaded
-        if (window.TransactionModal) {
-            window.TransactionModal.openCreate();
-            return;
-        }
-        // Otherwise go to /transactions with a flag so that page script opens modal
-        const url = new URL(window.location.origin + '/transactions');
-        url.searchParams.set('openModal','1');
-        window.location.href = url.toString();
-    }
-    document.querySelectorAll('[data-dashboard-open-tx]').forEach(btn => btn.addEventListener('click', openTxFlow));
-});
+// Global modal system handles [data-open-transaction-modal]; no extra JS needed here.
 </script>
 {% endblock %}

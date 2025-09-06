@@ -1,0 +1,22 @@
+/* Theme Variables (Light + Dark) */
+:root { /* ...extracted from original style.css root... */
+  --bg-primary: #f6f7fb; --bg-secondary: #ffffff; --bg-tertiary: #f1f3f8;
+  --text-primary: #1f2937; --text-secondary: #4b5563; --text-hint: #6b7280;
+  --accent-primary: #2563eb; --accent-secondary: #6b7280; --border-color: #e5e7eb;
+  --card-shadow: 0 8px 20px rgba(0,0,0,0.08); --success-bg: #d1fae5; --danger-bg: #fee2e2;
+  --border-radius: 10px; --hover-bg: rgba(37,99,235,0.08);
+  --glass-bg: rgba(255,255,255,0.6); --glass-border: rgba(255,255,255,0.45); --glass-blur: 14px;
+  --header-grad-1: rgba(37, 99, 235, 0.10); --header-grad-2: rgba(59,130,246,0.08);
+  --success-hex: #16a34a; --success-rgb: 22,163,74; --danger-hex: #ef4444; --danger-rgb: 239,68,68;
+  --info-hex: #0ea5e9; --info-rgb: 14,165,233; --glass-blur-mobile: 10px; --bubble-tilt: 0.3deg;
+  --bubble-scale: 1.008; --bubble-shadow: 0 16px 32px rgba(0,0,0,0.14);
+}
+
+[data-theme="dark"] { /* dark overrides */
+  --bg-primary: #0b0f14; --bg-secondary: #0f1722; --bg-tertiary: #131c2a;
+  --text-primary: #e5e7eb; --text-secondary: #94a3b8; --text-hint: #cbd5e1;
+  --accent-primary: #60a5fa; --accent-secondary: #64748b; --border-color: #233046;
+  --card-shadow: 0 10px 24px rgba(0,0,0,0.45); --success-bg: #064e3b; --danger-bg: #7f1d1d;
+  --hover-bg: rgba(96,165,250,0.15); --glass-bg: rgba(18,29,46,0.55); --glass-border: rgba(255,255,255,0.08);
+  --glass-blur: 16px; --header-grad-1: rgba(96,165,250,0.16); --header-grad-2: rgba(59,130,246,0.12);
+}

@@ -1,0 +1,4 @@
+/* Pagination */
+.pagination .page-item .page-link { color:var(--text-primary); background-color:var(--bg-secondary); border:1px solid var(--border-color); }
+.pagination .page-item.active .page-link { color:#fff; background:linear-gradient(135deg, rgba(37,99,235,.9), rgba(59,130,246,.85)); border-color:rgba(37,99,235,.6); box-shadow:0 6px 16px rgba(37,99,235,.35); }
+.pagination .page-item .page-link:hover { background-color:var(--hover-bg); }

@@ -170,6 +170,11 @@ class Goal {
                 class: 'btn btn-sm btn-outline-secondary action-btn',
                 dataset: { goalRevalidate: g._id || g.id }
             }, 'Revalidate'));
+            // Edit button (only for non-completed goals)
+            actions.appendChild(createEl('button', {
+                class: 'btn btn-sm btn-outline-primary action-btn',
+                dataset: { goalEdit: g._id || g.id }
+            }, 'Edit'));
         }
         actions.appendChild(createEl('button', {
             class: 'btn btn-sm btn-outline-danger action-btn',
@@ -182,10 +187,12 @@ class Goal {
             const {
                 goalComplete,
                 goalRevalidate,
-                goalDelete
+                goalDelete,
+                goalEdit
             } = target.dataset;
             if (goalComplete) GoalsModule.doComplete(goalComplete);
             else if (goalRevalidate) GoalsModule.doRevalidate(goalRevalidate);
+            else if (goalEdit) GoalsModule.openEditModal(goalEdit);
             else if (goalDelete) GoalsModule.doDelete(goalDelete);
         });
 
@@ -200,7 +207,8 @@ class GoalsModule {
         this.state = {
             page: 1,
             perPage: 5,
-            total: 0
+            total: 0,
+            goalsMap: {}
         };
         if (this.utils.qs('[data-goals-root]')) {
             this.initGoalsPage();
@@ -208,36 +216,53 @@ class GoalsModule {
     }
 
     static initGoalsPage() {
-        const {
-            qs
-        } = this.utils;
+        const { qs } = this.utils;
         const addForm = qs('[data-goal-form]');
+
+        // Sort dropdown menu events
+        const sortMenu = document.querySelector('[data-goals-sort-menu]');
+        if (sortMenu) {
+            sortMenu.addEventListener('click', e => {
+                const a = e.target.closest('a[data-sort]');
+                if (!a) return;
+                e.preventDefault();
+                const mode = a.getAttribute('data-sort');
+                this.state.sort = mode;
+                sortMenu.querySelectorAll('a[data-sort]').forEach(el => el.classList.remove('active'));
+                a.classList.add('active');
+                this.loadGoals(1);
+            });
+            const def = sortMenu.querySelector('a[data-sort="created_desc"]');
+            def && def.classList.add('active');
+        }
+        if (!this.state.sort) this.state.sort = 'created_desc';
+
+        // Remove local submit handler to avoid duplicate POST; global_modals handles creation.
         if (addForm) {
             addForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
                 const fd = new FormData(addForm);
-                const payload = {
-                    goal_type: fd.get('goal_type'),
-                    target_amount: fd.get('target_amount'),
-                    description: fd.get('description'),
-                    target_date: fd.get('target_date'),
-                    target_currency: fd.get('target_currency')
-                };
+                const id = fd.get('_id');
+                if (!id) return; // creation handled by global_modals.js
+                e.preventDefault();
+                if (addForm.dataset.submitting==='1') return; addForm.dataset.submitting='1';
                 try {
-                    await this.utils.fetchJSON('/api/goals', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(payload)
+                    const patchPayload = {
+                        target_amount: fd.get('target_amount'),
+                        description: fd.get('description'),
+                        target_date: fd.get('target_date')
+                    };
+                    await this.utils.fetchJSON(`/api/goals/${id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(patchPayload)
                     });
-                    window.flash && window.flash('Goal added', 'success');
-                    addForm.reset();
-                    this.loadGoals(1);
-                } catch (err) {
-                    window.flash && window.flash('Add failed', 'danger');
-                }
-            });
+                    window.flash && window.flash('Goal updated (AI revalidating...)', 'success');
+                    this.closeModal();
+                    this.loadGoals(this.state.page);
+                } catch(err){
+                    window.flash && window.flash('Update failed','danger');
+                } finally { delete addForm.dataset.submitting; }
+            }, { once: false });
         }
 
         qs('[data-goals-pagination]')?.addEventListener('click', e => {
@@ -246,6 +271,13 @@ class GoalsModule {
             e.preventDefault();
             this.loadGoals(parseInt(a.dataset.page, 10));
         });
+
+        qs('[data-open-goal-modal]')?.addEventListener('click', () => this.openAddModal());
+
+        const modalEl = document.getElementById('goalModal');
+        if (modalEl && window.bootstrap) {
+            this.state.modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+        }
 
         this.loadGoals(1);
     }
@@ -258,14 +290,16 @@ class GoalsModule {
         const root = qs('[data-goals-list]');
         if (!root) return;
         const perPage = parseInt(root.getAttribute('data-per-page') || '5', 10);
+        const sortVal = this.state.sort || 'created_desc';
 
         try {
-            const data = await fetchJSON(`/api/goals/list?page=${page}&per_page=${perPage}`);
+            const data = await fetchJSON(`/api/goals/list?page=${page}&per_page=${perPage}&sort=${encodeURIComponent(sortVal)}`);
             this.state.page = data.page;
             this.state.perPage = data.per_page;
             this.state.total = data.total;
             this.renderGoals(data.items || []);
             this.renderPagination();
+            if (data.sort) this.state.sort = data.sort;
         } catch (e) {
             root.innerHTML = '<div class="text-danger">Failed to load goals</div>';
         }
@@ -280,6 +314,9 @@ class GoalsModule {
 
         root.innerHTML = '';
 
+    // Rebuild goals map for edit usage
+    this.state.goalsMap = {};
+
         if (!items.length) {
             root.innerHTML = '<div class="text-center py-4 text-muted">No goals yet.</div>';
             return;
@@ -288,6 +325,8 @@ class GoalsModule {
         const frag = document.createDocumentFragment();
         items.forEach(itemData => {
             try {
+                const gid = itemData._id || itemData.id;
+                if (gid) this.state.goalsMap[gid] = itemData;
                 const goal = new Goal(itemData, this.helpers());
                 frag.appendChild(goal.render());
             } catch (e) {
@@ -381,6 +420,81 @@ class GoalsModule {
 
     static helpers() {
         return this.utils;
+    }
+
+    // ------------- Modal Helpers -------------
+    static openAddModal() {
+        // Delegate to global GoalModal if present to avoid duplicate logic
+        if (window.GoalModal && typeof window.GoalModal.openCreate === 'function') {
+            window.GoalModal.openCreate();
+            return;
+        }
+        const { qs } = this.utils;
+        const form = qs('[data-goal-form]');
+        if (!form) return;
+        form.reset();
+        form.querySelector('[data-goal-id]').value = '';
+        // Enable selects for add
+        form.querySelector('[name="goal_type"]').disabled = false;
+        form.querySelector('[name="target_currency"]').disabled = false;
+        qs('[data-goal-modal-title]').textContent = 'Add Goal';
+        const submitBtn = qs('[data-goal-submit-btn]');
+        if (submitBtn) submitBtn.textContent = 'Save';
+        this.updateCurrencySymbol();
+        this.showModal();
+    }
+
+    static openEditModal(id) {
+        const { qs } = this.utils;
+        const goal = this.state.goalsMap[id];
+        if (!goal) return;
+        const form = qs('[data-goal-form]');
+        if (!form) return;
+    // Ensure modal exists (global include) and is appended once by global_modals.
+        // Populate fields
+        form.querySelector('[data-goal-id]').value = id;
+        form.querySelector('[name="goal_type"]').value = goal.type || 'savings';
+        form.querySelector('[name="goal_type"]').disabled = true; // not updatable via API
+        form.querySelector('[name="target_amount"]').value = goal.target_amount;
+        form.querySelector('[name="description"]').value = goal.description || '';
+        try {
+            const d = (goal.target_date || '').substring(0,10);
+            form.querySelector('[name="target_date"]').value = d;
+        } catch(e) {}
+        form.querySelector('[name="target_currency"]').value = goal.currency;
+    form.querySelector('[name="target_currency"]').disabled = true; // immutable during edit to avoid currency mismatch
+        qs('[data-goal-modal-title]').textContent = 'Edit Goal';
+        const submitBtn = qs('[data-goal-submit-btn]');
+        if (submitBtn) submitBtn.textContent = 'Update';
+        this.updateCurrencySymbol(goal.currency);
+        this.showModal();
+    }
+
+    static updateCurrencySymbol(code) {
+        const { qs } = this.utils;
+        const symEl = qs('[data-goal-symbol-prefix]');
+        if (!symEl) return;
+    const currencySelect = qs('[name="target_currency"]');
+    const c = code || (currencySelect ? currencySelect.value : null);
+        if (!c) return;
+        if (window.currencySymbols) {
+            symEl.textContent = window.currencySymbols[c] || symEl.textContent;
+        }
+    }
+
+    static showModal() {
+        if (this.state.modal) this.state.modal.show();
+        else {
+            // Fallback manual show if bootstrap not found
+            document.getElementById('goalModal')?.classList.add('show');
+        }
+    }
+
+    static closeModal() {
+        if (this.state.modal) this.state.modal.hide();
+        else {
+            document.getElementById('goalModal')?.classList.remove('show');
+        }
     }
 }
 
