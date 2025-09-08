@@ -58,8 +58,6 @@ class TodoBase(BaseModel):
     stage_updated_at: datetime = Field(default_factory=now_utc)
     completed_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
-    # Manual ordering support (higher = earlier in manual view)
-    sort_index: int = Field(default_factory=lambda: int(datetime.utcnow().timestamp() * 1000))
 
     @field_validator("title")
     @classmethod
@@ -116,7 +114,6 @@ class TodoUpdate(BaseModel):
         "wondering", "planning", "in_progress", "paused", "gave_up", "done"
     ]] = None
     due_date: Optional[datetime | str] = None
-    # sort_index intentionally omitted from public update schema; managed via reorder API
 
     @field_validator("title")
     @classmethod
@@ -295,7 +292,6 @@ class Todo:
             "updated_asc": [("updated_at", 1)],
             "title": [("title", 1)],
             "due_date": [("due_date", 1), ("created_at", -1)],
-            "manual": [("sort_index", -1), ("created_at", -1)],
         }
         mongo_sort = sort_map.get(sort, sort_map["created_desc"])
         total = db.todos.count_documents(filt)

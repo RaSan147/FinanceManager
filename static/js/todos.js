@@ -29,33 +29,42 @@
 
 	const stages = ['wondering', 'planning', 'in_progress', 'paused', 'gave_up', 'done'];
 	const state = {
+		// sort: current sort key. We deliberately avoid sending it to the API
+		// until the user explicitly chooses a sort so that the server can
+		// respond with the persisted per-user preference (current_user.todo_sort).
 		sort: 'created_desc',
+		// whether user explicitly changed sort this session (to decide if we send ?sort=)
+		sortExplicit: false,
 		viewStage: 'all',
 		q: '',
 		category: '',
-		manual: false,
-		items: [],
-		userSelectedSort: false // prevent server overriding manual choice mid-session
+		items: []
 	};
 
-	async function apiList() {
-		let url = `/api/todos?per_page=500&sort=${encodeURIComponent(state.sort)}`;
+	async function apiList(forceFresh = false) {
+		// Add lightweight cache-buster when we know data changed (stage update/delete)
+		let url = `/api/todos?per_page=500` + (forceFresh ? `&__ts=${Date.now()}` : '');
+		// Only include sort if user has explicitly picked one this session; otherwise
+		// let backend supply stored preference.
+		if (state.sortExplicit && state.sort) url += `&sort=${encodeURIComponent(state.sort)}`;
 		if (state.viewStage !== 'all') url += `&stage=${encodeURIComponent(state.viewStage)}`;
 		if (state.q) url += `&q=${encodeURIComponent(state.q)}`;
 		if (state.category) url += `&category=${encodeURIComponent(state.category)}`;
 		let data;
 		try {
-			data = await App.utils.fetchJSONUnified(url, {
-				dedupe: true
-			});
+			// Intentionally omit dedupe so we always get fresh data after mutations.
+			data = await App.utils.fetchJSONUnified(url);
 		} catch (e) {
 			console.warn('Todo list fetch failed', e);
 			return;
 		}
-		// Only allow server to set sort if user hasn't explicitly picked one or it's not manual override
-		if (data.sort && data.sort !== state.sort && !state.userSelectedSort) {
-			state.sort = data.sort;
-			updateSortLabel();
+		// Apply server-provided sort (persisted user preference) if we have not explicitly overridden it.
+		if (data.sort) {
+			if (!state.sortExplicit || data.sort !== state.sort) {
+				state.sort = data.sort;
+				updateSortLabel();
+				updateSortMenuActive();
+			}
 		}
 		state.items = data.items || [];
 		renderList();
@@ -64,29 +73,19 @@
 	function renderList() {
 		listEl.innerHTML = '';
 		let items = [...state.items];
-		if (state.sort === 'manual') {
-			items.sort((a, b) => (b.sort_index || 0) - (a.sort_index || 0));
-			state.manual = true;
-		} else state.manual = false;
 		if (!items.length) {
 			listEl.innerHTML = '<div class="text-muted small fst-italic">No items.</div>';
 			updateActiveFilterChips();
 			updateFilterBtnActive();
-			updateManualModeNotice();
 			return;
 		}
 		for (const it of items) {
 			const node = tmpl.content.firstElementChild.cloneNode(true);
 			hydrate(node, it);
-			if (state.manual) enableDrag(node);
-			if (state.manual && isTouchDevice()) enableTouchDrag(node); // pointer fallback
 			listEl.appendChild(node);
 		}
-		if (state.manual) initManualReorder();
-		if (state.manual && isTouchDevice()) initTouchDragContainer();
 		updateActiveFilterChips();
 		updateFilterBtnActive();
-		updateManualModeNotice();
 	}
 
 	function truncateDesc(txt) {
@@ -97,7 +96,6 @@
 
 	function hydrate(node, it) {
 		node.dataset.id = it._id;
-		// Ensure required class for drag logic & styling
 		if (!node.classList.contains('todo-item')) node.classList.add('todo-item');
 		node.classList.add(it.stage);
 		if (it.stage === 'done') node.classList.add('done');
@@ -120,10 +118,7 @@
 			sel.value = it.stage;
 			sel.addEventListener('change', () => quickStage(it._id, sel.value, node));
 		}
-		if (state.manual && canDragNow()) {
-			node.querySelector('.drag-handle')?.classList.remove('d-none');
-			node.setAttribute('draggable', 'true');
-		}
+		
 		bindItemHandlers(node, it);
 	}
 
@@ -140,7 +135,7 @@
 					stage: newStage
 				})
 			});
-			await apiList();
+			await apiList(true);
 		} catch (e) {
 			console.warn('Stage update failed', e);
 		} finally {
@@ -148,183 +143,7 @@
 		}
 	}
 
-	function enableDrag(node) {
-		const handle = node.querySelector('.drag-handle') || node;
-		// Always ensure draggable attribute is present in manual mode
-		if (!node.getAttribute('draggable')) node.setAttribute('draggable', 'true');
-		if (!handle.__dragBound) {
-			handle.addEventListener('dragstart', e => {
-				if (!canDragNow()) return; // safety
-				e.dataTransfer.effectAllowed = 'move';
-				e.dataTransfer.setData('text/plain', node.dataset.id || '');
-				node.classList.add('dragging');
-			});
-			node.addEventListener('dragend', () => node.classList.remove('dragging'));
-			handle.__dragBound = true;
-		}
-	}
 
-	// ---------------------- Touch / Pointer Reorder Fallback ----------------------
-	const TOUCH_DRAG_CLASS = 'dragging-touch';
-	let touchDragState = null;
-	function isTouchDevice() {
-		return window.matchMedia && window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-	}
-	function enableTouchDrag(node) {
-		const handle = node.querySelector('.drag-handle') || node;
-		if (handle.__touchDragBound) return;
-		handle.addEventListener('pointerdown', e => {
-			if (!canDragNow()) return;
-			if (e.button !== 0) return;
-			startTouchDrag(node, e);
-		});
-		handle.__touchDragBound = true;
-	}
-	function startTouchDrag(node, e) {
-		const rect = node.getBoundingClientRect();
-		const listRect = listEl.getBoundingClientRect();
-		const placeholder = document.createElement('div');
-		placeholder.className = 'todo-item touch-placeholder';
-		placeholder.style.height = rect.height + 'px';
-		placeholder.style.border = '2px dashed var(--border-color,#999)';
-		placeholder.style.borderRadius = '6px';
-		placeholder.style.background = 'var(--bs-warning-bg-subtle,rgba(255,200,0,.12))';
-		placeholder.style.marginBottom = getComputedStyle(node).marginBottom;
-		// Fix width while dragging
-		node.style.width = rect.width + 'px';
-		node.style.position = 'absolute';
-		node.style.zIndex = 1000;
-		node.style.pointerEvents = 'none';
-		node.classList.add(TOUCH_DRAG_CLASS);
-		const offsetY = e.clientY - rect.top;
-		const offsetX = e.clientX - rect.left;
-		listEl.insertBefore(placeholder, node);
-		listEl.appendChild(node); // move to end so absolute pos relative to list container
-		moveTouchDrag(node, listRect, e.clientX - listRect.left - offsetX, e.clientY - listRect.top - offsetY);
-		touchDragState = { node, placeholder, offsetY, offsetX, listRect };
-		document.addEventListener('pointermove', onTouchDragMove);
-		document.addEventListener('pointerup', onTouchDragEnd, { once: true });
-	}
-	function moveTouchDrag(node, listRect, x, y) {
-		node.style.left = Math.max(0, x) + 'px';
-		node.style.top = Math.max(0, y) + 'px';
-	}
-	function onTouchDragMove(e) {
-		if (!touchDragState) return;
-		const { node, placeholder, offsetY, offsetX, listRect } = touchDragState;
-		moveTouchDrag(node, listRect, e.clientX - listRect.left - offsetX, e.clientY - listRect.top - offsetY);
-		const centerY = e.clientY - listRect.top;
-		let beforeEl = null;
-		const siblings = [...listEl.querySelectorAll('.todo-item:not(.touch-placeholder):not(.' + TOUCH_DRAG_CLASS + ')')];
-		for (const sib of siblings) {
-			const r = sib.getBoundingClientRect();
-			const relTop = r.top - listRect.top;
-			if (centerY < relTop + r.height / 2) {
-				beforeEl = sib;
-				break;
-			}
-		}
-		if (beforeEl) listEl.insertBefore(placeholder, beforeEl);
-		else listEl.appendChild(placeholder);
-	}
-	function onTouchDragEnd() {
-		if (!touchDragState) return;
-		const { node, placeholder } = touchDragState;
-		node.style.position = '';
-		node.style.width = '';
-		node.style.left = '';
-		node.style.top = '';
-		node.style.zIndex = '';
-		node.style.pointerEvents = '';
-		node.classList.remove(TOUCH_DRAG_CLASS);
-		listEl.insertBefore(node, placeholder);
-		placeholder.remove();
-		touchDragState = null;
-		document.removeEventListener('pointermove', onTouchDragMove);
-		debounceCommitOrder();
-	}
-	function initTouchDragContainer() {
-		// no-op placeholder for future container-specific logic; ensures single init if needed
-		if (listEl.__touchContainerInit) return;
-		listEl.__touchContainerInit = true;
-	}
-
-	let reorderListenersAttached = false;
-
-	function initManualReorder() {
-		if (!canDragNow()) return; // drag inactive under filters or stage view
-		listEl.querySelectorAll('.todo-item').forEach(item => {
-			item.addEventListener('dragover', e => {
-				e.preventDefault();
-				const dragging = listEl.querySelector('.todo-item.dragging');
-				if (!dragging || dragging === item) return;
-				const r = item.getBoundingClientRect();
-				const after = (e.clientY - r.top) > r.height / 2;
-				if (after) item.after(dragging);
-				else item.before(dragging);
-			});
-		});
-		// Container level handlers (drop at end / empty area support)
-		if (!listEl.__containerDragBound) {
-			listEl.addEventListener('dragover', e => {
-				if (!canDragNow()) return;
-				e.preventDefault();
-				const dragging = listEl.querySelector('.todo-item.dragging');
-				if (!dragging) return;
-				// If cursor is below last item, append
-				const last = [...listEl.querySelectorAll('.todo-item')].pop();
-				if (last) {
-					const lr = last.getBoundingClientRect();
-					if (e.clientY > lr.bottom) listEl.appendChild(dragging);
-				}
-			});
-			listEl.addEventListener('drop', () => {
-				// Debounced commit already scheduled, but ensure one more call
-				debounceCommitOrder();
-			});
-			listEl.__containerDragBound = true;
-		}
-		if (!reorderListenersAttached) {
-			listEl.addEventListener('drop', debounceCommitOrder, {
-				once: false
-			});
-			reorderListenersAttached = true;
-		}
-	}
-	const debounceCommitOrder = (() => {
-		let t;
-		return () => {
-			clearTimeout(t);
-			t = setTimeout(commitManualOrder, 400);
-		}
-	})();
-	async function commitManualOrder() {
-		if (!state.manual) return;
-		if (!canDragNow()) return;
-		const nodes = [...listEl.querySelectorAll('.todo-item')];
-		const base = Date.now();
-		const payload = nodes.map((el, i) => ({
-			id: el.dataset.id,
-			sort_index: base + (nodes.length - i)
-		}));
-		try {
-			await App.utils.fetchJSONUnified('/api/todos/reorder', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					items: payload
-				})
-			});
-			window.flash && window.flash('Order saved', 'success');
-		} catch (e) {
-			console.warn('Reorder failed', e);
-			window.flash && window.flash('Reorder failed', 'danger');
-			// Attempt to refresh to restore consistent view
-			apiList();
-		}
-	}
 
 	function updateActiveFilterChips() {
 		const chips = []; // stage & sort omitted
@@ -341,10 +160,18 @@
 			created_asc: 'Oldest',
 			updated_desc: 'Recently Updated',
 			updated_asc: 'Least Updated',
-			due_date: 'Due Date',
-			manual: 'Manual'
+			due_date: 'Due Date'
 		};
 		currentSortLabel.textContent = map[state.sort] || 'Sort';
+	}
+
+	function updateSortMenuActive() {
+		if (!sortMenuEl) return;
+		const opts = sortMenuEl.querySelectorAll('[data-sort]');
+		opts.forEach(btn => {
+			const s = btn.getAttribute('data-sort');
+			btn.classList.toggle('active', s === state.sort);
+		});
 	}
 	const filterBtn = document.getElementById('btnFilterToggle');
 
@@ -406,7 +233,7 @@
 				method: 'DELETE'
 			});
 			window.flash && window.flash('Deleted', 'info');
-			apiList();
+			apiList(true);
 		} catch (e) {
 			console.warn('Delete failed', e);
 			window.flash && window.flash('Failed to delete item', 'danger');
@@ -863,29 +690,19 @@
 			const s = el.getAttribute('data-sort');
 			if (!s) return;
 			state.sort = s;
-			state.userSelectedSort = true;
+			state.sortExplicit = true; // from now on we send the sort param
 			updateSortLabel();
+			updateSortMenuActive();
 			apiList();
 			saveSortPreference(s);
 		}));
+		// Initialize active state (may update after first apiList when preference arrives)
+		updateSortMenuActive();
 	}
 
-	function canDragNow() {
-		return state.sort === 'manual' && state.viewStage === 'all' && !state.q && !state.category;
-	}
 
-	function updateManualModeNotice() {
-		const notice = document.getElementById('manualModeNotice');
-		if (!notice) return;
-		if (state.sort === 'manual') {
-			const restricted = !canDragNow();
-			notice.classList.remove('d-none');
-			notice.textContent = restricted ? 'Manual order view (drag disabled while filters/stage/search active).' : 'Manual order: drag items to reorder (drop anywhere below last item to move to end).';
-		} else notice.classList.add('d-none');
-	}
 
-	updateSortLabel();
+	// Don't force label here beyond default; after first fetch user preference will set it.
 	updateFilterBtnActive();
-	updateManualModeNotice();
 	apiList();
 })();

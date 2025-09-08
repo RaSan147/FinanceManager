@@ -39,8 +39,7 @@
             <li><button class="dropdown-item" data-sort="updated_desc">Recently Updated</button></li>
             <li><button class="dropdown-item" data-sort="updated_asc">Least Updated</button></li>
             <li><button class="dropdown-item" data-sort="due_date">Due Date</button></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><button class="dropdown-item" data-sort="manual">Manual (drag)</button></li>
+            
           </ul>
         </div>
         <div class="btn-group btn-group-sm">
@@ -63,15 +62,15 @@
         <button class="btn btn-sm btn-outline-secondary" id="btnClearFilters">Clear</button>
       </div>
     </div>
-    <div id="manualModeNotice" class="small text-muted mt-2 d-none"></div>
+  
     <div id="todosFlatList" class="todos-grid"></div>
   </div>
 </div>
 
 <template id="todoItemTemplate">
-  <div class="todo-item card p-2" data-id="" draggable="false">
+  <div class="todo-item card p-2" data-id="">
     <div class="d-flex gap-2 align-items-start">
-      <div class="drag-handle text-muted small d-none" title="Drag to reorder" style="cursor:grab"><i class="fa fa-grip-vertical"></i></div>
+      
       <div class="flex-grow-1">
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <strong class="todo-title"></strong>
