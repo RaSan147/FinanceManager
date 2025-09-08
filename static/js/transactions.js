@@ -93,82 +93,67 @@
   // ---------------------- Form Submit ----------------------
   async function handleSubmit(evt) {
     evt.preventDefault();
-  // Guard against accidental double-submission (e.g., rapid double click or duplicate listeners)
-  if (formEl.dataset.submitting === '1') return;
-  formEl.dataset.submitting = '1';
-    submitBtn.disabled = true;
-    const fd = new FormData(formEl);
-    const id = idInput.value.trim();
-    const payload = Object.fromEntries(fd.entries());
-    if (payload.date instanceof Date) payload.date = payload.date.toISOString().slice(0, 10);
-    try {
-      const url = id ? `/api/transactions/${id}` : '/api/transactions';
-      const method = id ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-  let raw = null;
-  try { raw = await res.json(); } catch(_) {}
-  const data = raw && raw.data ? raw.data : raw; // unwrap envelope
-      flash('Transaction saved', 'success');
-      bsModal.hide();
-      // If module available, reload page for consistency
-      if (window.DashboardTransactionsModule && typeof window.DashboardTransactionsModule.loadTransactionsPage === 'function') {
-        window.DashboardTransactionsModule.loadTransactionsPage(currentPage());
-  } else if (id && data && data.item) {
-        // Fallback: update the specific row inline without full reload
-        try {
-          const tbody = qs('[data-transactions-body]');
-          const btn = tbody?.querySelector(`[data-edit-id="${id}"]`);
-          const row = btn?.closest('tr');
-          if (row) {
-            const item = data.item;
-            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            const d = new Date(item.date || item._date || item.created_at);
-            const dateStr = isNaN(d) ? '' : `${monthNames[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2,'0')}, ${d.getUTCFullYear()}`;
-            const currencySymbol = qs('[data-transactions-table]')?.getAttribute('data-currency-symbol') || '';
-            const sign = item.type === 'income' ? '+' : '-';
-            const cls = item.type === 'income' ? 'text-success' : 'text-danger';
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 6) {
-              cells[0].textContent = dateStr;
-              cells[1].textContent = item.description || '';
-              cells[2].textContent = item.category || '';
-              cells[3].className = cls; // amount cell
-              const amt = Number(item.amount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-              cells[3].textContent = `${sign}${currencySymbol}${amt}`;
-              cells[4].textContent = (item.type || '').replace(/^./, c=>c.toUpperCase());
-              // Update edit JSON payload on button
-              if (btn) {
-                const editPayload = {
-                  _id: item._id,
-                  amount_original: item.amount_original || item.amount,
-                  currency: item.currency,
-                  type: item.type,
-                  category: item.category,
-                  description: item.description,
-                  date: (item.date || '').slice ? (item.date || '').slice(0,10) : item.date,
-                  related_person: item.related_person || ''
-                };
-                btn.setAttribute('data-edit-json', JSON.stringify(editPayload));
+    App.utils.withSingleFlight(formEl, async () => {
+      submitBtn.disabled = true;
+      const fd = new FormData(formEl);
+      const id = idInput.value.trim();
+      const payload = Object.fromEntries(fd.entries());
+      if (payload.date instanceof Date) payload.date = payload.date.toISOString().slice(0, 10);
+      try {
+        const url = id ? `/api/transactions/${id}` : '/api/transactions';
+        const method = id ? 'PATCH' : 'POST';
+        const data = await App.utils.fetchJSONUnified(url, { method, headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload) });
+        flash('Transaction saved', 'success');
+        bsModal.hide();
+        if (window.DashboardTransactionsModule && typeof window.DashboardTransactionsModule.loadTransactionsPage === 'function') {
+          window.DashboardTransactionsModule.loadTransactionsPage(currentPage());
+        } else if (id && data && data.item) {
+          try {
+            const tbody = qs('[data-transactions-body]');
+            const btn = tbody?.querySelector(`[data-edit-id="${id}"]`);
+            const row = btn?.closest('tr');
+            if (row) {
+              const item = data.item;
+              const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              const d = new Date(item.date || item._date || item.created_at);
+              const dateStr = isNaN(d) ? '' : `${monthNames[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2,'0')}, ${d.getUTCFullYear()}`;
+              const currencySymbol = qs('[data-transactions-table]')?.getAttribute('data-currency-symbol') || '';
+              const sign = item.type === 'income' ? '+' : '-';
+              const cls = item.type === 'income' ? 'text-success' : 'text-danger';
+              const cells = row.querySelectorAll('td');
+              if (cells.length >= 6) {
+                cells[0].textContent = dateStr;
+                cells[1].textContent = item.description || '';
+                cells[2].textContent = item.category || '';
+                cells[3].className = cls;
+                const amt = Number(item.amount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                cells[3].textContent = `${sign}${currencySymbol}${amt}`;
+                cells[4].textContent = (item.type || '').replace(/^./, c=>c.toUpperCase());
+                if (btn) {
+                  const editPayload = {
+                    _id: item._id,
+                    amount_original: item.amount_original || item.amount,
+                    currency: item.currency,
+                    type: item.type,
+                    category: item.category,
+                    description: item.description,
+                    date: (item.date || '').slice ? (item.date || '').slice(0,10) : item.date,
+                    related_person: item.related_person || ''
+                  };
+                  btn.setAttribute('data-edit-json', JSON.stringify(editPayload));
+                }
               }
             }
-          }
-        } catch (err) { console.warn('Inline row update failed', err); }
-  } else if (!id && data && data.item) {
-        // New item created but no module: simplest is full page reload
-        location.reload();
+          } catch (err) { console.warn('Inline row update failed', err); }
+        } else if (!id && data && data.item) {
+          location.reload();
+        }
+      } catch (e) {
+        if(!(e && e.status)) flash('Save failed', 'danger');
+      } finally {
+        submitBtn.disabled = false;
       }
-    } catch (e) {
-      flash('Save failed', 'danger');
-    } finally {
-      submitBtn.disabled = false;
-      // Allow future submissions after async cycle completes
-      delete formEl.dataset.submitting;
-    }
+    });
   }
 
   // ---------------------- Event Wiring ----------------------

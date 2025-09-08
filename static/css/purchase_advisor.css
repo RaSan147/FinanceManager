@@ -1,0 +1,7 @@
+/* Purchase Advisor Page Styles
+   Shared component rules removed (see components/ai-shared.css) */
+
+/* Page-local visualization adjustments */
+.card canvas { max-height:300px; width:100%!important; }
+
+/* Placeholder for future page-specific overrides */

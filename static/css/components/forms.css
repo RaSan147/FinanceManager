@@ -11,7 +11,6 @@ textarea {
 	appearance: none;
 	-webkit-appearance: none;
 	-moz-appearance: none;
-	cursor: pointer;
 }
 
 input:focus,

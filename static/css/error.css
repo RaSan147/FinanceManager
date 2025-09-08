@@ -1,0 +1,10 @@
+/* Error page styles (extracted from inline <style> in templates/error.html) */
+.error-hero {position:relative;padding:3rem 1.5rem;border-radius:1.25rem;background:linear-gradient(135deg,#6610f2,#6f42c1,#d63384);color:#fff;overflow:hidden;}
+.error-hero:before,.error-hero:after{content:"";position:absolute;border-radius:50%;background:rgba(255,255,255,.08);animation:float 12s linear infinite;}
+.error-hero:before{width:260px;height:260px;top:-60px;right:-60px;}
+.error-hero:after{width:180px;height:180px;bottom:-50px;left:-40px;animation-direction:reverse;}
+@keyframes float {0%{transform:translateY(0) rotate(0deg);}50%{transform:translateY(-25px) rotate(180deg);}100%{transform:translateY(0) rotate(360deg);}}
+pre.traceback {max-height:420px;overflow:auto;background:#1b1f24;color:#e6edf3;font-size:.85rem;padding:1rem 1.25rem;border-radius:.75rem;line-height:1.35;border:1px solid #30363d;box-shadow:0 0 0 1px #0d1117 inset,0 0 0 1px rgba(255,255,255,.05);} 
+.badge-env {background:rgba(255,255,255,.2);backdrop-filter:blur(4px);}
+.copy-btn {position:absolute;top:12px;right:12px;}
+.dark-mode pre.traceback {background:#0d1117;color:#e6edf3;}

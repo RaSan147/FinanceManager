@@ -1,0 +1,38 @@
+/* Shared AI component styles (advice boxes, priority bars, loading, tagging) */
+
+/* Priority indicator (generic – can be reused outside AI contexts) */
+[data-priority] { position: relative; transition: transform .3s ease; }
+[data-priority]::before { content:''; position:absolute; left:0; top:0; bottom:0; width:calc(var(--priority, 0)*1%); background:rgba(0,255,0,.12); z-index:-1; border-radius:4px; }
+
+/* Advice / recommendation box (semantic variants) */
+.ai-advice { padding:1rem; margin:1rem 0; border-radius:8px; border-left:4px solid; background:rgba(0,0,0,.03); font-size:.9rem; }
+.ai-advice.yes { border-color:#28a745; background:rgba(40,167,69,.10); }
+.ai-advice.no { border-color:#dc3545; background:rgba(220,53,69,.10); }
+.ai-advice.maybe { border-color:#ffc107; background:rgba(255,193,7,.15); }
+.ai-advice.unknown { border-color:#6c757d; background:rgba(108,117,125,.12); }
+
+/* Inline advice inside expandable recommendation history (tighter) */
+.recommendation-details .ai-advice { margin:0; }
+
+/* Loading placeholder */
+.ai-loading { position:relative; min-height:100px; }
+.ai-loading::after { content:'AI is analyzing...'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:.85rem; opacity:.8; }
+
+/* Tag input cluster */
+.tag-input-container { position:relative; }
+#tag-list { min-height:30px; }
+.tag-input-container .badge .btn-close { font-size:.6em; padding:.25em; }
+
+/* Impact cards accent (goal impact visual) */
+#goal-impact-container .card { border-left:4px solid var(--accent-primary); }
+
+/* Compact export buttons within grouped context */
+.btn-group .btn.export-btn { padding:.375rem .75rem; }
+
+@media (prefers-color-scheme: dark) {
+  .ai-advice { background:rgba(255,255,255,.05); }
+  .ai-advice.yes { background:rgba(40,167,69,.18); }
+  .ai-advice.no { background:rgba(220,53,69,.18); }
+  .ai-advice.maybe { background:rgba(255,193,7,.22); }
+  .ai-advice.unknown { background:rgba(255,255,255,.07); }
+}

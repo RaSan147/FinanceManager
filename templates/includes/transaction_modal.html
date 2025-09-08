@@ -35,7 +35,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Category</label>
-            <select class="form-select" name="category" required data-category-select>
+            <select class="form-select" name="category" required data-category-select maxlength="120">
               <option value="">Select a category</option>
               {% if tx_categories is mapping %}
                 <optgroup label="Income" data-group-income>
@@ -63,7 +63,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Description</label>
-            <input type="text" class="form-control" name="description" required>
+            <input type="text" class="form-control" name="description" required maxlength="300">
           </div>
           <div class="row">
             <div class="col-md-6 mb-3">
@@ -72,7 +72,7 @@
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label">Related Person (Optional)</label>
-              <input list="tx_person_options" class="form-control" name="related_person" placeholder="Type or select a name">
+              <input list="tx_person_options" class="form-control" name="related_person" placeholder="Type or select a name" maxlength="120">
               <datalist id="tx_person_options"></datalist>
               <div class="form-text">For loan-related categories, pick a counterparty.</div>
             </div>

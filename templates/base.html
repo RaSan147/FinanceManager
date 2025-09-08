@@ -51,6 +51,9 @@
 						<li class="nav-item">
 							<a class="nav-link {% if request.endpoint=='ai_bp.purchase_advisor' %}active{% endif %}" href="{{ url_for('ai_bp.purchase_advisor') }}" {% if request.endpoint=='ai_bp.purchase_advisor' %}aria-current="page"{% endif %}><i class="fa-solid fa-robot"></i> Purchase Advisor</a>
 						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint=='todos_bp.todos' %}active{% endif %}" href="{{ url_for('todos_bp.todos') }}" {% if request.endpoint=='todos_bp.todos' %}aria-current="page"{% endif %}><i class="fa-solid fa-list-check"></i> To-Dos</a>
+						</li>
 						{% endif %}
 					</ul>
 					<ul class="navbar-nav">
@@ -125,6 +128,7 @@
 	{% if current_user.is_authenticated %}
 		{% include 'includes/transaction_modal.html' %}
 		{% include 'includes/goal_modal.html' %}
+		{% include 'includes/todo_modal.html' %}
 	{% endif %}
 
 
@@ -140,10 +144,26 @@
 			window.currencySymbol = {{ currency_symbol|tojson|safe }};
 		</script>
 	<script src="{{ url_for('static', filename='js/dynamic_app.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/image_viewer.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/global_modals.js') }}" defer></script>
+		<script src="{{ url_for('static', filename='js/todos.js') }}" defer></script>
+			{#
+				Dev/AI Reference:
+				Duplicate form submissions & double event bindings were previously observed (rapid clicks / double script includes).
+				Unified mitigation strategy implemented:
+					- app_core.js: App.utils.withSingleFlight(el, asyncFn) sets el.dataset.submitting flag to gate re-entry.
+				- Keyed request dedupe + short-lived cache: App.utils.fetchJSONUnified(url,{dedupe:true}).
+				- Guard helpers: App.utils.Guard.submit(form, handler) & Guard.click(btn, handler) auto-wrap with single-flight.
+				- Lightweight EventBus: App.utils.EventBus.on/emit for cross-module events (foundation for SPA nav updates).
+				- SPA groundwork: enableSPALinkInterception() (not yet auto-enabled) can turn internal links with data-spa into partial loads.
+					- transactions.js, goals.js (patch/update flows) and todos.js now use this helper (or direct dataset.submitting) to prevent duplicate requests.
+					- Each feature script sets a global guard (e.g., window.__todosModuleLoaded) to avoid double IIFE execution if the script tag is accidentally included twice.
+					- For future forms/buttons, wrap async handlers in withSingleFlight or manually set dataset.submitting.
+				Add new feature? Search for 'withSingleFlight' usage as a pattern reference.
+			#}
     {% block extra_js %}{% endblock %}
 </body>
 </html>
