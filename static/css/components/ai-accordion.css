@@ -1,0 +1,188 @@
+/* AI Accordion / Plan Component Styles (shared) - extracted from ai_styles.css */
+
+/* Root theming tokens (fallbacks if Bootstrap vars absent) */
+:root {
+	--ai-acc-bg: var(--bs-tertiary-bg, #f5f7fa);
+	--ai-acc-bg-hover: var(--bs-secondary-bg, #edf4ff);
+	--ai-acc-bg-open: var(--bs-body-bg, #ffffff);
+	--ai-acc-border: var(--bs-border-color, #d0d7de);
+	--ai-acc-border-accent: var(--bs-primary, #0d6efd);
+	--ai-acc-focus-ring: 0 0 0 2px rgba(13, 110, 253, .35);
+	--ai-acc-icon-size: 1.05rem;
+}
+
+details.ai-plan-block {
+	position: relative;
+	border: 1px solid transparent;
+	border-radius: 14px;
+	background: linear-gradient(var(--ai-acc-bg), var(--ai-acc-bg)) padding-box, linear-gradient(135deg, var(--ai-acc-border-accent), #6f42c1) border-box;
+	overflow: hidden;
+	transition: box-shadow .5s cubic-bezier(.4, 0, .2, 1), border-color .35s ease, background .6s ease;
+}
+
+details.ai-plan-block[open] {
+	background: var(--ai-acc-bg-open);
+	box-shadow: 0 8px 28px -10px rgba(0, 0, 0, .35), 0 2px 6px -2px rgba(0, 0, 0, .15);
+	border-color: transparent;
+}
+
+details.ai-plan-block>.ai-plan-toggle {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	gap: .65rem;
+	padding: .95rem 1.1rem;
+	font-size: .85rem;
+	font-weight: 650;
+	letter-spacing: .4px;
+	background: linear-gradient(180deg, var(--ai-acc-bg) 0%, rgba(255, 255, 255, 0) 120%);
+	color: var(--bs-body-color, #1f2328);
+	cursor: pointer;
+	list-style: none;
+	user-select: none;
+	border: 0;
+	outline: 0;
+	transition: background .35s ease, color .35s ease, padding .35s ease;
+}
+
+details.ai-plan-block>.ai-plan-toggle::-webkit-details-marker {
+	display: none;
+}
+
+details.ai-plan-block>.ai-plan-toggle::before {
+	content: '';
+	flex: 0 0 calc(var(--ai-acc-icon-size) + .15rem);
+	height: calc(var(--ai-acc-icon-size) + .15rem);
+	display: inline-flex;
+	border-radius: 8px;
+	background: linear-gradient(135deg, var(--ai-acc-border-accent) 0%, #6f42c1 100%) border-box;
+	--chevron: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='9 6 15 12 9 18'/%3E%3C/svg%3E");
+	-webkit-mask: var(--chevron) center/ 60% 60% no-repeat;
+	mask: var(--chevron) center/ 60% 60% no-repeat;
+	opacity: .9;
+	box-shadow: 0 2px 4px -1px rgba(0, 0, 0, .25), 0 1px 2px -1px rgba(0, 0, 0, .3);
+	transform-origin: 50% 50%;
+	transition: transform .55s cubic-bezier(.76, 0, .24, 1), border-radius .45s ease, box-shadow .4s ease;
+}
+
+details.ai-plan-block[open]>.ai-plan-toggle::before {
+	transform: rotate(90deg) scale(1.05);
+	border-radius: 10px;
+}
+
+details.ai-plan-block>.ai-plan-toggle::after {
+	content: '';
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 4px;
+	background: linear-gradient(180deg, var(--ai-acc-border-accent), rgba(13, 110, 253, .5));
+	border-radius: 0 2px 2px 0;
+	opacity: .55;
+	transition: opacity .35s ease, width .35s ease;
+}
+
+details.ai-plan-block[open]>.ai-plan-toggle::after {
+	opacity: 1;
+	width: 6px;
+}
+
+details.ai-plan-block>.ai-plan-toggle:hover {
+	background: linear-gradient(90deg, var(--ai-acc-bg-hover) 0%, rgba(255, 255, 255, 0) 90%);
+}
+
+details.ai-plan-block>.ai-plan-toggle:active {
+	background: var(--ai-acc-bg-hover);
+	filter: brightness(.97);
+}
+
+details.ai-plan-block>.ai-plan-toggle:focus-visible {
+	box-shadow: var(--ai-acc-focus-ring);
+	z-index: 1;
+}
+
+details.ai-plan-block[open]>.ai-plan-toggle {
+	background: linear-gradient(180deg, var(--ai-acc-bg-open) 0%, var(--ai-acc-bg) 180%);
+	padding-left: 1.2rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	details.ai-plan-block,
+	details.ai-plan-block>.ai-plan-toggle::before,
+	details.ai-plan-block>.ai-plan-toggle::after,
+	details.ai-plan-block>.ai-plan-toggle {
+		transition: none !important;
+	}
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--ai-acc-bg: #0f172a;
+		--ai-acc-bg-hover: #1e293b;
+		--ai-acc-bg-open: #162133;
+		--ai-acc-border: #243054;
+		--ai-acc-focus-ring: 0 0 0 2px rgba(56, 132, 255, .45);
+	}
+
+	details.ai-plan-block {
+		background: linear-gradient(#0f172a, #0f172a) padding-box, linear-gradient(135deg, #2563eb, #6f42c1) border-box;
+	}
+
+	details.ai-plan-block[open] {
+		box-shadow: 0 10px 26px -10px rgba(0, 0, 0, .7), 0 3px 8px -2px rgba(0, 0, 0, .55);
+	}
+
+	details.ai-plan-block>.ai-plan-toggle {
+		color: #d3e2ff;
+	}
+
+	details.ai-plan-block>.ai-plan-toggle:hover {
+		color: #fff;
+	}
+}
+
+/* Legacy pill variant */
+.ai-plan-toggle.ai-pill {
+	border-radius: 999px !important;
+	background: linear-gradient(135deg, rgba(13, 110, 253, .15), rgba(13, 110, 253, .3)) !important;
+	border: 1px solid var(--ai-acc-border-accent) !important;
+	width: auto !important;
+	display: inline-flex !important;
+	padding: .4rem .9rem !important;
+}
+
+/* Content body animation */
+.ai-plan-block:not([open]) {
+	box-shadow: 0 1px 2px -1px rgba(0, 0, 0, .06);
+}
+
+.ai-plan-content {
+	padding: .75rem 1rem 1rem;
+	font-size: .85rem;
+	line-height: 1.45;
+	position: relative;
+}
+
+/* NOTE: Interactive button-based accordion styles moved to generic component: */
+/*   components/accordion/accordion.css (classes renamed to .acc-*) */
+/* This file now retains only <details>/<summary> based "ai plan" styles. */
+
+.ai-plan-block>.ai-plan-content {
+	--ai-acc-max: 1200px;
+	max-height: 0;
+	opacity: 0;
+	overflow: hidden;
+	transition: max-height .65s cubic-bezier(.76, 0, .24, 1), opacity .45s ease;
+	background: linear-gradient(180deg, rgba(0, 0, 0, .05), rgba(0, 0, 0, 0) 16%) top/100% 30px no-repeat, linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(0, 0, 0, .02));
+}
+
+.ai-plan-block[open]>.ai-plan-content {
+	max-height: var(--ai-acc-max);
+	opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+	.ai-plan-block>.ai-plan-content {
+		background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 16%) top/100% 30px no-repeat, linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .04));
+	}
+}

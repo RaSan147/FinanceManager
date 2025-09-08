@@ -1,33 +1,150 @@
 /* Responsive tables, goals, transactions adjustments */
-@media (max-width:640px){
-  .transactions-table thead, .loans-table thead { display:none; }
-  .transactions-table tbody tr, .loans-table tbody tr { display:block; margin-bottom:.9rem; border:1px solid var(--border-color); border-radius:12px; padding:.65rem .75rem; background:var(--bg-tertiary); position:relative; }
-  .transactions-table tbody tr:hover, .loans-table tbody tr:hover { background:var(--hover-bg)!important; }
-  .transactions-table tbody tr td, .loans-table tbody tr td { display:flex; justify-content:space-between; padding:.35rem 0!important; border:none!important; font-size:.875rem; font-weight: 500;}
-  .loans-table tbody tr td { font-size:.8125rem; }
-  .transactions-table tbody tr td:first-child, .loans-table tbody tr td:first-child { padding-top:0!important; }
-  .transactions-table tbody tr td:last-child, .loans-table tbody tr td:last-child { padding-bottom:0!important; }
-  .transactions-table tbody tr td::before { content:attr(data-label); font-weight:600; color:var(--text-secondary); padding-right:.75rem; flex:0 0 42%; text-align:left; }
-  .loans-table tbody tr td::before { content:attr(data-label); font-weight:600; color:var(--text-secondary); padding-right:.6rem; flex:0 0 46%; text-align:left; }
-  .transactions-table tbody tr td[data-label='Actions']::before, .loans-table tbody tr td[data-label='Actions']::before { content:''; display:none; }
-  .transactions-table tbody tr td[data-label='Actions'], .loans-table tbody tr td[data-label='Actions'] { justify-content:flex-end; }
+@media (max-width:640px) {
+
+  .transactions-table thead,
+  .loans-table thead {
+    display: none;
+  }
+
+  .transactions-table tbody tr,
+  .loans-table tbody tr {
+    display: block;
+    margin-bottom: .9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: .65rem .75rem;
+    background: var(--bg-tertiary);
+    position: relative;
+  }
+
+  .transactions-table tbody tr:hover,
+  .loans-table tbody tr:hover {
+    background: var(--hover-bg) !important;
+  }
+
+  .transactions-table tbody tr td,
+  .loans-table tbody tr td {
+    display: flex;
+    justify-content: space-between;
+    padding: .35rem 0 !important;
+    border: none !important;
+    font-size: .875rem;
+    font-weight: 500;
+  }
+
+  .loans-table tbody tr td {
+    font-size: .8125rem;
+  }
+
+  .transactions-table tbody tr td:first-child,
+  .loans-table tbody tr td:first-child {
+    padding-top: 0 !important;
+  }
+
+  .transactions-table tbody tr td:last-child,
+  .loans-table tbody tr td:last-child {
+    padding-bottom: 0 !important;
+  }
+
+  .transactions-table tbody tr td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding-right: .75rem;
+    flex: 0 0 42%;
+    text-align: left;
+  }
+
+  .loans-table tbody tr td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding-right: .6rem;
+    flex: 0 0 46%;
+    text-align: left;
+  }
+
+  .transactions-table tbody tr td[data-label='Actions']::before,
+  .loans-table tbody tr td[data-label='Actions']::before {
+    content: '';
+    display: none;
+  }
+
+  .transactions-table tbody tr td[data-label='Actions'],
+  .loans-table tbody tr td[data-label='Actions'] {
+    justify-content: flex-end;
+  }
 }
-@media (max-width:640px){
-  .transactions-header { gap:.5rem; }
-  .transactions-header h4.card-title { font-size:1.05rem; margin:0; }
-  .transactions-header .add-transaction-btn { padding:.35rem .55rem; font-size:.75rem; }
-  .transactions-header .add-transaction-btn .btn-label { display:none; }
-  .transactions-header .add-transaction-btn i { margin-right:0!important; font-size:1rem; }
+
+@media (max-width:640px) {
+  .transactions-header {
+    gap: .5rem;
+  }
+
+  .transactions-header h4.card-title {
+    font-size: 1.05rem;
+    margin: 0;
+  }
+
+  .transactions-header .add-transaction-btn {
+    padding: .35rem .55rem;
+    font-size: .75rem;
+  }
+
+  .transactions-header .add-transaction-btn .btn-label {
+    display: none;
+  }
+
+  .transactions-header .add-transaction-btn i {
+    margin-right: 0 !important;
+    font-size: 1rem;
+  }
 }
-@media (max-width:640px){
-  .goals-list .list-group-item { padding:.85rem .9rem; }
-  .goals-list .list-group-item h5 { font-size:1rem; }
-  .goals-list .list-group-item .progress { height:16px!important; }
-  .goals-list .list-group-item .progress-bar { font-size:.85rem; }
-  .goals-list .list-group-item .d-flex.justify-content-between { flex-direction:column; align-items:flex-start!important; gap:.25rem; }
-  .goals-list .list-group-item .text-end { text-align:left!important; min-width:100%!important; }
-  .goals-list .list-group-item .text-end .small { font-size:.7rem; }
-  .goals-list .list-group-item .d-flex.justify-content-end { flex-wrap:wrap; }
-  .goals-list .list-group-item .d-flex.justify-content-end .btn { flex:1 1 48%; margin:2px 0; }
+
+@media (max-width:640px) {
+  .goals-list .list-group-item {
+    padding: .85rem .9rem;
+  }
+
+  .goals-list .list-group-item h5 {
+    font-size: 1rem;
+  }
+
+  .goals-list .list-group-item .progress {
+    height: 16px !important;
+  }
+
+  .goals-list .list-group-item .progress-bar {
+    font-size: .85rem;
+  }
+
+  .goals-list .list-group-item .d-flex.justify-content-between {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: .25rem;
+  }
+
+  .goals-list .list-group-item .text-end {
+    text-align: left !important;
+    min-width: 100% !important;
+  }
+
+  .goals-list .list-group-item .text-end .small {
+    font-size: .7rem;
+  }
+
+  .goals-list .list-group-item .d-flex.justify-content-end {
+    flex-wrap: wrap;
+  }
+
+  .goals-list .list-group-item .d-flex.justify-content-end .btn {
+    flex: 1 1 48%;
+    margin: 2px 0;
+  }
 }
-@media (min-width:641px){ .goal-meta-block { min-width:230px; } }
+
+@media (min-width:641px) {
+  .goal-meta-block {
+    min-width: 230px;
+  }
+}

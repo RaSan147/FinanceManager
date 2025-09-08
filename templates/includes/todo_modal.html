@@ -1,0 +1,43 @@
+<div class="modal fade" id="todoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" data-todo-modal-title>To-Do</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form data-todo-form autocomplete="off">
+        <div class="modal-body row g-3">
+          <input type="hidden" name="_id" data-todo-id>
+          <div class="col-md-6">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" name="title" required maxlength="200">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Category</label>
+            <input list="todoCategoriesGlobal" type="text" class="form-control" name="category" maxlength="60" placeholder="Category (or create new)">
+            <datalist id="todoCategoriesGlobal"></datalist>
+          </div>
+            <div class="col-md-3">
+              <label class="form-label">Stage</label>
+              <select class="form-select" name="stage" data-todo-stage-select>
+                {% for s in todo_stages %}<option value="{{ s }}">{{ s.replace('_',' ')|title }}</option>{% endfor %}
+              </select>
+            </div>
+          <div class="col-md-3">
+            <label class="form-label">Due Date</label>
+            <input type="date" class="form-control" name="due_date">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" name="description" rows="4" maxlength="5000"></textarea>
+          </div>
+          <div class="col-12 small text-muted" data-todo-meta></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary" data-todo-submit-btn>Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

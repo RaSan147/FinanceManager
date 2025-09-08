@@ -14,10 +14,17 @@
 @import url('components/modals.css');
 @import url('components/darkmode-toggle.css');
 @import url('components/goals.css');
+@import url('components/header-actions.css');
 @import url('utilities/accessibility.css');
 @import url('utilities/responsive.css');
 @import url('utilities/misc.css');
 
 /* Page-specific overrides can be added below. */
 
-@import url('ai_styles.css');
+@import url('components/accordion.css');
+@import url('components/ai-shared.css');
+@import url('components/image_viewer.css');
+/* Page-scoped (now unified) */
+@import url('analysis.css');
+@import url('purchase_advisor.css');
+@import url('todos.css');

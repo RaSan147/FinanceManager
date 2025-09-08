@@ -168,12 +168,158 @@
         return res.json();
     }
 
+        // Unified single-flight (duplicate submit) guard for forms/buttons.
+        // Usage: App.utils.withSingleFlight(formElement, async () => { ... });
+        async function withSingleFlight(el, fn) {
+            if (!el) return await fn();
+            if (el.dataset.submitting === '1') return; // already in-flight
+            el.dataset.submitting = '1';
+            try { return await fn(); } finally { delete el.dataset.submitting; }
+        }
+
+        // Simple pub/sub event bus for cross-module communication
+        const EventBus = (() => {
+            const map = new Map();
+            return {
+                on(evt, fn) { if(!map.has(evt)) map.set(evt, new Set()); map.get(evt).add(fn); return () => this.off(evt, fn); },
+                off(evt, fn) { const set = map.get(evt); if(set){ set.delete(fn); if(!set.size) map.delete(evt);} },
+                emit(evt, data) { const set = map.get(evt); if(set) [...set].forEach(f => { try { f(data); } catch(e){ console.warn('Event handler error', evt, e); } }); }
+            };
+        })();
+
+        // Keyed single-flight (deduplicate concurrent identical async calls) + short-term response cache
+        const RequestCoordinator = (() => {
+            const inflight = new Map(); // key -> Promise
+            const cache = new Map(); // key -> {ts,data}
+            const CACHE_MS = 4000;
+            function key(method, url, body) { return method + ' ' + url + ' ' + (body ? JSON.stringify(body) : ''); }
+            async function run(method, url, opts) {
+                const body = opts && opts.body ? opts.body : null;
+                const k = key(method, url, body);
+                const now = Date.now();
+                // Serve fresh cache if recent and no-cache override not set
+                if(!opts?.noCache){
+                    const c = cache.get(k);
+                    if(c && (now - c.ts) < CACHE_MS) return c.data;
+                }
+                if(inflight.has(k)) return inflight.get(k);
+                const p = (async () => {
+                    try {
+                        const res = await fetch(url, opts);
+                        if(!res.ok) throw new Error('HTTP '+res.status);
+                        const data = await res.json();
+                        cache.set(k, { ts: now, data });
+                        return data;
+                    } finally {
+                        inflight.delete(k);
+                    }
+                })();
+                inflight.set(k, p);
+                return p;
+            }
+            return { run };
+        })();
+
+        // Enhanced fetchJSON that leverages RequestCoordinator and supports options: { dedupe: true, noCache: true }
+        async function fetchJSONUnified(url, opts) {
+            const method = (opts?.method || 'GET').toUpperCase();
+            const headers = Object.assign({ 'Accept': 'application/json', 'X-Client-TZ': DateTime.timeZone }, (opts && opts.headers) || {});
+            const final = Object.assign({}, opts, { headers });
+            if(final.dedupe) {
+                return RequestCoordinator.run(method, url, final);
+            }
+            let res;
+            try { res = await fetch(url, final); } catch(networkErr){
+                window.flash && window.flash('Network error', 'danger');
+                throw networkErr;
+            }
+            let data = null;
+            const isJson = (res.headers.get('content-type')||'').includes('application/json');
+            if(isJson){
+                try { data = await res.json(); } catch(_) { /* ignore parse failure */ }
+            }
+            if(!res.ok){
+                // Derive message
+                let msg = (data && (data.error || data.message)) || ('Request failed ('+res.status+')');
+                // Collect validation errors array (Pydantic style: {'errors':[{'loc':['field'],'msg':'...'}]})
+                if(data && Array.isArray(data.errors)){
+                    const lines = data.errors.slice(0,4).map(e=>{
+                        try { const loc = Array.isArray(e.loc)? e.loc.filter(p=> typeof p==='string').join('.') : ''; return (loc? loc+': ':'') + (e.msg || e.message || 'Invalid'); } catch { return ''; }
+                    }).filter(Boolean);
+                    if(lines.length) msg = msg + '<br>' + lines.join('<br>');
+                }
+                window.flash && window.flash(msg, 'danger', 7000);
+                const err = new Error(msg);
+                err.status = res.status; // @ts-ignore
+                err.payload = data; // attach raw
+                throw err;
+            }
+            return data != null ? data : (isJson? {}: null);
+        }
+
+        // Guard helpers namespace
+        const Guard = {
+            submit(formEl, handler){
+                formEl.addEventListener('submit', e => {
+                    e.preventDefault();
+                    withSingleFlight(formEl, () => handler(e, formEl));
+                });
+            },
+            click(btnEl, handler){
+                btnEl.addEventListener('click', e => {
+                    withSingleFlight(btnEl, () => handler(e, btnEl));
+                });
+            },
+            oncePer(intervalMs, key, fn){
+                const STORE = (Guard._onceStore = Guard._onceStore || {});
+                const now = Date.now();
+                if(STORE[key] && (now - STORE[key]) < intervalMs) return false;
+                STORE[key] = now;
+                fn();
+                return true;
+            }
+        };
+
+        // SPA skeleton: optional interception of internal link clicks.
+        // For future expansion; currently just emits navigation events.
+        function enableSPALinkInterception(){
+            if(window.__spaLinksEnabled) return; window.__spaLinksEnabled = true;
+            document.addEventListener('click', e => {
+                const a = e.target.closest('a[data-spa]');
+                if(!a) return;
+                const href = a.getAttribute('href');
+                if(!href || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('#')) return;
+                e.preventDefault();
+                EventBus.emit('spa:navigate:start', { href });
+                fetch(href, { headers: { 'Accept': 'text/html' } })
+                    .then(r => r.text())
+                    .then(html => {
+                        // Minimal swap: replace main container content only (future TODO: server provide JSON partial)
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newMain = doc.querySelector('main .container');
+                        const curMain = document.querySelector('main .container');
+                        if(newMain && curMain){
+                            curMain.innerHTML = newMain.innerHTML;
+                            window.history.pushState({}, '', href);
+                            EventBus.emit('spa:navigate:complete', { href });
+                            // Re-run module init for any dynamic components in swapped content
+                            App.init();
+                        } else {
+                            window.location.href = href; // fallback
+                        }
+                    })
+                    .catch(()=> window.location.href = href);
+            });
+            window.addEventListener('popstate', () => EventBus.emit('spa:popstate', { href: location.pathname }));
+        }
+
     const App = {
         modules: [],
         register(mod) {
             this.modules.push(mod);
         },
-        utils: { qs, qsa, html, fmt, money, cap, escapeHtml, safeDateString, fetchJSON, createEl },
+    utils: { qs, qsa, html, fmt, money, cap, escapeHtml, safeDateString, fetchJSON, createEl, withSingleFlight, fetchJSONUnified, Guard, EventBus, enableSPALinkInterception },
         init() {
             this.modules.forEach(m => {
                 try {

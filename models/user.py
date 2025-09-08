@@ -46,6 +46,8 @@ class User(UserMixin):
         self.monthly_income_currency = user_data.get('monthly_income_currency', self.default_currency)
         # DB handle
         self.db = db
+        # UI preferences
+        self.todo_sort = user_data.get('todo_sort', 'created_desc')
 
     def get_recent_income_expense(self, months=3):
         """
@@ -84,6 +86,15 @@ class User(UserMixin):
         - total_transactions
         """
         return calculate_lifetime_transaction_summary(self.id, self.db)
+
+    # --- UI preference helpers ---
+    def set_todo_sort(self, sort: str):
+        allowed = {'created_desc','created_asc','updated_desc','updated_asc','due_date','manual'}
+        if sort not in allowed:
+            return False
+        self.db.users.update_one({'_id': ObjectId(self.id)}, {'$set': {'todo_sort': sort}})
+        self.todo_sort = sort
+        return True
 
     @classmethod
     def get_by_email(cls, email: str, db: Database):

@@ -1,0 +1,22 @@
+/* Shared header action button styles (extracted from goals.css) */
+.header-actions .btn {
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.header-actions .btn i { font-size: 1.05rem; }
+
+@media (max-width: 575.98px) {
+	.header-actions .btn { padding: .65rem .8rem; border-radius: 10px; }
+	.header-actions .btn i { font-size: 1.3rem; }
+	.header-actions .btn span { display: none !important; }
+	.header-actions .dropdown-menu { font-size: .95rem; }
+}
+
+.header-actions .btn:active { transform: scale(.94); }
+
+@media (prefers-reduced-motion: no-preference) {
+	.header-actions .btn { transition: background-color .18s ease, transform .15s ease; }
+}

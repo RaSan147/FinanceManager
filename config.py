@@ -25,3 +25,4 @@ class Config:
     # Performance logging
     LOG_PERF_DETAILS = str(os.getenv('LOG_PERF_DETAILS', '0')).lower() in {'1','true','yes','on'}
     SHOW_PERF_FOOTER = str(os.getenv('SHOW_PERF_FOOTER', '1')).lower() in {'1','true','yes','on'}
+    IMGBB_API_KEY = os.getenv('IMGBB_API_KEY', '')

@@ -72,25 +72,20 @@
       refreshCounterparties();
     }
 
-    formEl.addEventListener('submit', async (e)=>{
+    formEl.addEventListener('submit', (e)=>{
       e.preventDefault();
-      if(formEl.dataset.submitting==='1') return; formEl.dataset.submitting='1';
-      submitBtn.disabled=true;
-      try {
-        const fd = new FormData(formEl);
-        const payload = Object.fromEntries(fd.entries());
-        const res = await fetch('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
-        if(!res.ok) throw new Error('HTTP '+res.status);
-  const raw = await res.json();
-  const data = raw && raw.data ? raw.data : raw;
-        window.flash && window.flash('Transaction saved','success');
-        bsModal.hide();
-        // If dashboard live refresh available
-        if(window.DashboardTransactionsModule) {
-          window.DashboardTransactionsModule.refreshDashboardData?.();
-        }
-      } catch(err){ window.flash && window.flash('Save failed','danger'); }
-      finally { submitBtn.disabled=false; delete formEl.dataset.submitting; }
+      (window.App?.utils?.withSingleFlight || ((el,fn)=>fn()))(formEl, async () => {
+        submitBtn.disabled = true;
+        try {
+          const fd = new FormData(formEl);
+          const payload = Object.fromEntries(fd.entries());
+          await (window.App?.utils?.fetchJSONUnified || U.fetchJSON)('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
+          window.flash && window.flash('Transaction saved','success');
+          bsModal.hide();
+          window.DashboardTransactionsModule?.refreshDashboardData?.();
+        } catch(err){ window.flash && window.flash('Save failed','danger'); }
+        finally { submitBtn.disabled=false; }
+      });
     });
 
     currencySelect.addEventListener('change', updateSymbol);
@@ -135,34 +130,27 @@
       bsModal.show();
     }
 
-    form.addEventListener('submit', async (e)=>{
+    form.addEventListener('submit', (e)=>{
       e.preventDefault();
-      if(form.dataset.submitting==='1') return; form.dataset.submitting='1'; submitBtn.disabled=true;
-      try {
-        const fd = new FormData(form);
-        const payload = Object.fromEntries(fd.entries());
-        const res = await fetch('/api/goals', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        let created = null;
+      (window.App?.utils?.withSingleFlight || ((el,fn)=>fn()))(form, async () => {
+        submitBtn.disabled = true;
         try {
-          const raw = await res.json();
-          created = raw && raw.data ? (raw.data.item || raw.data.goal || raw.data) : raw;
-        } catch(_) {}
-        window.flash && window.flash('Goal saved','success');
-        bsModal.hide();
-        // Refresh goals if on goals page or dashboard
-        if(window.GoalsModule?.loadGoals) {
-          window.GoalsModule.loadGoals(1);
-        } else {
-          // If module not ready yet, schedule retries
-          setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 300);
-          setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 1200);
-        }
-        // Broadcast creation so any listeners (e.g., goals page already loaded) can react
-        try { window.dispatchEvent(new CustomEvent('goal:created')); } catch(_) {}
-        if(window.DashboardTransactionsModule?.refreshDashboardData) window.DashboardTransactionsModule.refreshDashboardData();
-      } catch(err){ window.flash && window.flash('Save failed','danger'); }
-      finally { submitBtn.disabled=false; delete form.dataset.submitting; }
+          const fd = new FormData(form);
+          const payload = Object.fromEntries(fd.entries());
+          await (window.App?.utils?.fetchJSONUnified || U.fetchJSON)('/api/goals', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
+          window.flash && window.flash('Goal saved','success');
+          bsModal.hide();
+          if(window.GoalsModule?.loadGoals) {
+            window.GoalsModule.loadGoals(1);
+          } else {
+            setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 300);
+            setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 1200);
+          }
+          try { window.dispatchEvent(new CustomEvent('goal:created')); } catch(_) {}
+          window.DashboardTransactionsModule?.refreshDashboardData?.();
+        } catch(err){ window.flash && window.flash('Save failed','danger'); }
+        finally { submitBtn.disabled=false; }
+      });
     });
 
     currencySel.addEventListener('change', updateSymbol);

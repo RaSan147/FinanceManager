@@ -18,11 +18,12 @@ class TransactionCreate(BaseModel):
     amount: float = Field(..., gt=0)
     currency: str | None = None
     type: Literal["income", "expense"]
-    category: str
+    # Category (enum from predefined list) but enforce upper length safety (120 chars)
+    category: str = Field(..., min_length=1, max_length=120)
     description: str = Field(..., min_length=3, max_length=300)
     # Accept raw date string (YYYY-MM-DD) via alias 'date'; parsed in service.
     date_input: Optional[str] = Field(default=None, alias='date')
-    related_person: Optional[str] = None
+    related_person: Optional[str] = Field(default=None, max_length=120)
 
     # Coerce case / trim
     @field_validator('type')
@@ -79,11 +80,11 @@ class TransactionPatch(BaseModel):
     amount: Optional[float] = Field(default=None, gt=0)
     currency: Optional[str] = None
     type: Optional[Literal["income", "expense"]] = None
-    category: Optional[str] = None
+    category: Optional[str] = Field(default=None, min_length=1, max_length=120)
     description: Optional[str] = Field(default=None, min_length=3, max_length=300)
     # Accept date, datetime, or ISO date string; normalize to date
     date: Optional[date | datetime | str] = None
-    related_person: Optional[str] = None
+    related_person: Optional[str] = Field(default=None, max_length=120)
 
     # Allow string date (YYYY-MM-DD) in patch payloads
     @field_validator('date', mode='before')
@@ -150,6 +151,14 @@ class TransactionRecord(BaseModel):
     @classmethod
     def _trim_desc(cls, v):
         return v.strip()
+
+    @field_validator('related_person')
+    @classmethod
+    def _limit_related(cls, v):
+        if not isinstance(v, str):
+            return v
+        v2 = v.strip()
+        return v2[:120]
 
     class Config:
         populate_by_name = True
