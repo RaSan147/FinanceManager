@@ -616,7 +616,6 @@ class GoalsModule {
         if (this.state.modal) {
             this.state.modal.show();
         } else {
-            // Fallback manual show if bootstrap not found
             el.classList.add('show');
             el.style.display = 'block';
             el.removeAttribute('aria-hidden');

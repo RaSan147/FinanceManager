@@ -89,7 +89,7 @@ class User(UserMixin):
 
     # --- UI preference helpers ---
     def set_todo_sort(self, sort: str):
-        allowed = {'created_desc','created_asc','updated_desc','updated_asc','due_date','manual'}
+        allowed = {'created_desc','created_asc','updated_desc','updated_asc','due_date'}
         if sort not in allowed:
             return False
         self.db.users.update_one({'_id': ObjectId(self.id)}, {'$set': {'todo_sort': sort}})

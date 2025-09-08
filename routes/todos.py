@@ -184,27 +184,6 @@ def init_todos_blueprint(mongo):
             return jsonify({'error': 'Not found'}), 404
         return jsonify({'success': True})
 
-    @bp.route('/api/todos/reorder', methods=['POST'], endpoint='api_todo_reorder')
-    @login_required
-    def api_todo_reorder():  # type: ignore[override]
-        data = request.get_json(force=True, silent=True) or {}
-        items = data.get('items')
-        if not isinstance(items, list):
-            return jsonify({'error': 'items list required'}), 400
-        if len(items) > 500:
-            return jsonify({'error': 'too many items'}), 400
-        # Expect list of {id, sort_index}
-        modified = 0
-        for obj in items:
-            if not isinstance(obj, dict):
-                continue
-            tid = obj.get('id') or obj.get('_id')
-            si = obj.get('sort_index')
-            if not tid or not isinstance(si, int):
-                continue
-            mongo.db.todos.update_one({'_id': ObjectId(tid), 'user_id': current_user.id}, {'$set': {'sort_index': si, 'updated_at': datetime.utcnow()}})
-            modified += 1
-        return jsonify({'updated': modified})
 
     # Category management
     @bp.route('/api/todo-categories', methods=['GET'], endpoint='api_todo_categories')

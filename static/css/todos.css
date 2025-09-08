@@ -15,9 +15,6 @@
 @media (max-width:575.98px){ .todos-grid { grid-template-columns:1fr; } }
 
 .todo-item { position:relative; transition:background-color .15s, box-shadow .15s; cursor:pointer; }
-.todo-item.dragging { opacity:.6; box-shadow:0 0 0 .15rem rgba(0,123,255,.25); }
-.drag-handle { opacity:.6; }
-.drag-handle:active { cursor:grabbing; }
 .view-selector { min-width:170px; }
 .view-select-pop { width:200px; z-index:30; }
 .view-toggle-heading { font-size:1.05rem; }
