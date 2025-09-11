@@ -5,9 +5,10 @@ from datetime import datetime, timedelta, timezone
 import asyncio, json, threading, traceback
 from utils.request_metrics import summary as metrics_summary
 from models.advice import PurchaseAdvice
+from utils.ai_spending_advisor import SpendingAdvisor
 
 
-def init_ai_blueprint(mongo, spending_advisor, pastebin_client):
+def init_ai_blueprint(mongo, spending_advisor: SpendingAdvisor, pastebin_client):
     bp = Blueprint('ai_bp', __name__)
 
     @bp.route('/purchase-advisor', endpoint='purchase_advisor')

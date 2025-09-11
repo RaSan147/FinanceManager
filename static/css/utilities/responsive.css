@@ -141,6 +141,13 @@
     flex: 1 1 48%;
     margin: 2px 0;
   }
+
+
+  /* Goals page main view */
+  .col-12.order-2.order-lg-1 {
+    padding: 0;
+  }
+
 }
 
 @media (min-width:641px) {

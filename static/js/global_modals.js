@@ -184,6 +184,16 @@
   document.addEventListener('DOMContentLoaded', function(){
     bindGlobalTriggers();
     setupDashboardAutoRefresh();
+    // Enforce single Bootstrap modal open at a time globally (handles diary + others)
+    if(!window.__singleModalEnforced){
+      window.__singleModalEnforced = true;
+      document.addEventListener('show.bs.modal', (ev)=>{
+        const incoming = ev.target;
+        document.querySelectorAll('.modal.show').forEach(m=>{
+          if(m!==incoming){ const inst = bootstrap.Modal.getInstance(m); inst && inst.hide(); }
+        });
+      });
+    }
   });
 
   // Keyboard shortcuts (Alt+T, Alt+G)

@@ -400,8 +400,11 @@
 			if (!comments.length) {
 				commentsWrap.innerHTML = '<div class="text-muted">No comments</div>';
 			} else {
+				const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform)
+				? ImageUploader.thumbTransform(url, 280, 280, false)
+				: url;
 				commentsWrap.innerHTML = comments.map(c => {
-					const images = (c.images || []).map((u,i) => `<div class='mt-2'><img src='${u}' data-viewer-thumb data-viewer-group='todo-comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i+1}' style='max-width:140px;max-height:140px;height:auto;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;object-fit:cover;'/></div>`).join('');
+					const images = (c.images || []).map((u,i) => { const t = ikThumb(u); return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='todo-comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i+1}' style='max-width:140px;max-height:140px;height:auto;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;object-fit:cover;'/></div>`}).join('');
 					return `
             <div class='todo-comment'>
               <div class='body'>
@@ -471,98 +474,72 @@
 	}
 	if (detailModalEl) {
 		const formC = detailModalEl.querySelector('[data-todo-comment-form]');
-		const fileInput = detailModalEl.querySelector('[data-todo-comment-image]');
-		// --- Enhanced multi-image handling aligned with modal HTML ---
-		let pendingImages = [];
-		const previewWrap = detailModalEl.querySelector('[data-todo-comment-images-preview]');
-		const clearBtn = detailModalEl.querySelector('[data-todo-comment-images-clear]');
-		const triggerBtn = detailModalEl.querySelector('[data-todo-comment-image-trigger]');
-		if (fileInput) fileInput.style.display = 'none';
-		triggerBtn && triggerBtn.addEventListener('click', () => fileInput && fileInput.click());
-		clearBtn && clearBtn.addEventListener('click', () => { pendingImages = []; renderPreviews(); });
-		function renderPreviews() {
-			if (!previewWrap) return;
-			if (!pendingImages.length) {
-				previewWrap.innerHTML = '';
-				clearBtn && clearBtn.classList.add('d-none');
-				return;
-			}
-			previewWrap.innerHTML = pendingImages.map((u, idx) => `
-				<div class="position-relative" data-img-idx="${idx}" style="width:90px;height:90px;overflow:hidden;border:1px solid var(--border-color,#ccc);border-radius:4px;">
-					<img src="${u}" alt="preview" style="object-fit:cover;width:100%;height:100%;"/>
-					<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1" data-remove-img="${idx}" title="Remove"><i class="bi bi-x"></i></button>
-				</div>`).join('');
-			clearBtn && clearBtn.classList.remove('d-none');
-			previewWrap.querySelectorAll('[data-remove-img]').forEach(btn => btn.addEventListener('click', () => {
-				const i = parseInt(btn.getAttribute('data-remove-img'), 10);
-				if (!isNaN(i)) { pendingImages.splice(i, 1); renderPreviews(); }
-			}));
-		}
-		async function uploadDataUrl(dataUrl, originLabel) {
-			try {
-				const res = await App.utils.fetchJSONUnified('/api/todo-images', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ image: dataUrl })
-				});
-				pendingImages.push(res.url);
-				renderPreviews();
-				window.flash && window.flash(originLabel + ' image ready', 'info');
-			} catch (_) {
-				window.flash && window.flash(originLabel + ' image upload failed', 'danger');
-			}
-		}
-		function handleFiles(fileList, originLabel) {
-			const arr = Array.from(fileList || []);
-				arr.forEach(f => {
-					if (!f.type.startsWith('image/')) return;
-					if (f.size > 16 * 1024 * 1024) { // 16MB safety
-						window.flash && window.flash('Image too large (max 16MB)', 'warning');
-						return;
+		// Maintain per-item unsent draft so switching items doesn't leak comment text/images
+		const todoDrafts = {};
+		if (formC && window.ImageUploader) {
+			ImageUploader.attachCommentUploader({
+				formEl: formC,
+				uploadEndpoint: '/api/todo-images',
+				selectors: {
+					fileInput: '[data-todo-comment-image]',
+					triggerBtn: '[data-todo-comment-image-trigger]',
+					clearBtn: '[data-todo-comment-images-clear]',
+					previewWrap: '[data-todo-comment-images-preview]'
+				},
+				pasteScopeEl: detailModalEl
+			});
+			// Restore draft (if any) when modal opened for item
+			detailModalEl.addEventListener('show.bs.modal', () => {
+				const tid = formC.dataset.todoId;
+				if (!tid) return;
+				const d = todoDrafts[tid];
+				if (d) {
+					formC.querySelector('[name="body"]').value = d.body || '';
+					if (d.images && formC._imageUploader && formC._imageUploader.setImages) {
+						formC._imageUploader.setImages(d.images);
 					}
-				const reader = new FileReader();
-				reader.onload = () => uploadDataUrl(reader.result, originLabel);
-				reader.readAsDataURL(f);
+				}
+			});
+			// Persist draft on input changes
+			formC.addEventListener('input', () => {
+				const tid = formC.dataset.todoId; if (!tid) return;
+				todoDrafts[tid] = todoDrafts[tid] || {};
+				todoDrafts[tid].body = formC.querySelector('[name="body"]').value;
+				todoDrafts[tid].images = formC._imageUploader ? formC._imageUploader.getImages() : [];
+			});
+			// When switching items (dataset.todoId changes) save old draft first via MutationObserver
+			const obs = new MutationObserver(() => {
+				// dataset change triggers observer; ensure new draft loaded
+				const tid = formC.dataset.todoId;
+				if (!tid) return;
+				const d = todoDrafts[tid];
+				formC.querySelector('[name="body"]').value = d?.body || '';
+				if (formC._imageUploader && formC._imageUploader.setImages) {
+					formC._imageUploader.setImages(d?.images || []);
+				}
+			});
+			obs.observe(formC, { attributes: true, attributeFilter: ['data-todo-id'], subtree: false });
+			formC.addEventListener('submit', async e => {
+				e.preventDefault();
+				const todoId = formC.dataset.todoId;
+				if (!todoId) return;
+				const fd = new FormData(formC);
+				const body = fd.get('body')?.toString().trim();
+				const imgs = formC._imageUploader ? formC._imageUploader.getImages() : [];
+				if (!body && !imgs.length) return;
+				try {
+					await App.utils.fetchJSONUnified(`/api/todos/${todoId}/comments`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ body, images: imgs })
+					});
+					formC.reset();
+					formC._imageUploader && formC._imageUploader.reset();
+					delete todoDrafts[todoId]; // clear draft on successful post
+					openDetailModal(todoId);
+				} catch (_) {}
 			});
 		}
-		formC.addEventListener('submit', async e => {
-			e.preventDefault();
-			const todoId = formC.dataset.todoId;
-			if (!todoId) return;
-			const fd = new FormData(formC);
-			const body = fd.get('body')?.toString().trim();
-			if (!body && !pendingImages.length) return; // require some content
-			const images = [...pendingImages];
-			try {
-				await App.utils.fetchJSONUnified(`/api/todos/${todoId}/comments`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ body, images })
-				});
-				formC.reset();
-				pendingImages = [];
-				renderPreviews();
-				openDetailModal(todoId);
-			} catch (_) { /* swallow */ }
-		});
-		fileInput.addEventListener('change', () => {
-			handleFiles(fileInput.files, 'Selected');
-			fileInput.value = '';
-		});
-		document.addEventListener('paste', e => {
-			if (!detailModalEl.classList.contains('show')) return;
-			const items = e.clipboardData?.items || [];
-			const files = [];
-			for (const it of items) {
-				if (it.type && it.type.startsWith('image/')) {
-					const f = it.getAsFile();
-					if (f) files.push(f);
-				}
-			}
-			if (files.length) handleFiles(files, 'Pasted');
-		});
-		// initial preview render
-		renderPreviews();
 		// Inline edit handlers
 		const editBtn = detailModalEl.querySelector('[data-todo-detail-edit-btn]');
 		const saveBtn = detailModalEl.querySelector('[data-todo-detail-save-btn]');

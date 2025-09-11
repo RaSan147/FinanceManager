@@ -1,0 +1,102 @@
+{# Diary Create/Edit Modal #}
+<div class="modal fade" id="diaryModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true" data-append-to-body="1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form data-diary-form>
+        <div class="modal-header">
+          <h5 class="modal-title" data-diary-modal-title>New Entry</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" data-diary-id name="id" />
+          <div class="mb-2">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" name="title" maxlength="300" placeholder="Optional title">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Category</label>
+            <input type="text" class="form-control" name="category" list="diaryCategoriesGlobal" placeholder="Tag (optional)" maxlength="64">
+          </div>
+          <div class="mb-2">
+            <label class="form-label d-flex justify-content-between">Content <small class="text-muted">Paste images directly (they will appear inline)</small></label>
+            <textarea class="form-control" name="content" rows="10" data-diary-content-input placeholder="Write something..."></textarea>
+            <div class="form-text">Images become small thumbnails; click to enlarge.</div>
+            <div class="d-flex gap-2 mt-2 flex-wrap align-items-center">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-content-image-trigger><i class="bi bi-image"></i> Image</button>
+              <small class="text-muted">Or drag & drop images here</small>
+            </div>
+            <input type="file" accept="image/*" multiple data-diary-content-image style="display:none" />
+          </div>
+          <datalist id="diaryCategoriesGlobal"></datalist>
+        </div>
+        <div class="modal-footer">
+          <div class="me-auto small text-muted" data-diary-meta></div>
+          <button type="submit" class="btn btn-primary" data-diary-submit-btn>Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Diary Detail Modal #}
+<div class="modal fade" id="diaryDetailModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true" data-append-to-body="1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-book-open"></i> Diary Entry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" data-diary-detail-root>
+        <div class="d-flex flex-wrap align-items-start mb-3 gap-3">
+          <div class="flex-grow-1">
+            <h4 class="mb-1" data-diary-detail-title>Untitled</h4>
+            <span class="badge bg-info text-dark d-none" data-diary-detail-category></span>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" data-diary-detail-edit-btn>Edit</button>
+            <button class="btn btn-sm btn-primary d-none" data-diary-detail-save-btn>Save</button>
+            <button class="btn btn-sm btn-outline-secondary d-none" data-diary-detail-cancel-btn>Cancel</button>
+          </div>
+        </div>
+        <div class="mb-3" data-diary-detail-content></div>
+        <form class="d-none" data-diary-detail-edit-form>
+          <div class="mb-2">
+            <input type="text" class="form-control" placeholder="Title" data-diary-detail-edit-title maxlength="300" />
+          </div>
+          <div class="mb-2">
+            <input type="text" class="form-control" placeholder="Category" data-diary-detail-edit-category list="diaryCategoriesGlobal" maxlength="64" />
+          </div>
+          <div class="mb-2">
+            <textarea class="form-control" rows="10" data-diary-detail-edit-content></textarea>
+            <div class="form-text">Paste images while editing to upload automatically.</div>
+            <div class="d-flex gap-2 mt-2 flex-wrap align-items-center">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-edit-content-image-trigger><i class="bi bi-image"></i> Image</button>
+              <small class="text-muted">Drag & drop images here too</small>
+            </div>
+            <input type="file" accept="image/*" multiple data-diary-edit-content-image style="display:none" />
+          </div>
+        </form>
+        <hr />
+        <div class="mb-2">
+          <h6 class="d-flex align-items-center gap-2">Comments <span class="small text-muted" data-diary-comment-limit></span></h6>
+          <div data-diary-comments class="mb-2"></div>
+          <form data-diary-comment-form class="border rounded p-2">
+            <div class="mb-2">
+              <textarea class="form-control form-control-sm" rows="3" name="body" placeholder="Add a comment..."></textarea>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-comment-image-trigger><i class="bi bi-image"></i> Image</button>
+              <button type="button" class="btn btn-sm btn-outline-warning d-none" data-diary-comment-images-clear>Clear Images</button>
+              <div class="small text-muted">Paste images directly</div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap" data-diary-comment-images-preview></div>
+            <input type="file" accept="image/*" multiple data-diary-comment-image style="display:none" />
+            <div class="mt-2 d-flex justify-content-end">
+              <button class="btn btn-sm btn-primary">Post</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

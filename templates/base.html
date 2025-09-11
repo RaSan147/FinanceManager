@@ -54,6 +54,9 @@
 						<li class="nav-item">
 							<a class="nav-link {% if request.endpoint=='todos_bp.todos' %}active{% endif %}" href="{{ url_for('todos_bp.todos') }}" {% if request.endpoint=='todos_bp.todos' %}aria-current="page"{% endif %}><i class="fa-solid fa-list-check"></i> To-Dos</a>
 						</li>
+						<li class="nav-item">
+							<a class="nav-link {% if request.endpoint=='diary_bp.diary' %}active{% endif %}" href="{{ url_for('diary_bp.diary') }}" {% if request.endpoint=='diary_bp.diary' %}aria-current="page"{% endif %}><i class="fa-solid fa-book-open"></i> Diary</a>
+						</li>
 						{% endif %}
 					</ul>
 					<ul class="navbar-nav">
@@ -145,11 +148,13 @@
 		</script>
 	<script src="{{ url_for('static', filename='js/dynamic_app.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/image_viewer.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/image_uploader.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/global_modals.js') }}" defer></script>
 		<script src="{{ url_for('static', filename='js/todos.js') }}" defer></script>
+		<script src="{{ url_for('static', filename='js/diary.js') }}" defer></script>
 			{#
 				Dev/AI Reference:
 				Duplicate form submissions & double event bindings were previously observed (rapid clicks / double script includes).
