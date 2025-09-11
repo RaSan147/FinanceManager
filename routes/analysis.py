@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, jsonify, current_app, flash, redirect, url_for
 from flask_login import login_required, current_user
 from bson import ObjectId
-from models.goal import Goal
+from models.goal import Goal, Allocator as GoalAllocator
 from models.user import User
 from utils.request_metrics import summary as metrics_summary
 
@@ -14,7 +14,7 @@ def init_analysis_blueprint(mongo, ai_engine):
         from app import calculate_monthly_summary
         monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
         goal_models = Goal.get_active_goals(current_user.id, mongo.db)
-        allocations = Goal.compute_allocations(current_user.id, mongo.db)
+        allocations = GoalAllocator.compute_allocations(current_user.id, mongo.db)
         user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
         user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
         goals = []

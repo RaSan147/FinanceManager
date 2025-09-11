@@ -107,4 +107,20 @@ def ensure_indexes(db: Any) -> None:
     todo_cats = db.todo_categories
     _safe_create_index(todo_cats, [("user_id", ASCENDING), ("name", ASCENDING)], name="todo_cat_user_name", unique=True)
 
+    # diary entries
+    try:
+        diary = db.diary_entries
+        _safe_create_index(diary, [("user_id", ASCENDING), ("created_at", DESCENDING)], name="diary_user_created_desc")
+        _safe_create_index(diary, [("user_id", ASCENDING), ("updated_at", DESCENDING)], name="diary_user_updated_desc")
+        _safe_create_index(diary, [("user_id", ASCENDING), ("category", ASCENDING), ("created_at", DESCENDING)], name="diary_user_category_created_desc")
+        # Text-like search (regex) aided by compound prefix index on user_id; Mongo can't index arbitrary regex but this helps filtering by user fast.
+    except Exception as _e:
+        print(f"[db-indexes] Warning creating diary indexes: {_e}")
+
+    try:
+        diary_cats = db.diary_categories
+        _safe_create_index(diary_cats, [("user_id", ASCENDING), ("name", ASCENDING)], name="diary_cat_user_name", unique=True)
+    except Exception as _e:
+        print(f"[db-indexes] Warning creating diary category indexes: {_e}")
+
     print("[db-indexes] Index ensure complete.")

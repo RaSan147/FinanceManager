@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+import logging, os
+from config import Config
 from datetime import datetime
 from bson import ObjectId
 from flask_login import login_required, current_user
 from pydantic import ValidationError as PydValidationError
 from models.todo import Todo, TodoCreate, TodoUpdate, TODO_STAGES, TODO_DESC_TRUNCATE_LEN, TODO_COMMENT_MAX
 from models.todo_comment import TodoComment, TodoCommentCreate
-from utils.imgbb_client import upload_image, ImgbbError
+from utils.imagekit_client import upload_image
 from utils.request_metrics import summary as metrics_summary
 
 
@@ -162,18 +164,52 @@ def init_todos_blueprint(mongo):
             return jsonify({'error': 'Not found'}), 404
         return jsonify({'success': True})
 
-    # Image upload (base64 or data URL) -> imgbb
+    # Image upload (base64 or data URL) -> ImageKit (legacy name kept for route)
     @bp.route('/api/todo-images', methods=['POST'], endpoint='api_todo_image_upload')
     @login_required
     def api_todo_image_upload():  # type: ignore[override]
+        """Upload a single image (base64 string or data URL) and return hosted URL.
+
+        Returns 400 with a generic message unless debug flags are enabled.
+        Debug enrichment triggers when either:
+          * Environment variable IMAGEKIT_DEBUG is truthy, or
+          * Config.SHOW_DETAILED_ERRORS is true
+        """
         data = request.get_json(force=True, silent=True) or {}
         raw = data.get('image')
         if not raw:
             return jsonify({'error': 'image required'}), 400
+        debug_enabled = (
+            request.args.get('debug') is not None
+            or os.getenv('IMAGEKIT_DEBUG', '').lower() in {'1','true','yes','on'}
+            or getattr(Config, 'SHOW_DETAILED_ERRORS', False)
+        )
+        # Fallback simple size heuristic (raw may be base64 or data URL)
+        approx_bytes = None
+        try:
+            if isinstance(raw, str):
+                if ';base64,' in raw:
+                    approx_bytes = int(len(raw.split(';base64,',1)[1]) * 0.75)
+                elif len(raw) < 200000 and all(c.isalnum() or c in '+/=' for c in raw.strip('=')):
+                    approx_bytes = int(len(raw) * 0.75)
+        except Exception:
+            approx_bytes = None
         try:
             url = upload_image(raw)
-        except ImgbbError as e:
-            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            # Log full stack server-side; return minimal message to client unless debug.
+            logging.getLogger(__name__).exception('Todo image upload failed', extra={
+                'user_id': getattr(current_user, 'id', None),
+                'approx_bytes': approx_bytes,
+                'remote_addr': request.remote_addr,
+            })
+            payload = {'error': 'Upload failed (image service)'}
+            if debug_enabled:
+                # Provide original message + basic context (avoid dumping user raw data)
+                payload['detail'] = str(e)
+                if approx_bytes is not None:
+                    payload['approx_bytes'] = str(approx_bytes)
+            return jsonify(payload), 400
         return jsonify({'url': url})
 
     @bp.route('/api/todos/<todo_id>', methods=['DELETE'], endpoint='api_todo_delete')

@@ -52,6 +52,10 @@ body.dark-mode .modal-header {
 	z-index: 1055;
 }
 
+/* Diary specific (ensure detail modal above create when both accidentally open) */
+#diaryDetailModal.modal { z-index: 1056; }
+#diaryDetailModal.modal .modal-dialog { z-index: 1057; }
+
 [data-theme="dark"] .modal-content,
 body.dark-mode .modal-content {
 	box-shadow: 0 18px 46px rgba(0, 0, 0, .6), 0 6px 18px rgba(0, 0, 0, .4);

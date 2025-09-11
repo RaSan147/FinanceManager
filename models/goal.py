@@ -100,6 +100,7 @@ class GoalInDB(GoalBase):
     - completed_date is stored for completed goals.
     """
     id: str = Field(..., alias="_id")
+    # AI metrics below are stored on a 0–100 scale (percent-like)
     ai_priority: Optional[float] = None
     ai_plan: Optional[str] = None
     ai_plan_paste_url: Optional[str] = None  # Remote offloaded plan
@@ -358,55 +359,76 @@ class Goal:
         # Fetch active goals (exclude large ai_plan field for performance)
         goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
         # Sort in Python to avoid index requirements
-        goals_list = list(GoalInDB(**g) for g in goals_cursor)
+        goals_list = [GoalInDB(**g) for g in goals_cursor]
+
         if sort_by == 'algorithmic':
             def _algorithmic_sort_key(goalindb: GoalInDB):
                 # Time metrics
                 target_dt = ensure_utc(goalindb.target_date) if goalindb.target_date else now_utc()
-                now = now_utc()
-                days_left = max(int((target_dt - now).total_seconds() // 86400), -3650)
+                _now = now_utc()
+                days_left = max(int((target_dt - _now).total_seconds() // 86400), -3650)
 
                 # Monetary normalization
-                target_in_base = currency_service.convert_amount(float(goalindb.target_amount or 0.0), (goalindb.currency or base_ccy).upper(), base_ccy)
+                target_in_base = currency_service.convert_amount(
+                    float(goalindb.target_amount or 0.0),
+                    (goalindb.currency or base_ccy).upper(),
+                    base_ccy,
+                )
 
-                # AI signals (with sensible defaults)
-                priority_n = float(goalindb.ai_priority or 50) / 100.0
-                urgency_n = float(goalindb.ai_urgency or 0.0)
-                impact_n = min(float(goalindb.ai_impact or 0.0), 10.0) / 10.0
-                health_n = float(goalindb.ai_health_impact or 0.0)
-                confidence = float(goalindb.ai_confidence or 0.5)
+                # Normalize AI signals to 0..1 from stored 0..100
+                def _pct01(val: Optional[float], default: float = 0.0) -> float:
+                    try:
+                        if val is None:
+                            return max(0.0, min(1.0, default))
+                        return max(0.0, min(1.0, float(val) / 100.0))
+                    except Exception:
+                        return max(0.0, min(1.0, default))
+
+                priority_n = _pct01(goalindb.ai_priority, 0.5)
+                urgency_n = _pct01(goalindb.ai_urgency, 0.0)
+                impact_n = _pct01(goalindb.ai_impact, 0.0)
+                health_n = _pct01(goalindb.ai_health_impact, 0.0)
+                confidence = _pct01(goalindb.ai_confidence, 0.5)
 
                 # If AI urgency missing, infer a soft urgency from time left (sooner => higher)
                 if goalindb.ai_urgency is None:
-                    # 0 when > 24 months away, 1 when due now or overdue
-                    urgency_n = max(0.0, min(1.0, 1.0 - (days_left / (24 * 30))))
+                    # 0 when > 24 months away, 100 when due now or overdue
+                    inferred_urgency_pct = max(0.0, min(100.0, 100.0 * (1.0 - (days_left / (24 * 30)))))
+                    urgency_n = inferred_urgency_pct / 100.0
 
-                # Required per-day burn in base currency (avoid div by 0)
-                daily_required_amount = target_in_base / (days_left + 1) if days_left > 0 else target_in_base
+                # Time-pressure penalty (dimensionless, scaled to pool)
+                # - time_pressure: 1.0 when due/overdue, scales down with more days (<=30 days -> near 1)
+                # - resource_ratio: how large the target is vs available pool (capped to avoid overpower)
+                penalty_weight = 0.15  # keep conservative to avoid overwhelming AI score
+                time_pressure = 1.0 if days_left <= 0 else min(1.0, 30.0 / max(days_left, 1))
+                resource_ratio = 0.0
+                if pool > 0:
+                    resource_ratio = min(1.0, target_in_base / pool)
+                penalty_amount = penalty_weight * time_pressure * resource_ratio * pool
 
                 # Fraction of goal we could cover from pool right now (bounded)
                 coverage = 0.0
                 if target_in_base > 0:
                     coverage = max(0.0, min(1.0, pool / target_in_base))
 
-                # Aggregate AI-driven score; confidence scales the AI parts
-                ai_score = confidence * (
-                    0.5 * priority_n +
-                    0.3 * urgency_n +
-                    0.15 * impact_n +
+                # Aggregate AI-driven score; emphasize priority and urgency, keep impact & confidence
+                ai_base = (
+                    0.45 * priority_n +
+                    0.40 * urgency_n +
+                    0.10 * impact_n +
                     0.05 * health_n
                 )
+                ai_score = ai_base * confidence
 
-                # Overall value combines "available resources to deploy" vs. "required pace"
-                # and a small boost for goals that are fully coverable now.
-                value = (ai_score * pool) + (0.2 * coverage * pool) - daily_required_amount
+                # Overall value combines AI score and coverage bonus, minus a bounded time-pressure penalty
+                value = (ai_score * pool) + (0.2 * coverage * pool) - penalty_amount
 
-                # Sort primarily by value desc, then by ai_priority desc, then earliest due date, then earliest created
+                # Sort primarily by value desc, then by priority, then earliest due date, then earliest created
                 return (
                     value,
                     priority_n,
-                    -days_left,  # sooner deadlines first
-                    (goalindb.created_at or now)
+                    -days_left,
+                    (goalindb.created_at or _now),
                 )
 
             goals_list.sort(key=_algorithmic_sort_key, reverse=True)
@@ -434,9 +456,9 @@ class Goal:
         """Async AI enrichment for a goal.
 
         Updates:
-        - ai_priority: integer (0-100, higher = more important to pursue soon)
-        - ai_urgency: float (0.0-1.0, representing days_remaining / total_days until target).
-        - ai_impact: float (goal_amount ÷ monthly_income, capped at 10)
+    - ai_priority: integer (0-100, higher = more important to pursue soon)
+    - ai_urgency: integer (0-100, higher = more urgent)
+    - ai_impact: integer (0-100, scaled from impact heuristics)
         - ai_suggestions: list of suggested actions.
         - ai_summary: string (1-2 concise sentences summarizing the goal's importance)
         - ai_plan: step-by-step plan text.
@@ -464,23 +486,37 @@ class Goal:
             user_obj = User(user, db)
 
             ai_analysis = await run_goal_priority_analysis(user_obj, ai_engine, goal_dict)
+
+
             # Generate a concrete step-by-step plan using the dedicated helper
             try:
-                plan_text: str = get_goal_plan(
+                plan_text: str = await get_goal_plan(
                     goal_dict,
                     user_obj
                 )
             except Exception:
+                traceback.print_exc()
                 plan_text = ai_analysis.get('summary') or 'Plan unavailable.'
+
+            # Compute days_left for fallback urgency/priority
+            target_dt = ensure_utc(goal_dict.get('target_date')) if goal_dict.get('target_date') else now_utc()
+            now = now_utc()
+            days_left = max(int((target_dt - now).total_seconds() // 86400), -3650)
+
+            priority_pct = ai_analysis.get('priority_score', 0)
+            urgency_pct = ai_analysis.get('urgency', 0)
+            impact_pct = ai_analysis.get('financial_impact', 0)
+            health_pct = ai_analysis.get('health_impact', 0)
+            confidence_pct = ai_analysis.get('confidence', 50)
 
             db.goals.update_one(
                 {'_id': ObjectId(goal_id)},
                 {'$set': {
-                    'ai_priority': ai_analysis.get('priority_score', 0),
-                    'ai_urgency': ai_analysis.get('urgency'),
-                    'ai_impact': ai_analysis.get('financial_impact'),
-                    'ai_health_impact': ai_analysis.get('health_impact'),
-                    'ai_confidence': ai_analysis.get('confidence'),
+                    'ai_priority': priority_pct,
+                    'ai_urgency': urgency_pct,
+                    'ai_impact': impact_pct,
+                    'ai_health_impact': health_pct,
+                    'ai_confidence': confidence_pct,
                     'ai_suggestions': ai_analysis.get('suggested_actions'),
                     # Keep the short summary in metadata for context
                     'ai_summary': ai_analysis.get('summary'),
@@ -575,14 +611,335 @@ class Goal:
             return False
 
     @staticmethod
-    def compact_dict(goal: GoalInDB|dict) -> dict:
+    def compact_dict(goal: GoalInDB|dict, include_ai_analysis=False) -> dict:
         """Return a compact representation of the goal."""
         if isinstance(goal, GoalInDB):
             goal = goal.model_dump(by_alias=True)
 
-        return {
+        compact = {
             'description': goal.get('description', ''),
             'target_amount': goal.get('target_amount', 0),
             'target_date': goal.get('target_date', ''),
             'currency': goal.get('currency', ''),
+            'days_left': max(int(((ensure_utc(goal.get('target_date')) if goal.get('target_date') else now_utc()) - now_utc()).total_seconds() // 86400), -3650),
         }
+
+        if include_ai_analysis:
+            compact.update({
+                'ai_priority': goal.get('ai_priority'),
+                'ai_urgency': goal.get('ai_urgency'),
+                'ai_impact': goal.get('ai_impact'),
+                'ai_health_impact': goal.get('ai_health_impact'),
+                'ai_confidence': goal.get('ai_confidence'),
+                'ai_summary': goal.get('ai_summary'),
+                'ai_suggestions': goal.get('ai_suggestions'),
+            })
+
+        return compact
+
+
+
+from typing import Dict, Optional
+
+class Allocator:
+    @staticmethod
+    def _safe_pct_field(goal, *names, default=0.0):
+        """
+        Read several possible AI fields and normalize to 0..1 floats.
+        Accepts both 0..100 ints and 0..1 floats (defensive).
+        """
+        for n in names:
+            val = getattr(goal, n, None) if hasattr(goal, n) else goal.get(n) if isinstance(goal, dict) else None
+            if val is None:
+                continue
+            try:
+                v = float(val)
+                # If already 0..1 (likely produced by something else), leave it
+                if 0.0 <= v <= 1.0:
+                    return v
+                # If 0..100 scale, convert
+                if 0.0 <= v <= 100.0:
+                    return max(0.0, min(1.0, v / 100.0))
+            except Exception:
+                continue
+        return max(0.0, min(1.0, float(default)))
+
+    @staticmethod
+    def compute_allocations(user_id: str, db, *, sort_by: str = 'algorithmic') -> Dict[str, float]:
+        """Improved allocation algorithm: two-pass (secure urgent needs, then proportional by value).
+        Returns mapping goal_id -> allocation (base currency amount, rounded to 2 decimals).
+        """
+        # --- Gather pool and base currency ---
+        lifetime = calculate_lifetime_transaction_summary(user_id, db) or {}
+        pool = max(float(lifetime.get('current_balance', 0) or 0), 0.0)
+        if pool == 0:
+            return {}
+
+        user_doc = db.users.find_one({'_id': ObjectId(user_id)})
+        base_ccy = (user_doc or {}).get('default_currency', 'USD').upper()
+
+        # Optional: monthly savings estimate (fallbacks)
+        monthly_savings_est = None
+        # prefer explicit field if available
+        if lifetime.get('monthly_net_savings') is not None:
+            try:
+                monthly_savings_est = float(lifetime.get('monthly_net_savings') or 0.0)
+            except Exception:
+                monthly_savings_est = None
+        # fallback to an approximate (pool/12) if unknown
+        if monthly_savings_est is None or monthly_savings_est <= 0:
+            monthly_savings_est = max(0.0, pool / 12.0)
+
+        # Fetch goals (exclude heavy ai_plan)
+        goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
+        goals_list = [GoalInDB(**g) for g in goals_cursor]
+
+        # early exit
+        if not goals_list:
+            return {}
+
+        # parameters / knobs
+        safety_reserve_pct = 0.05  # keep a small reserve of pool (5%)
+        min_alloc_absolute = 1.00  # don't allocate amounts < $1 (avoid dust)
+        time_penalty_weight = 0.12  # bounded time penalty weight
+        coverage_bonus_weight = 0.18
+        affordability_weight = 0.40  # how much affordability modifies priority
+        ai_weights = {
+            "priority": 0.40,
+            "urgency": 0.30,
+            "impact": 0.18,
+            "health": 0.12
+        }
+
+        # Precompute some pool-derived values
+        initial_pool = pool
+        reserve = round(pool * safety_reserve_pct, 2)
+        working_pool = max(0.0, pool - reserve)
+
+        # build sort key / value computation
+        def goal_score(g: GoalInDB):
+            now = now_utc()
+            # time metrics
+            if g.target_date:
+                try:
+                    target_dt = ensure_utc(g.target_date)
+                except Exception:
+                    target_dt = now
+            else:
+                target_dt = now
+
+            # days / months left (cap months to 0..240)
+            delta_days = (target_dt - now).total_seconds() / 86400.0
+            months_left = max(0.0, delta_days / 30.0)
+            months_left_capped = min(240.0, months_left)  # 20 years cap
+
+            # target in base currency
+            try:
+                target_amt = float(g.target_amount or 0.0)
+            except Exception:
+                target_amt = 0.0
+            g_ccy = (g.currency or base_ccy).upper()
+            target_in_base = currency_service.convert_amount(target_amt, g_ccy, base_ccy)
+
+            # required monthly to hit target on time
+            required_monthly = target_in_base / max(1.0, months_left_capped)
+
+            # AI fields normalized 0..1
+            priority_n = Allocator._safe_pct_field(g, 'ai_priority', 'priority_score', default=0.5)
+            urgency_n = Allocator._safe_pct_field(g, 'ai_urgency', 'urgency', default=None)
+            impact_n = Allocator._safe_pct_field(g, 'ai_impact', 'financial_impact', default=0.0)
+            health_n = Allocator._safe_pct_field(g, 'ai_health_impact', 'health_impact', default=0.0)
+            confidence = Allocator._safe_pct_field(g, 'ai_confidence', 'confidence', default=0.6)
+
+            # If AI urgency not provided, infer from time left (0 when >24 months, 1 when due or overdue)
+            if urgency_n is None or urgency_n == 0.0:
+                urgency_inferred = 0.0
+                if months_left_capped <= 24.0:
+                    urgency_inferred = max(0.0, min(1.0, 1.0 - (months_left_capped / 24.0)))
+                urgency_n = max(urgency_n or 0.0, urgency_inferred)
+
+            # Affordability: how realistic is hitting target given user's monthly savings
+            affordability = 0.0
+            if required_monthly > 0:
+                affordability = max(0.0, min(1.0, monthly_savings_est / required_monthly))
+            else:
+                affordability = 1.0
+
+            # coverage: fraction of target we could cover from current working_pool
+            coverage = 0.0
+            if target_in_base > 0:
+                coverage = max(0.0, min(1.0, working_pool / target_in_base))
+
+            # time_pressure (1 if due or overdue, else decays with months; stronger when <= 3 months)
+            if months_left <= 0:
+                time_pressure = 1.0
+            elif months_left <= 3:
+                time_pressure = max(0.6, 1.0 - (months_left / 3.0) * 0.4)
+            else:
+                time_pressure = max(0.0, min(1.0, 3.0 / months_left))
+
+            # AI base score (weighted)
+            ai_base = (
+                ai_weights['priority'] * priority_n +
+                ai_weights['urgency'] * urgency_n +
+                ai_weights['impact'] * impact_n +
+                ai_weights['health'] * health_n
+            )
+            ai_score = ai_base * confidence  # confidence downscales score if uncertain
+
+            # Compose final value:
+            # start with ai_score scaled by pool + an affordability multiplier + coverage bonus - time penalty
+            value = (
+                ai_score * (0.6 + affordability_weight * affordability) * working_pool
+                + coverage_bonus_weight * coverage * working_pool
+                - (time_penalty_weight * time_pressure * min(1.0, target_in_base / max(1.0, working_pool)) * working_pool)
+            )
+
+            # Secondary sort keys to break ties
+            created_at = getattr(g, 'created_at', now) or now
+            return (
+                float(value or 0.0),
+                float(priority_n),
+                float(urgency_n),
+                -months_left,          # sooner (less months) comes first
+                created_at
+            )
+
+        # Sort goals by algorithmic value by default
+        if sort_by == 'algorithmic':
+            goals_list.sort(key=goal_score, reverse=True)
+        else:
+            goals_list.sort(key=lambda g: getattr(g, sort_by) or getattr(g, 'created_at') or now_utc())
+
+        # --- First pass: ensure urgent goals get at least the 'next-month' required funding if affordable ---
+        allocations: Dict[str, float] = {}
+        remaining_pool = working_pool
+
+        # Helper to compute current target_in_base and required_monthly per goal
+        def target_and_required(g):
+            try:
+                t = float(g.target_amount or 0.0)
+            except Exception:
+                t = 0.0
+            ccy = (g.currency or base_ccy).upper()
+            t_base = currency_service.convert_amount(t, ccy, base_ccy)
+            now = now_utc()
+            if getattr(g, 'target_date', None):
+                try:
+                    months_left = max(0.0, (ensure_utc(g.target_date) - now).total_seconds() / 86400.0 / 30.0)
+                except Exception:
+                    months_left = 0.0
+            else:
+                months_left = 0.0
+            months_left = min(240.0, months_left)
+            req_monthly = t_base / max(1.0, months_left) if months_left > 0 else t_base
+            return t_base, req_monthly, months_left
+
+        # Pass 1: for goals with high urgency (urgency_n >= 0.75), try to allocate a single-month required amount (capped)
+        for g in goals_list:
+            gid = str(g.id)
+            t_base, req_monthly, months_left = target_and_required(g)
+            urgency_n = Allocator._safe_pct_field(g, 'ai_urgency', 'urgency', default=None)
+            if urgency_n is None:
+                # infer if missing
+                if months_left <= 24.0:
+                    urgency_n = max(0.0, min(1.0, 1.0 - (months_left / 24.0)))
+                else:
+                    urgency_n = 0.0
+
+            # high-urgency threshold
+            if urgency_n >= 0.75 and remaining_pool > 0 and req_monthly > 0:
+                # allocate min(req_monthly, remaining_pool, t_base) but leave min reserve
+                alloc = min(remaining_pool, req_monthly, t_base)
+                # avoid dust allocations
+                if alloc < min_alloc_absolute:
+                    alloc = 0.0
+                else:
+                    alloc = round(alloc, 2)
+                    allocations[gid] = allocations.get(gid, 0.0) + alloc
+                    remaining_pool = round(remaining_pool - alloc, 2)
+
+        # Pass 2: allocate remaining_pool proportionally by computed 'value' (greedy but normalized)
+        # compute numeric values
+        values = []
+        for g in goals_list:
+            gid = str(g.id)
+            v_tuple = goal_score(g)
+            v = max(0.0, float(v_tuple[0]))
+            # reduce value for goals already fully funded by first-pass allocations
+            t_base, _, _ = target_and_required(g)
+            already = allocations.get(gid, 0.0)
+            remaining_to_goal = max(0.0, t_base - already)
+            if remaining_to_goal <= 0:
+                v = 0.0
+            values.append((g, gid, v, remaining_to_goal, t_base))
+
+        total_value = sum(v for (_, _, v, _, _) in values) or 0.0
+
+        # If total_value is zero (no positive value), fallback to FIFO/earliest created
+        if total_value <= 0.0:
+            for g, gid, _, remaining_to_goal, t_base in values:
+                if remaining_pool <= 0:
+                    break
+                if remaining_to_goal <= 0:
+                    continue
+                alloc = min(remaining_pool, remaining_to_goal)
+                if alloc < min_alloc_absolute:
+                    continue
+                alloc = round(alloc, 2)
+                allocations[gid] = allocations.get(gid, 0.0) + alloc
+                remaining_pool = round(remaining_pool - alloc, 2)
+        else:
+            # distribute proportionally to v / total_value, but also cap to remaining_to_goal
+            for g, gid, v, remaining_to_goal, t_base in sorted(values, key=lambda x: x[2], reverse=True):
+                if remaining_pool <= 0:
+                    break
+                if v <= 0 or remaining_to_goal <= 0:
+                    continue
+                share = v / total_value
+                desired = remaining_pool * share
+                alloc = min(desired, remaining_to_goal, remaining_pool)
+                # avoid tiny allocations
+                if alloc < min_alloc_absolute:
+                    continue
+                alloc = round(alloc, 2)
+                allocations[gid] = allocations.get(gid, 0.0) + alloc
+                remaining_pool = round(remaining_pool - alloc, 2)
+                total_value -= v  # conservative: remove this goal's value so next shares adjust
+
+        # Final step: if rounding left some cents and a small positive remaining_pool, add it to highest priority goal that still needs it
+        if remaining_pool >= 0.01:
+            # find candidate with remaining need
+            candidates = [(gid, (t := currency_service.convert_amount(float(g.target_amount or 0.0),
+                                                                         (g.currency or base_ccy).upper(), base_ccy) - allocations.get(str(g.id), 0.0)))
+                          for g in goals_list for gid in [str(g.id)]]
+            # pick candidate with positive remaining need and highest ai priority
+            candidate = None
+            for g in goals_list:
+                gid = str(g.id)
+                need = (currency_service.convert_amount(float(g.target_amount or 0.0),
+                                                        (g.currency or base_ccy).upper(), base_ccy)
+                        - allocations.get(gid, 0.0))
+                if need > 0.01:
+                    candidate = (gid, need)
+                    break
+            if candidate:
+                gid, need = candidate
+                add = min(round(remaining_pool, 2), need)
+                if add >= 0.01:
+                    allocations[gid] = allocations.get(gid, 0.0) + add
+                    remaining_pool = round(remaining_pool - add, 2)
+
+        # ensure all allocations are rounded to 2 decimals and no negatives
+        for k in list(allocations.keys()):
+            allocations[k] = round(max(0.0, allocations[k]), 2)
+
+        # ensure we never allocate more than initial pool (safety clamp)
+        total_alloc = round(sum(allocations.values()), 2)
+        if total_alloc > initial_pool:
+            # scale down proportionally
+            scale = initial_pool / total_alloc
+            for k in allocations:
+                allocations[k] = round(allocations[k] * scale, 2)
+
+        return allocations

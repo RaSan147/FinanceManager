@@ -252,11 +252,11 @@ class Goal {
             }, text));
         };
 
-        if (g.ai_priority != null) addBadge('bg-info text-dark', `Priority ${Number(g.ai_priority).toFixed(0)}`);
-        if (g.ai_urgency != null) addBadge('bg-warning text-dark', `Urgency ${Number(g.ai_urgency).toFixed(2)}`);
-        if (g.ai_impact != null) addBadge('bg-success text-dark', `Impact ${Number(g.ai_impact).toFixed(2)}`);
-        if (g.ai_health_impact != null && g.ai_health_impact > 0) addBadge('bg-danger text-dark', `Health ${Number(g.ai_health_impact).toFixed(2)}`);
-        if (g.ai_confidence != null) addBadge('bg-secondary text-light', `Conf ${Number(g.ai_confidence).toFixed(2)}`);
+        if (g.ai_priority != null) addBadge('bg-info text-dark', `Priority ${Number(g.ai_priority)}`);
+        if (g.ai_urgency != null) addBadge('bg-warning text-dark', `Urgency ${Number(g.ai_urgency)}`);
+        if (g.ai_impact != null) addBadge('bg-success text-dark', `Impact ${Number(g.ai_impact)}`);
+        if (g.ai_health_impact != null && g.ai_health_impact > 0) addBadge('bg-danger text-dark', `Health ${Number(g.ai_health_impact)}`);
+        if (g.ai_confidence != null) addBadge('bg-secondary text-light', `Conf ${Number(g.ai_confidence)}`);
 
         if (g.ai_suggestions && g.ai_suggestions.length) {
             const ul = createEl('ul', {

@@ -1,12 +1,14 @@
 /* Theme Variables (Light + Dark) */
 :root {
 	/* ...extracted from original style.css root... */
-	--bg-primary: #f6f7fb;
-	--bg-secondary: #ffffff;
-	--bg-tertiary: #f1f3f8;
-	--text-primary: #1f2937;
-	--text-secondary: #4b5563;
-	--text-hint: #6b7280;
+	--bg-primary: rgb(246, 247, 251);
+	--bg-primary-rgb: 246, 247, 251;
+	--bg-secondary: rgb(255, 255, 255);
+	--bg-secondary-rgb: 255, 255, 255;
+	--bg-tertiary: rgb(241, 243, 248);
+	--text-primary: rgb(31, 41, 55);
+	--text-secondary: rgb(75, 85, 99);
+	--text-hint: rgb(107, 114, 128);
 	--accent-primary-rgb: 37, 99, 235;
 	--accent-primary: rgb(37, 99, 235);
 	--accent-primary-bright-rgb: 59, 130, 246;
@@ -39,18 +41,37 @@
 	--bubble-tilt: 0.3deg;
 	--bubble-scale: 1.008;
 	--bubble-shadow: 0 16px 32px rgba(0, 0, 0, 0.14);
+
+
+
+	--bs-success-bg-subtle: #d1e7dd;
+	/* .bg-white rgba(var(--bs-white-rgb), var(--bs-bg-opacity)) !important; */
+	--bs-white-rgb: var(--bg-primary-rgb);
+	--bs-bg-opacity: 1;
 }
 
 [data-theme="dark"] {
 	/* dark overrides */
 	--bg-primary: #0b0f14;
+	--bg-primary-rgb: 11, 15, 20;
 	--bg-secondary: #0f1722;
+	--bg-secondary-rgb: 15, 23, 34;
 	--bg-tertiary: #131c2a;
+	--bg-tertiary-rgb: 19, 28, 42;
 	--text-primary: #e5e7eb;
+	--text-primary-rgb: 229, 231, 235;
 	--text-secondary: #94a3b8;
+	--text-secondary-rgb: 148, 163, 184;
 	--text-hint: #cbd5e1;
+	--text-hint-rgb: 203, 213, 225;
+	--accent-primary-bright: #3b82f6;
+	--accent-primary-bright-rgb: 59, 130, 246;
+	--accent-primary-brighter: #60a5fa;
+	--accent-primary-brighter-rgb: 96, 165, 250;
 	--accent-primary: #60a5fa;
+	--accent-primary-rgb: 96, 165, 250;
 	--accent-secondary: #64748b;
+	--accent-secondary-rgb: 100, 116, 139;
 	--border-color: #233046;
 	--card-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
 	--success-bg: #064e3b;
@@ -61,4 +82,9 @@
 	--glass-blur: 16px;
 	--header-grad-1: rgba(var(--accent-primary-brighter-rgb), 0.16);
 	--header-grad-2: rgba(var(--accent-primary-bright-rgb), 0.12);
+
+
+
+
+	--bs-success-bg-subtle: #0b5750;
 }
