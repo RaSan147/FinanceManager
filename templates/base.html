@@ -1,31 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 	{% include "includes/initial_dark_mode.html" %}
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="color-scheme" content="light dark">
-    <title>Finance Tracker - {% block title %}{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+	<title>Finance Tracker - {% block title %}{% endblock %}</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 	<!-- Font Awesome (v6 complete premium, via provided CDN) -->
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/RaSan147/fabkp@2f5670e/css/all.min.css">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    {% block extra_css %}{% endblock %}
+	{% block extra_css %}{% endblock %}
 
-	
+
 	<!-- Right before closing head -->
-    <script defer src="{{ url_for('static', filename='js/dark_mode.js') }}"></script>
-    {% include "includes/dark_mode_toggle.html" %}
+	<script defer src="{{ url_for('static', filename='js/dark_mode.js') }}"></script>
+	{% include "includes/dark_mode_toggle.html" %}
 </head>
+
 <body class="{{ 'dark-mode' if session.get('dark_mode') else '' }}">
 	<main>
 		<nav class="navbar navbar-expand-lg glassy-nav">
 			<div class="container">
 				<a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard.index') }}">
-                    <i class="fa-solid fa-wallet"></i>
-                    <span>Finance Tracker</span>
-                </a>
+					<i class="fa-solid fa-wallet"></i>
+					<span>Finance Tracker</span>
+				</a>
 				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
 					<span class="navbar-toggler-icon"></span>
 				</button>
@@ -33,29 +35,29 @@
 					<ul class="navbar-nav me-auto">
 						{% if current_user.is_authenticated %}
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" {% if request.endpoint=='dashboard.index' %}aria-current="page"{% endif %}><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+							<a class="nav-link {% if request.endpoint=='dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" {% if request.endpoint=='dashboard.index' %}aria-current="page" {% endif %}><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
 						</li>
 						<li class="nav-item">
 							{# Adjusted for blueprint endpoint name #}
-							<a class="nav-link {% if request.endpoint=='transactions_routes.transactions' %}active{% endif %}" href="{{ url_for('transactions_routes.transactions') }}" {% if request.endpoint=='transactions_routes.transactions' %}aria-current="page"{% endif %}><i class="fa-solid fa-receipt"></i> Transactions</a>
+							<a class="nav-link {% if request.endpoint=='transactions_routes.transactions' %}active{% endif %}" href="{{ url_for('transactions_routes.transactions') }}" {% if request.endpoint=='transactions_routes.transactions' %}aria-current="page" {% endif %}><i class="fa-solid fa-receipt"></i> Transactions</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='goals_bp.goals' %}active{% endif %}" href="{{ url_for('goals_bp.goals') }}" {% if request.endpoint=='goals_bp.goals' %}aria-current="page"{% endif %}><i class="fa-solid fa-bullseye"></i> Goals</a>
+							<a class="nav-link {% if request.endpoint=='goals_bp.goals' %}active{% endif %}" href="{{ url_for('goals_bp.goals') }}" {% if request.endpoint=='goals_bp.goals' %}aria-current="page" {% endif %}><i class="fa-solid fa-bullseye"></i> Goals</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='loans_bp.loans' %}active{% endif %}" href="{{ url_for('loans_bp.loans') }}" {% if request.endpoint=='loans_bp.loans' %}aria-current="page"{% endif %}><i class="fa-solid fa-scale-balanced"></i> Loans</a>
+							<a class="nav-link {% if request.endpoint=='loans_bp.loans' %}active{% endif %}" href="{{ url_for('loans_bp.loans') }}" {% if request.endpoint=='loans_bp.loans' %}aria-current="page" {% endif %}><i class="fa-solid fa-scale-balanced"></i> Loans</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='analysis_bp.analysis' %}active{% endif %}" href="{{ url_for('analysis_bp.analysis') }}" {% if request.endpoint=='analysis_bp.analysis' %}aria-current="page"{% endif %}><i class="fa-solid fa-chart-line"></i> Analysis</a>
+							<a class="nav-link {% if request.endpoint=='analysis_bp.analysis' %}active{% endif %}" href="{{ url_for('analysis_bp.analysis') }}" {% if request.endpoint=='analysis_bp.analysis' %}aria-current="page" {% endif %}><i class="fa-solid fa-chart-line"></i> Analysis</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='ai_bp.purchase_advisor' %}active{% endif %}" href="{{ url_for('ai_bp.purchase_advisor') }}" {% if request.endpoint=='ai_bp.purchase_advisor' %}aria-current="page"{% endif %}><i class="fa-solid fa-robot"></i> Purchase Advisor</a>
+							<a class="nav-link {% if request.endpoint=='ai_bp.purchase_advisor' %}active{% endif %}" href="{{ url_for('ai_bp.purchase_advisor') }}" {% if request.endpoint=='ai_bp.purchase_advisor' %}aria-current="page" {% endif %}><i class="fa-solid fa-robot"></i> Purchase Advisor</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='todos_bp.todos' %}active{% endif %}" href="{{ url_for('todos_bp.todos') }}" {% if request.endpoint=='todos_bp.todos' %}aria-current="page"{% endif %}><i class="fa-solid fa-list-check"></i> To-Dos</a>
+							<a class="nav-link {% if request.endpoint=='todos_bp.todos' %}active{% endif %}" href="{{ url_for('todos_bp.todos') }}" {% if request.endpoint=='todos_bp.todos' %}aria-current="page" {% endif %}><i class="fa-solid fa-list-check"></i> To-Dos</a>
 						</li>
 						<li class="nav-item">
-							<a class="nav-link {% if request.endpoint=='diary_bp.diary' %}active{% endif %}" href="{{ url_for('diary_bp.diary') }}" {% if request.endpoint=='diary_bp.diary' %}aria-current="page"{% endif %}><i class="fa-solid fa-book-open"></i> Diary</a>
+							<a class="nav-link {% if request.endpoint=='diary_bp.diary' %}active{% endif %}" href="{{ url_for('diary_bp.diary') }}" {% if request.endpoint=='diary_bp.diary' %}aria-current="page" {% endif %}><i class="fa-solid fa-book-open"></i> Diary</a>
 						</li>
 						{% endif %}
 					</ul>
@@ -70,7 +72,9 @@
 									<a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('profile_bp.profile') }}"><i class="fa-solid fa-user-gear"></i> <span>Profile</span></a>
 								</li>
 
-								<li><hr class="dropdown-divider"></li>
+								<li>
+									<hr class="dropdown-divider">
+								</li>
 								<li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
 							</ul>
 						</li>
@@ -89,30 +93,30 @@
 
 		<div class="container mt-4">
 			{% with messages = get_flashed_messages(with_categories=true) %}
-				{% if messages %}
-					{% for item in messages %}
-						{# Handle normal (category, message) tuples #}
-						{% if item is sequence and item|length == 2 %}
-							{% set category = item[0] %}
-							{% set message = item[1] %}
-						{# Handle possible mapping representation of tuples in some contexts, e.g., {' t': ['cat','msg']} #}
-						{% elif item is mapping and (' t' in item or 't' in item) %}
-							{% set pair = item[' t'] if ' t' in item else item['t'] %}
-							{% set category = pair[0] %}
-							{% set message = pair[1] %}
-						{# Fallback to simple string message #}
-						{% else %}
-							{% set category = 'info' %}
-							{% set message = item %}
-						{% endif %}
-						{# Normalize unexpected categories to Bootstrap variants #}
-						{% set cat = category if category in ['primary','secondary','success','danger','warning','info','light','dark'] else 'info' %}
-						<div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
-							{{ message }}
-							<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-						</div>
-					{% endfor %}
-				{% endif %}
+			{% if messages %}
+			{% for item in messages %}
+			{# Handle normal (category, message) tuples #}
+			{% if item is sequence and item|length == 2 %}
+			{% set category = item[0] %}
+			{% set message = item[1] %}
+			{# Handle possible mapping representation of tuples in some contexts, e.g., {' t': ['cat','msg']} #}
+			{% elif item is mapping and (' t' in item or 't' in item) %}
+			{% set pair = item[' t'] if ' t' in item else item['t'] %}
+			{% set category = pair[0] %}
+			{% set message = pair[1] %}
+			{# Fallback to simple string message #}
+			{% else %}
+			{% set category = 'info' %}
+			{% set message = item %}
+			{% endif %}
+			{# Normalize unexpected categories to Bootstrap variants #}
+			{% set cat = category if category in ['primary','secondary','success','danger','warning','info','light','dark'] else 'info' %}
+			<div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+				{{ message }}
+				<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+			</div>
+			{% endfor %}
+			{% endif %}
 			{% endwith %}
 
 			{% block content %}{% endblock %}
@@ -129,46 +133,48 @@
 
 	{# Global modals included once so they are accessible anywhere #}
 	{% if current_user.is_authenticated %}
-		{% include 'includes/transaction_modal.html' %}
-		{% include 'includes/goal_modal.html' %}
-		{% include 'includes/todo_modal.html' %}
+	{% include 'includes/transaction_modal.html' %}
+	{% include 'includes/goal_modal.html' %}
+	{% include 'includes/todo_modal.html' %}
 	{% endif %}
 
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 	<script src="{{ url_for('static', filename='js/currency.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/script.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/app_core.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/transaction_model.js') }}" defer></script>
-		<script>
-			// Expose currency metadata globally for dynamic modules
-			window.currencySymbols = {{ currency_symbols|tojson|safe }};
-			window.currencyCode = {{ currency_code|tojson|safe }};
-			window.currencySymbol = {{ currency_symbol|tojson|safe }};
-		</script>
+	<script>
+		// Expose currency metadata globally for dynamic modules
+		window.currencySymbols = {{ currency_symbols | tojson | safe }};
+		window.currencyCode = {{ currency_code | tojson | safe }};
+		window.currencySymbol = {{ currency_symbol | tojson | safe }};
+	</script>
 	<script src="{{ url_for('static', filename='js/dynamic_app.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/image_viewer.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/image_uploader.js') }}" defer></script>
-		<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
-		<script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
-		<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
-		<script src="{{ url_for('static', filename='js/global_modals.js') }}" defer></script>
-		<script src="{{ url_for('static', filename='js/todos.js') }}" defer></script>
-		<script src="{{ url_for('static', filename='js/diary.js') }}" defer></script>
-			{#
-				Dev/AI Reference:
-				Duplicate form submissions & double event bindings were previously observed (rapid clicks / double script includes).
-				Unified mitigation strategy implemented:
-					- app_core.js: App.utils.withSingleFlight(el, asyncFn) sets el.dataset.submitting flag to gate re-entry.
-				- Keyed request dedupe + short-lived cache: App.utils.fetchJSONUnified(url,{dedupe:true}).
-				- Guard helpers: App.utils.Guard.submit(form, handler) & Guard.click(btn, handler) auto-wrap with single-flight.
-				- Lightweight EventBus: App.utils.EventBus.on/emit for cross-module events (foundation for SPA nav updates).
-				- SPA groundwork: enableSPALinkInterception() (not yet auto-enabled) can turn internal links with data-spa into partial loads.
-					- transactions.js, goals.js (patch/update flows) and todos.js now use this helper (or direct dataset.submitting) to prevent duplicate requests.
-					- Each feature script sets a global guard (e.g., window.__todosModuleLoaded) to avoid double IIFE execution if the script tag is accidentally included twice.
-					- For future forms/buttons, wrap async handlers in withSingleFlight or manually set dataset.submitting.
-				Add new feature? Search for 'withSingleFlight' usage as a pattern reference.
-			#}
-    {% block extra_js %}{% endblock %}
+	<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/global_modals.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/todos.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/diary.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/transactions.js') }}" defer></script>
+	{#
+	Dev/AI Reference:
+	Duplicate form submissions & double event bindings were previously observed (rapid clicks / double script includes).
+	Unified mitigation strategy implemented:
+	- app_core.js: App.utils.withSingleFlight(el, asyncFn) sets el.dataset.submitting flag to gate re-entry.
+	- Keyed request dedupe + short-lived cache: App.utils.fetchJSONUnified(url,{dedupe:true}).
+	- Guard helpers: App.utils.Guard.submit(form, handler) & Guard.click(btn, handler) auto-wrap with single-flight.
+	- Lightweight EventBus: App.utils.EventBus.on/emit for cross-module events (foundation for SPA nav updates).
+	- SPA groundwork: enableSPALinkInterception() (not yet auto-enabled) can turn internal links with data-spa into partial loads.
+	- transactions.js, goals.js (patch/update flows) and todos.js now use this helper (or direct dataset.submitting) to prevent duplicate requests.
+	- Each feature script sets a global guard (e.g., window.__todosModuleLoaded) to avoid double IIFE execution if the script tag is accidentally included twice.
+	- For future forms/buttons, wrap async handlers in withSingleFlight or manually set dataset.submitting.
+	Add new feature? Search for 'withSingleFlight' usage as a pattern reference.
+	#}
+	{% block extra_js %}{% endblock %}
 </body>
+
 </html>
