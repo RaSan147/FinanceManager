@@ -71,7 +71,6 @@
 </div>
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/transactions.js') }}" defer></script>
 <script>
 // Provide category label lookup for dynamic JS rendering (TransactionModel.categoryLabel)
 window.txCategoryLabels = {{ tx_categories|tojson|safe }};
