@@ -288,7 +288,7 @@ Output only the JSON object (single line or pretty JSON is fine). Ensure valid J
 
 
 # ---------------- Public API -----------------
-async def get_ai_analysis(user: User) -> str:
+def get_ai_analysis(user: User) -> str:
     """Return HTML analysis for the sidebar (no markdown)."""
     start = time.perf_counter()
     prompt = _analysis_prompt(user)
@@ -298,7 +298,7 @@ async def get_ai_analysis(user: User) -> str:
     print(f"Prompt generation took {end - start:.2f} seconds")
 
     start = time.perf_counter()
-    raw = await _BRAIN.aget_text(prompt)
+    raw = _BRAIN.get_text(prompt)
     end = time.perf_counter()
     print(f"AI response generation took {end - start:.2f} seconds")
     return _strip(raw, md_type="html")
