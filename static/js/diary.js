@@ -119,7 +119,7 @@
         if (focusedElement) {
           focusedElement.blur();
         }
-        
+
         const inst = bootstrap.Modal.getInstance(m);
         inst && inst.hide();
       }
@@ -239,7 +239,7 @@
       const data = await App.utils.fetchJSONUnified(`/api/diary/${id}/detail`, {
         dedupe: true
       });
-      
+
       // Safety check for renderDetail function
       try {
         renderDetail(data);
@@ -248,7 +248,7 @@
         window.flash && window.flash('Error displaying diary entry', 'danger');
         return;
       }
-      
+
       closeOtherModals();
       if (detailModal) {
         detailModal.show();
@@ -264,7 +264,7 @@
 
   function safeFormatDate(dateValue) {
     if (!dateValue) return 'Unknown date';
-    
+
     try {
       const date = new Date(dateValue);
       if (isNaN(date.getTime())) {
@@ -276,85 +276,245 @@
       return 'Invalid date';
     }
   }
+  // Add URL validation function
+  function isValidHttpUrl(string) {
+    try {
+      const url = new URL(string);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
 
-  function escapeHtml(str) {
-    return (str || '').replace(/[&<>"']/g, c => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      '\'': '&#39;'
-    } [c]));
+  // Enhanced escapeHtml function (if not already robust)
+  function __escapeHtml(unsafe) {
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return '';
+
+    // Temporary placeholder for img tags
+    const imgPlaceholder = '___IMG_TAG_PLACEHOLDER___';
+    const imgTags = [];
+
+    // Extract and store img tags with placeholders
+    const withPlaceholders = unsafe.replace(
+      /(<img\b[^>]*>)/gi,
+      (match) => {
+        imgTags.push(match);
+        return imgPlaceholder;
+      }
+    );
+
+    // Escape HTML in the remaining content
+    const escaped = withPlaceholders
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+    // Restore the original img tags
+    let result = escaped;
+    imgTags.forEach(imgTag => {
+      result = result.replace(imgPlaceholder, imgTag);
+    });
+
+    return result;
+  }
+
+  // Cache markdown preferences
+  let markdownPreference = null;
+
+  function getMarkdownPreference() {
+    if (markdownPreference === null) {
+      markdownPreference = localStorage.getItem('diary-markdown-enabled') === 'true';
+    }
+    return markdownPreference;
+  }
+
+  // Pre-compile regex patterns for better performance
+  const markdownPatterns = {
+    headers: /^#{1,6}\s+(.+)$/gm,
+    bold: /(\*\*|__)(?=\S)(.*?\S)\1/g,
+    italic: /(\*|_)(?=\S)(.*?\S)\1/g,
+    codeBlock: /```([\s\S]*?)```/gm,
+    inlineCode: /`([^`]+)`/g,
+    blockquote: /^>\s+(.+)$/gm,
+    image: /!\[([^\]]*)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
+    link: /\[([^\]]+)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
+    hr: /^[-*_]{3,}$/gm,
+    unorderedList: /^(\s*)[-*+]\s+(.+)$/gm,
+    orderedList: /^(\s*)\d+\.\s+(.+)$/gm
+  };
+
+  function escapeHtml(text, preserveUrls = false) {
+    if (!text) return '';
+
+    const div = document.createElement('div');
+    div.textContent = text;
+    let result = div.innerHTML;
+
+    if (preserveUrls) {
+      // Preserve URL encoding
+      result = result.replace(/%20/g, ' ');
+    }
+
+    return result;
   }
 
   function renderInlineContent(raw, id, markdownEnabled = false) {
     if (!raw) return '';
 
-    const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform) ?
-      ImageUploader.thumbTransform(url, 280, 280, true) :
-      url;
+    // Mock ImageUploader for demonstration
+    const ikThumb = (url) => url;
 
     const group = id ? `diary-inline-${id}` : 'diary-inline';
 
-    if (markdownEnabled) {
-      // Basic markdown rendering
-      let processed = escapeHtml(raw);
-
-      // Images
-      processed = processed.replace(
-        /!\[[^\]]*\]\((https?:[^)]+)\)/g,
-        (m, url) => {
-          const t = ikThumb(url);
-          return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${url}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='image'/>`;
+    // Process images first (both markdown and plain text modes)
+    const processImages = (text) => {
+      return text.replace(
+        /!\[([^\]]*)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
+        (match, altText, fullUrl, cleanUrl, title) => {
+          const t = ikThumb(cleanUrl);
+          const titleAttr = title ? ` title="${escapeHtml(title, false)}"` : '';
+          return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${cleanUrl}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='${escapeHtml(altText, false)}'${titleAttr}/>`;
         }
       );
+    };
 
-      // Bold **text**
-      processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    if (markdownEnabled) {
+      let processed = escapeHtml(raw, false);
 
-      // Italic *text* (but not **text**)
-      processed = processed.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+      // Process images first to avoid markdown processing within URLs
+      processed = processImages(processed);
 
-      // Code `code`
-      processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>');
+      // Process code blocks first to avoid processing inside them
+      const codeBlocks = [];
+      processed = processed.replace(markdownPatterns.codeBlock, (match, code) => {
+        codeBlocks.push(code);
+        return `:::CODEBLOCK${codeBlocks.length - 1}:::`;
+      });
 
-      // Headers
-      processed = processed.replace(/^### (.+)$/gm, '<h5>$1</h5>');
-      processed = processed.replace(/^## (.+)$/gm, '<h4>$1</h4>');
-      processed = processed.replace(/^# (.+)$/gm, '<h3>$1</h3>');
+      // Process lists
+      processed = processLists(processed);
 
-      // Links
-      processed = processed.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      // Then process other markdown elements
+      processed = processed
+        .replace(markdownPatterns.headers, (match, text) => {
+          const level = match.match(/^#+/)[0].length;
+          return `<h${Math.min(level + 2, 6)}>${text}</h${Math.min(level + 2, 6)}>`;
+        })
+        .replace(markdownPatterns.hr, '<hr/>')
+        .replace(markdownPatterns.blockquote, '<blockquote>$1</blockquote>')
+        .replace(markdownPatterns.bold, '<strong>$2</strong>')
+        .replace(markdownPatterns.italic, '<em>$2</em>')
+        .replace(markdownPatterns.inlineCode, '<code>$1</code>')
+        .replace(
+          markdownPatterns.link,
+          (match, text, fullUrl, cleanUrl, title) => {
+            const titleAttr = title ? ` title="${escapeHtml(title, false)}"` : '';
+            return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
+          }
+        );
+
+      // Restore code blocks
+      processed = processed.replace(/:::CODEBLOCK(\d+):::/g, (match, index) => {
+        return `<pre><code>${escapeHtml(codeBlocks[parseInt(index)], false)}</code></pre>`;
+      });
 
       return formatTextWithWhitespace(processed);
     } else {
-      // Plain text with preserved formatting
-      const esc = escapeHtml(raw);
-      const withImgs = esc.replace(
-        /!\[[^\]]*\]\((https?:[^)]+)\)/g,
-        (m, url) => {
-          const t = ikThumb(url);
-          return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${url}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='image'/>`;
-        }
-      );
-
+      // For plain text mode
+      const withPreservedImgs = escapeHtml(raw, true);
+      const withImgs = processImages(withPreservedImgs);
       return formatTextWithWhitespace(withImgs);
     }
   }
 
+  function processLists(text) {
+    // Process ordered and unordered lists with nesting support
+    let processed = text;
+
+    // Process unordered lists
+    processed = processed.replace(markdownPatterns.unorderedList, (match, indentation, content) => {
+      const level = Math.min(Math.floor(indentation.length / 2), 4); // Max 5 levels deep (0-4)
+      return `<li class="nesting-level-${level}">${content}</li>`;
+    });
+
+    // Process ordered lists
+    processed = processed.replace(markdownPatterns.orderedList, (match, indentation, content) => {
+      const level = Math.min(Math.floor(indentation.length / 2), 4); // Max 5 levels deep (0-4)
+      return `<li class="nesting-level-${level}">${content}</li>`;
+    });
+
+    // Group list items into lists
+    processed = processed.replace(/(<li class="nesting-level-0">.*?<\/li>)+/g, match => {
+      return `<ul>${match}</ul>`;
+    });
+
+    for (let i = 1; i <= 4; i++) {
+      processed = processed.replace(new RegExp(`<li class="nesting-level-${i}">.*?<\\/li>`, "g"), match => {
+        return match;
+      });
+
+      processed = processed.replace(new RegExp(`(<li class="nesting-level-${i-1}">.*?)(<li class="nesting-level-${i}">.*?<\\/li>)+(.*?<\\/li>)`, "gs"), (match, before, nestedItems, after) => {
+        return `${before}<ul>${nestedItems}</ul>${after}`;
+      });
+    }
+
+    // Convert ordered list items (numbers followed by dots)
+    processed = processed.replace(/<ul>((\s*<li>.*?<\/li>\s*)+)<\/ul>/gs, (match, items) => {
+      // Check if the first item starts with a number (ordered list)
+      if (/<li>(\d+)\./.test(items)) {
+        return `<ol>${items}</ol>`;
+      }
+      return match;
+    });
+
+    return processed;
+  }
+
   function formatTextWithWhitespace(text) {
-    // Preserve leading whitespace and convert newlines properly
+    // Preserve multiple spaces and convert newlines properly
     return text
       .split('\n')
       .map(line => {
-        // Convert leading spaces/tabs to non-breaking spaces to preserve indentation
-        const leadingSpaces = line.match(/^(\s*)/)[1];
-        const restOfLine = line.slice(leadingSpaces.length);
-        const preservedSpaces = leadingSpaces.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
-        return preservedSpaces + restOfLine;
+        // Skip processing if the line is a list item
+        if (line.startsWith('<li') || line.startsWith('</ul>') || line.startsWith('</ol>')) {
+          return line;
+        }
+
+        // Convert multiple spaces to non-breaking spaces
+        let processedLine = line;
+
+        // Handle tabs (4 spaces each)
+        processedLine = processedLine.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+
+        // Convert leading spaces to non-breaking spaces
+        const leadingSpacesMatch = processedLine.match(/^(\s+)/);
+        if (leadingSpacesMatch) {
+          const leadingSpaces = leadingSpacesMatch[1];
+          const preservedSpaces = leadingSpaces.replace(/ /g, '&nbsp;');
+          processedLine = preservedSpaces + processedLine.slice(leadingSpaces.length);
+        }
+
+        // Convert multiple consecutive spaces within line
+        processedLine = processedLine.replace(/ {2,}/g, spaces =>
+          spaces.replace(/ /g, '&nbsp;')
+        );
+
+        return processedLine;
       })
       .join('<br/>');
   }
+
 
   function renderDetail(data) {
     if (!detailModalEl) return;
@@ -380,6 +540,7 @@
     function updateContent() {
       const markdownEnabled = markdownToggle?.checked || false;
       if (contentEl) {
+        contentEl.classList.toggle('markdown', markdownEnabled);
         contentEl.innerHTML = renderInlineContent(item.content || '', item._id, markdownEnabled);
       }
       // Save preference
@@ -388,7 +549,7 @@
 
     // Load markdown preference
     if (markdownToggle) {
-      markdownToggle.checked = localStorage.getItem('diary-markdown-enabled') === 'true';
+      markdownToggle.checked = getMarkdownPreference();
       markdownToggle.addEventListener('change', updateContent);
     }
 
