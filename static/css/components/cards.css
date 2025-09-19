@@ -45,3 +45,61 @@ body.dark-mode .card-header.text-white,
 body.dark-mode .card-header.bg-primary.text-white {
 	border-bottom: 1px solid rgba(var(--accent-primary-brighter-rgb), .25) !important;
 }
+
+/* Diary card-specific styles */
+.diary-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 1rem;
+}
+
+.diary-item {
+	margin-bottom: 0 !important; /* Override default card margin since we're using grid gap */
+	height: fit-content;
+}
+
+.diary-item .diary-title {
+	word-wrap: break-word;
+	word-break: break-word;
+	overflow-wrap: break-word;
+	hyphens: auto;
+	line-height: 1.4;
+	/* Limit title to maximum 3 lines */
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.diary-item .diary-content-trunc {
+	word-wrap: break-word;
+	word-break: break-word;
+	overflow-wrap: break-word;
+	hyphens: auto;
+	line-height: 1.4;
+	/* Limit content preview to maximum 4 lines */
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	line-clamp: 4;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* Responsive adjustments for diary grid */
+@media (max-width: 768px) {
+	.diary-grid {
+		grid-template-columns: 1fr;
+		gap: 0.75rem;
+	}
+	
+	.diary-item .diary-title {
+		-webkit-line-clamp: 2; /* Reduce to 2 lines on mobile */
+		line-clamp: 2;
+	}
+	
+	.diary-item .diary-content-trunc {
+		-webkit-line-clamp: 3; /* Reduce to 3 lines on mobile */
+		line-clamp: 3;
+	}
+}
