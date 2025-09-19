@@ -91,11 +91,11 @@
 
   function bindItemHandlers(node, data) {
     const delBtn = node.querySelector('.btn-delete');
-    delBtn && delBtn.addEventListener('click', () => deleteEntry(data._id));
-    node.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-delete')) return;
-      openDetailModal(data._id);
+    delBtn && delBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent triggering the delegated click handler
+      deleteEntry(data._id);
     });
+    // Removed duplicate click handler - using delegated click handler instead
   }
 
   async function deleteEntry(id) {
@@ -114,6 +114,12 @@
   function closeOtherModals() {
     document.querySelectorAll('.modal.show').forEach(m => {
       if (m !== modalEl && m !== detailModalEl) {
+        // Remove focus before hiding to prevent aria-hidden accessibility warnings
+        const focusedElement = m.querySelector(':focus');
+        if (focusedElement) {
+          focusedElement.blur();
+        }
+        
         const inst = bootstrap.Modal.getInstance(m);
         inst && inst.hide();
       }
@@ -233,11 +239,41 @@
       const data = await App.utils.fetchJSONUnified(`/api/diary/${id}/detail`, {
         dedupe: true
       });
-      renderDetail(data);
+      
+      // Safety check for renderDetail function
+      try {
+        renderDetail(data);
+      } catch (renderError) {
+        console.error('Error rendering diary detail:', renderError);
+        window.flash && window.flash('Error displaying diary entry', 'danger');
+        return;
+      }
+      
       closeOtherModals();
-      detailModal && detailModal.show();
+      if (detailModal) {
+        detailModal.show();
+      } else {
+        console.error('detailModal is not available');
+        window.flash && window.flash('Modal not available', 'danger');
+      }
     } catch (e) {
-      window.flash && window.flash('Failed to load', 'danger');
+      console.error('Failed to load diary detail:', e);
+      window.flash && window.flash(`Failed to load: ${e.message || 'Unknown error'}`, 'danger');
+    }
+  }
+
+  function safeFormatDate(dateValue) {
+    if (!dateValue) return 'Unknown date';
+    
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      return date.toISOString().slice(0, 16).replace('T', ' ');
+    } catch (e) {
+      console.warn('Date formatting error:', e, dateValue);
+      return 'Invalid date';
     }
   }
 
@@ -251,22 +287,73 @@
     } [c]));
   }
 
-  function renderInlineContent(raw, id) {
-    const esc = escapeHtml(raw);
-    const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform)
-      ? ImageUploader.thumbTransform(url, 280, 280, true)
-      : url;
+  function renderInlineContent(raw, id, markdownEnabled = false) {
+    if (!raw) return '';
+
+    const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform) ?
+      ImageUploader.thumbTransform(url, 280, 280, true) :
+      url;
 
     const group = id ? `diary-inline-${id}` : 'diary-inline';
-    const withImgs = esc.replace(
-      /!\[[^\]]*\]\((https?:[^)]+)\)/g,
-      (m, url) => {
-        const t = ikThumb(url);
-        return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${url}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='image'/>`;
-      }
-    );
 
-    return withImgs.replace(/\n/g, '<br/>');
+    if (markdownEnabled) {
+      // Basic markdown rendering
+      let processed = escapeHtml(raw);
+
+      // Images
+      processed = processed.replace(
+        /!\[[^\]]*\]\((https?:[^)]+)\)/g,
+        (m, url) => {
+          const t = ikThumb(url);
+          return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${url}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='image'/>`;
+        }
+      );
+
+      // Bold **text**
+      processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+      // Italic *text* (but not **text**)
+      processed = processed.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+
+      // Code `code`
+      processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Headers
+      processed = processed.replace(/^### (.+)$/gm, '<h5>$1</h5>');
+      processed = processed.replace(/^## (.+)$/gm, '<h4>$1</h4>');
+      processed = processed.replace(/^# (.+)$/gm, '<h3>$1</h3>');
+
+      // Links
+      processed = processed.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+      return formatTextWithWhitespace(processed);
+    } else {
+      // Plain text with preserved formatting
+      const esc = escapeHtml(raw);
+      const withImgs = esc.replace(
+        /!\[[^\]]*\]\((https?:[^)]+)\)/g,
+        (m, url) => {
+          const t = ikThumb(url);
+          return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${url}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='image'/>`;
+        }
+      );
+
+      return formatTextWithWhitespace(withImgs);
+    }
+  }
+
+  function formatTextWithWhitespace(text) {
+    // Preserve leading whitespace and convert newlines properly
+    return text
+      .split('\n')
+      .map(line => {
+        // Convert leading spaces/tabs to non-breaking spaces to preserve indentation
+        const leadingSpaces = line.match(/^(\s*)/)[1];
+        const restOfLine = line.slice(leadingSpaces.length);
+        const preservedSpaces = leadingSpaces.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        return preservedSpaces + restOfLine;
+      })
+      .join('<br/>');
   }
 
   function renderDetail(data) {
@@ -274,6 +361,8 @@
     const item = data.item || {};
     const root = detailModalEl.querySelector('[data-diary-detail-root]');
     if (!root) return;
+
+    // Set up title and category
     const titleEl = root.querySelector('[data-diary-detail-title]');
     if (titleEl) titleEl.textContent = item.title || '(Untitled)';
     const catEl = root.querySelector('[data-diary-detail-category]');
@@ -283,23 +372,48 @@
         catEl.classList.remove('d-none');
       } else catEl.classList.add('d-none');
     }
+
+    // Set up markdown toggle
+    const markdownToggle = root.querySelector('[data-diary-markdown-toggle]');
     const contentEl = root.querySelector('[data-diary-detail-content]');
-    if (contentEl) contentEl.innerHTML = renderInlineContent(item.content || '', item._id);
+
+    function updateContent() {
+      const markdownEnabled = markdownToggle?.checked || false;
+      if (contentEl) {
+        contentEl.innerHTML = renderInlineContent(item.content || '', item._id, markdownEnabled);
+      }
+      // Save preference
+      localStorage.setItem('diary-markdown-enabled', markdownEnabled);
+    }
+
+    // Load markdown preference
+    if (markdownToggle) {
+      markdownToggle.checked = localStorage.getItem('diary-markdown-enabled') === 'true';
+      markdownToggle.addEventListener('change', updateContent);
+    }
+
+    // Initial content render
+    updateContent();
     const commentsWrap = root.querySelector('[data-diary-comments]');
     if (commentsWrap) {
       const comments = data.comments || [];
       if (!comments.length) {
         commentsWrap.innerHTML = '<div class="text-muted">No comments</div>';
       } else {
-        const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform)
-          ? ImageUploader.thumbTransform(url, 320, 320, false)
-          : url;
+        const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform) ?
+          ImageUploader.thumbTransform(url, 320, 320, false) :
+          url;
         commentsWrap.innerHTML = comments.map(c => {
           const images = (c.images || []).map((u, i) => {
             const t = ikThumb(u);
             return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='diary-comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i + 1}' style='max-width:140px;max-height:140px;cursor:pointer;border:1px solid var(--border-color);border-radius:4px;object-fit:cover;'/></div>`
           }).join('');
-          return `<div class='diary-comment'><div class='body'><div class='content'>${escapeHtml(c.body)}</div>${images}<div class='meta d-flex align-items-center'><div class='datetime text-muted small'>${(new Date(c.created_at)).toISOString().slice(0, 16).replace('T', ' ')}</div><div class='ms-auto'><button class='btn btn-sm btn-outline-danger' data-comment-del='${c._id}'><i class='bi bi-trash'></i></button></div></div></div></div>`;
+          // Use shared comment formatter to preserve whitespace and formatting
+          const formattedText = window.CommentFormatter ?
+            window.CommentFormatter.formatText(c.body) :
+            escapeHtml(c.body).replace(/\n/g, '<br/>'); // fallback
+          const timestamp = safeFormatDate(c.created_at["$date"]);
+          return `<div class='diary-comment'><div class='body'><div class='content'>${formattedText}</div>${images}<div class='meta d-flex align-items-center'><div class='datetime text-muted small'>${timestamp}</div><div class='ms-auto'><button class='btn btn-sm btn-outline-danger' data-comment-del='${c._id}'><i class='bi bi-trash'></i></button></div></div></div></div>`;
         }).join('');
         commentsWrap.querySelectorAll('[data-comment-del]').forEach(btn => btn.addEventListener('click', async () => {
           const cid = btn.getAttribute('data-comment-del');
@@ -349,24 +463,138 @@
       const clearBtn = formC.querySelector('[data-diary-comment-images-clear]');
       const previewWrap = formC.querySelector('[data-diary-comment-images-preview]');
       let images = [];
-      function renderPreviews(){ if(!previewWrap) return; if(!images.length){ previewWrap.innerHTML=''; clearBtn?.classList.add('d-none'); return;} previewWrap.innerHTML = images.map((u,i)=>`<div class='position-relative' style='width:90px;height:90px;border:1px solid var(--border-color);border-radius:4px;overflow:hidden;'>\n<img src='${u}' style='object-fit:cover;width:100%;height:100%;'/>\n<button type='button' class='btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1' data-remove='${i}'><i class='bi bi-x'></i></button></div>`).join(''); clearBtn?.classList.remove('d-none'); previewWrap.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',()=>{ const idx=parseInt(b.getAttribute('data-remove'),10); if(!isNaN(idx)){ images.splice(idx,1); renderPreviews(); }})); }
-      async function uploadDataUrl(dataUrl,label){ try{ const res = await App.utils.fetchJSONUnified('/api/diary-images',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({image:dataUrl})}); images.push(res.url); renderPreviews(); window.flash && window.flash(label+' image ready','info'); } catch(_){ window.flash && window.flash(label+' upload failed','danger'); } }
-      function handleFiles(fileList,label){ Array.from(fileList||[]).forEach(f=>{ if(!f.type.startsWith('image/')) return; if(f.size>16*1024*1024){ window.flash && window.flash('Image too large','warning'); return;} const r=new FileReader(); r.onload=()=> uploadDataUrl(r.result,label); r.readAsDataURL(f); }); }
-      trigger && trigger.addEventListener('click',()=> fileInput && fileInput.click());
-      clearBtn && clearBtn.addEventListener('click',()=>{ images=[]; renderPreviews(); });
-      fileInput && fileInput.addEventListener('change',()=>{ handleFiles(fileInput.files,'Selected'); fileInput.value=''; });
-      document.addEventListener('paste', e=>{ if(!detailModalEl.classList.contains('show')) return; const active=document.activeElement; if(!formC.contains(active)) return; const items=e.clipboardData?.items||[]; const files=[]; for(const it of items){ if(it.type?.startsWith('image/')){ const f=it.getAsFile(); if(f) files.push(f);} } if(files.length){ if(!confirm('Paste image(s) into comment?')) return; handleFiles(files,'Pasted'); }});
+
+      function renderPreviews() {
+        if (!previewWrap) return;
+        if (!images.length) {
+          previewWrap.innerHTML = '';
+          clearBtn?.classList.add('d-none');
+          return;
+        }
+        previewWrap.innerHTML = images.map((u, i) => `<div class='position-relative' style='width:90px;height:90px;border:1px solid var(--border-color);border-radius:4px;overflow:hidden;'>\n<img src='${u}' style='object-fit:cover;width:100%;height:100%;'/>\n<button type='button' class='btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1' data-remove='${i}'><i class='bi bi-x'></i></button></div>`).join('');
+        clearBtn?.classList.remove('d-none');
+        previewWrap.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => {
+          const idx = parseInt(b.getAttribute('data-remove'), 10);
+          if (!isNaN(idx)) {
+            images.splice(idx, 1);
+            renderPreviews();
+          }
+        }));
+      }
+      async function uploadDataUrl(dataUrl, label) {
+        try {
+          const res = await App.utils.fetchJSONUnified('/api/diary-images', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              image: dataUrl
+            })
+          });
+          images.push(res.url);
+          renderPreviews();
+          window.flash && window.flash(label + ' image ready', 'info');
+        } catch (_) {
+          window.flash && window.flash(label + ' upload failed', 'danger');
+        }
+      }
+
+      function handleFiles(fileList, label) {
+        Array.from(fileList || []).forEach(f => {
+          if (!f.type.startsWith('image/')) return;
+          if (f.size > 16 * 1024 * 1024) {
+            window.flash && window.flash('Image too large', 'warning');
+            return;
+          }
+          const r = new FileReader();
+          r.onload = () => uploadDataUrl(r.result, label);
+          r.readAsDataURL(f);
+        });
+      }
+      trigger && trigger.addEventListener('click', () => fileInput && fileInput.click());
+      clearBtn && clearBtn.addEventListener('click', () => {
+        images = [];
+        renderPreviews();
+      });
+      fileInput && fileInput.addEventListener('change', () => {
+        handleFiles(fileInput.files, 'Selected');
+        fileInput.value = '';
+      });
+      document.addEventListener('paste', e => {
+        if (!detailModalEl.classList.contains('show')) return;
+        const active = document.activeElement;
+        if (!formC.contains(active)) return;
+        const items = e.clipboardData?.items || [];
+        const files = [];
+        for (const it of items) {
+          if (it.type?.startsWith('image/')) {
+            const f = it.getAsFile();
+            if (f) files.push(f);
+          }
+        }
+        if (files.length) {
+          if (!confirm('Paste image(s) into comment?')) return;
+          handleFiles(files, 'Pasted');
+        }
+      });
       // Restore draft on modal show
       detailModalEl.addEventListener('show.bs.modal', () => {
-        const did = formC.dataset.diaryId; if(!did) return; const d = diaryDrafts[did];
-        if (d) { formC.querySelector('[name="body"]').value = d.body || ''; images = Array.from(d.images||[]); renderPreviews(); }
+        const did = formC.dataset.diaryId;
+        if (!did) return;
+        const d = diaryDrafts[did];
+        if (d) {
+          formC.querySelector('[name="body"]').value = d.body || '';
+          images = Array.from(d.images || []);
+          renderPreviews();
+        }
       });
       // Save draft on input
-      formC.addEventListener('input', () => { const did=formC.dataset.diaryId; if(!did) return; diaryDrafts[did] = diaryDrafts[did]||{}; diaryDrafts[did].body = formC.querySelector('[name="body"]').value; diaryDrafts[did].images = [...images]; });
+      formC.addEventListener('input', () => {
+        const did = formC.dataset.diaryId;
+        if (!did) return;
+        diaryDrafts[did] = diaryDrafts[did] || {};
+        diaryDrafts[did].body = formC.querySelector('[name="body"]').value;
+        diaryDrafts[did].images = [...images];
+      });
       // Observe dataset change (diaryId switching)
-      const obs = new MutationObserver(()=>{ const did=formC.dataset.diaryId; if(!did) return; const d=diaryDrafts[did]; formC.querySelector('[name="body"]').value = d?.body || ''; images = Array.from(d?.images||[]); renderPreviews(); });
-      obs.observe(formC,{attributes:true, attributeFilter:['data-diary-id']});
-      formC.addEventListener('submit', async e=>{ e.preventDefault(); const diaryId=formC.dataset.diaryId; if(!diaryId) return; const fd=new FormData(formC); const body=fd.get('body')?.toString().trim(); if(!body && !images.length) return; try { await App.utils.fetchJSONUnified(`/api/diary/${diaryId}/comments`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({body, images})}); formC.reset(); images=[]; renderPreviews(); delete diaryDrafts[diaryId]; openDetailModal(diaryId); } catch(_){} });
+      const obs = new MutationObserver(() => {
+        const did = formC.dataset.diaryId;
+        if (!did) return;
+        const d = diaryDrafts[did];
+        formC.querySelector('[name="body"]').value = d?.body || '';
+        images = Array.from(d?.images || []);
+        renderPreviews();
+      });
+      obs.observe(formC, {
+        attributes: true,
+        attributeFilter: ['data-diary-id']
+      });
+      formC.addEventListener('submit', async e => {
+        e.preventDefault();
+        const diaryId = formC.dataset.diaryId;
+        if (!diaryId) return;
+        const fd = new FormData(formC);
+        const body = fd.get('body')?.toString().trim();
+        if (!body && !images.length) return;
+        try {
+          await App.utils.fetchJSONUnified(`/api/diary/${diaryId}/comments`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              body,
+              images
+            })
+          });
+          formC.reset();
+          images = [];
+          renderPreviews();
+          delete diaryDrafts[diaryId];
+          openDetailModal(diaryId);
+        } catch (_) {}
+      });
     }
     const editBtn = root.querySelector('[data-diary-detail-edit-btn]');
     const saveBtn = root.querySelector('[data-diary-detail-save-btn]');
@@ -406,8 +634,12 @@
           try {
             const res = await App.utils.fetchJSONUnified('/api/diary-images', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: reader.result })
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                image: reader.result
+              })
             });
             // Replace specific placeholder
             editContent.value = editContent.value.replace(`![uploading-${idTag}]()`, `![img](${res.url})`);
@@ -423,7 +655,7 @@
         for (const f of files) {
           if (!confirm(`Insert ${label} image?`)) return; // one confirm per action batch
           const id = insertUploadingPlaceholder();
-            uploadAndReplace(f, id);
+          uploadAndReplace(f, id);
         }
       }
 
@@ -513,16 +745,75 @@
 
   // Inline image pasting for create modal content input
   // Create modal content enhancements (paste / drag / file select)
-  if(contentInput){
+  if (contentInput) {
     const fileInput = modalEl.querySelector('[data-diary-content-image]');
     const trigger = modalEl.querySelector('[data-diary-content-image-trigger]');
-    trigger && trigger.addEventListener('click',()=> fileInput && fileInput.click());
-    async function uploadContentFiles(files,label){ for(const f of files){ if(!f.type.startsWith('image/')) continue; if(f.size>16*1024*1024){ window.flash && window.flash('Image too large','warning'); continue;} if(!confirm('Insert image into entry?')) return; const placeholder='\n![uploading]()'; const start=contentInput.selectionStart, end=contentInput.selectionEnd; const orig=contentInput.value; contentInput.value = orig.slice(0,start)+placeholder+orig.slice(end); contentInput.selectionStart=contentInput.selectionEnd=start+placeholder.length; const r=new FileReader(); r.onload= async ()=>{ try{ const res= await App.utils.fetchJSONUnified('/api/diary-images',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({image:r.result})}); contentInput.value = contentInput.value.replace('![uploading]()', `![img](${res.url})`); } catch(_){ contentInput.value = contentInput.value.replace('![uploading]()','(image failed)'); }}; r.readAsDataURL(f);} }
-    fileInput && fileInput.addEventListener('change',()=>{ uploadContentFiles(Array.from(fileInput.files||[]),'Selected'); fileInput.value=''; });
-    contentInput.addEventListener('paste', e=>{ const items=e.clipboardData?.items||[]; const files=[]; for(const it of items){ if(it.type?.startsWith('image/')){ const f=it.getAsFile(); if(f) files.push(f);} } if(files.length){ e.preventDefault(); uploadContentFiles(files,'Pasted'); }});
-    contentInput.addEventListener('dragover', e=>{ e.preventDefault(); });
-    contentInput.addEventListener('drop', e=>{ e.preventDefault(); const files=Array.from(e.dataTransfer?.files||[]); if(files.length) uploadContentFiles(files,'Dropped'); });
+    trigger && trigger.addEventListener('click', () => fileInput && fileInput.click());
+    async function uploadContentFiles(files, label) {
+      for (const f of files) {
+        if (!f.type.startsWith('image/')) continue;
+        if (f.size > 16 * 1024 * 1024) {
+          window.flash && window.flash('Image too large', 'warning');
+          continue;
+        }
+        if (!confirm('Insert image into entry?')) return;
+        const placeholder = '\n![uploading]()';
+        const start = contentInput.selectionStart,
+          end = contentInput.selectionEnd;
+        const orig = contentInput.value;
+        contentInput.value = orig.slice(0, start) + placeholder + orig.slice(end);
+        contentInput.selectionStart = contentInput.selectionEnd = start + placeholder.length;
+        const r = new FileReader();
+        r.onload = async () => {
+          try {
+            const res = await App.utils.fetchJSONUnified('/api/diary-images', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                image: r.result
+              })
+            });
+            contentInput.value = contentInput.value.replace('![uploading]()', `![img](${res.url})`);
+          } catch (_) {
+            contentInput.value = contentInput.value.replace('![uploading]()', '(image failed)');
+          }
+        };
+        r.readAsDataURL(f);
+      }
+    }
+    fileInput && fileInput.addEventListener('change', () => {
+      uploadContentFiles(Array.from(fileInput.files || []), 'Selected');
+      fileInput.value = '';
+    });
+    contentInput.addEventListener('paste', e => {
+      const items = e.clipboardData?.items || [];
+      const files = [];
+      for (const it of items) {
+        if (it.type?.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length) {
+        e.preventDefault();
+        uploadContentFiles(files, 'Pasted');
+      }
+    });
+    contentInput.addEventListener('dragover', e => {
+      e.preventDefault();
+    });
+    contentInput.addEventListener('drop', e => {
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (files.length) uploadContentFiles(files, 'Dropped');
+    });
   }
+
+  // Set up modal cleanup
+  window.CommentFormatter && window.CommentFormatter.setupModalCleanup(modalEl, ['[data-diary-form]']);
+  window.CommentFormatter && window.CommentFormatter.setupModalCleanup(detailModalEl, ['[data-diary-comment-form]']);
 
   apiList();
 })();

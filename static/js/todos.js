@@ -386,7 +386,13 @@
 			} else dueEl.classList.add('d-none');
 		}
 		const descEl = detailModalEl.querySelector('[data-todo-detail-description]');
-		if (descEl) descEl.textContent = item.description || '';
+		if (descEl) {
+			// Use shared comment formatter to preserve whitespace and formatting
+			const formattedDesc = window.CommentFormatter ? 
+				window.CommentFormatter.formatText(item.description || '') : 
+				escapeHtml(item.description || '').replace(/\n/g, '<br/>'); // fallback
+			descEl.innerHTML = formattedDesc;
+		}
 		const metaEl = detailModalEl.querySelector('[data-todo-detail-meta]');
 		if (metaEl) {
 			metaEl.textContent = '';
@@ -405,10 +411,14 @@
 				: url;
 				commentsWrap.innerHTML = comments.map(c => {
 					const images = (c.images || []).map((u,i) => { const t = ikThumb(u); return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='todo-comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i+1}' style='max-width:140px;max-height:140px;height:auto;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;object-fit:cover;'/></div>`}).join('');
+					// Use shared comment formatter to preserve whitespace and formatting
+					const formattedText = window.CommentFormatter ? 
+						window.CommentFormatter.formatText(c.body) : 
+						escapeHtml(c.body).replace(/\n/g, '<br/>'); // fallback
 					return `
             <div class='todo-comment'>
               <div class='body'>
-                <div class='content'>${escapeHtml(c.body)}</div>
+                <div class='content'>${formattedText}</div>
                 ${images}
                 <div class='meta d-flex align-items-center'>
                   <div class='datetime text-muted'>${fmtDateTime(c.created_at)}</div>
@@ -681,5 +691,9 @@
 
 	// Don't force label here beyond default; after first fetch user preference will set it.
 	updateFilterBtnActive();
+	
+	// Set up modal cleanup
+	window.CommentFormatter && window.CommentFormatter.setupModalCleanup(detailModalEl, ['[data-todo-comment-form]']);
+	
 	apiList();
 })();

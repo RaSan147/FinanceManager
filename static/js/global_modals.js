@@ -11,6 +11,88 @@
     }
   };
 
+  // -------------- Shared Comment & Text Formatting Functions --------------
+  
+  /**
+   * Format comment text while preserving whitespace and line breaks
+   * @param {string} text - The raw comment text
+   * @returns {string} HTML formatted text with preserved formatting
+   */
+  function formatCommentText(text) {
+    if (!text) return '';
+    
+    // Escape HTML for security
+    const escaped = text.replace(/[&<>"']/g, c => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      '\'': '&#39;'
+    }[c]));
+    
+    // Preserve leading whitespace and convert newlines properly
+    return escaped
+      .split('\n')
+      .map(line => {
+        // Convert leading spaces/tabs to non-breaking spaces to preserve indentation
+        const leadingSpaces = line.match(/^(\s*)/)[1];
+        const restOfLine = line.slice(leadingSpaces.length);
+        const preservedSpaces = leadingSpaces
+          .replace(/ /g, '&nbsp;')
+          .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        return preservedSpaces + restOfLine;
+      })
+      .join('<br/>');
+  }
+
+  /**
+   * Clear modal form data when modal is closed to prevent state issues
+   * @param {HTMLElement} modalElement - The modal element
+   * @param {string[]} formSelectors - Array of form selectors within the modal
+   */
+  function setupModalCleanup(modalElement, formSelectors = ['form']) {
+    if (!modalElement) return;
+    
+    // Fix aria-hidden accessibility issue by removing focus before hiding
+    modalElement.addEventListener('hide.bs.modal', () => {
+      // Remove focus from any focused elements inside the modal
+      const focusedElement = modalElement.querySelector(':focus');
+      if (focusedElement && modalElement.contains(focusedElement)) {
+        focusedElement.blur();
+      }
+      
+      // Also ensure aria-hidden is handled properly
+      setTimeout(() => {
+        modalElement.removeAttribute('aria-hidden');
+      }, 10);
+    });
+    
+    modalElement.addEventListener('hidden.bs.modal', () => {
+      formSelectors.forEach(selector => {
+        const forms = modalElement.querySelectorAll(selector);
+        forms.forEach(form => {
+          form.reset();
+          // Clear any dynamically added content
+          const imagePreview = form.querySelector('[data-comment-images-preview], [data-diary-comment-images-preview], [data-todo-comment-images-preview]');
+          if (imagePreview) imagePreview.innerHTML = '';
+          
+          // Clear hidden inputs
+          const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
+          hiddenInputs.forEach(input => input.value = '');
+        });
+      });
+      
+      // Ensure proper cleanup of any remaining focus issues
+      modalElement.removeAttribute('aria-hidden');
+    });
+  }
+
+  // Make these functions globally available
+  window.CommentFormatter = {
+    formatText: formatCommentText,
+    setupModalCleanup: setupModalCleanup
+  };
+
   // ---------------- Transaction Modal Lazy Wrapper -----------------
   function ensureTransactionModal(){
     if (window.TransactionModal && typeof window.TransactionModal.openCreate === 'function') return true; // transactions.js already loaded
