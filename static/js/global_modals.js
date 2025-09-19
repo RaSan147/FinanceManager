@@ -39,8 +39,33 @@
       const inc = categorySelect.querySelector('[data-group-income]');
       const exp = categorySelect.querySelector('[data-group-expense]');
       if(!inc||!exp) return;
-      if(typeVal==='income'){ inc.style.display=''; exp.style.display='none'; }
-      else { exp.style.display=''; inc.style.display='none'; }
+      
+      // Store current value to restore it after showing/hiding optgroups
+      const currentValue = categorySelect.value;
+      
+      if(typeVal==='income'){ 
+        inc.style.display=''; 
+        exp.style.display='none'; 
+      } else { 
+        exp.style.display=''; 
+        inc.style.display='none'; 
+      }
+      
+      // Restore the previous value if it's still visible in the current type
+      if (currentValue) {
+        const isValidForType = Array.from(categorySelect.options).some(opt => 
+          opt.value === currentValue && opt.offsetParent !== null
+        );
+        if (isValidForType) {
+          categorySelect.value = currentValue;
+        } else {
+          // Category not valid for this type, reset to placeholder
+          categorySelect.value = '';
+        }
+      } else {
+        // Ensure placeholder is selected when no previous value
+        categorySelect.value = '';
+      }
     }
     function loanKind(category){
       const v=(category||'').toLowerCase();

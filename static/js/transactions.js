@@ -26,6 +26,9 @@
 
 
   function filterCategoriesForType(typeVal) {
+    // Store current value to restore it after rebuilding
+    const currentValue = categorySelect.value;
+    
     // Clear current select
     categorySelect.innerHTML = '';
 
@@ -45,8 +48,17 @@
       }
     });
 
-    // Reset value
-    categorySelect.value = '';
+    // Restore the previous value if it exists in the new options, otherwise select placeholder
+    if (currentValue) {
+      categorySelect.value = currentValue;
+      // If the value wasn't successfully set (category doesn't exist for this type), reset to placeholder
+      if (categorySelect.value !== currentValue) {
+        categorySelect.value = '';
+      }
+    } else {
+      // Ensure placeholder is selected when no previous value
+      categorySelect.value = '';
+    }
   }
 
 
@@ -91,14 +103,15 @@
     formEl.amount.value = tx.amount_original || tx.amount || '';
     formEl.currency.value = tx.currency || window.currencyCode || '';
     formEl.type.value = tx.type || 'income';
-    formEl.category.value = tx.category || '';
     formEl.description.value = tx.description || '';
     formEl.date.value = dateISO || new Date().toISOString().slice(0, 10);
     formEl.related_person.value = tx.related_person || '';
     titleEl.textContent = 'Edit Transaction';
     submitBtn.textContent = 'Update';
     updateCurrencySymbol();
+    // Filter categories first, then set the category value
     filterCategoriesForType(formEl.type.value);
+    formEl.category.value = tx.category || '';
     bsModal.show();
     refreshCounterparties();
   }
