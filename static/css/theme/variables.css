@@ -88,3 +88,43 @@
 
 	--bs-success-bg-subtle: #0b5750;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ////////////////////////////////////// */
+:root {
+	/* Additional color refinements */
+    --accent-success: rgb(34, 197, 94);
+    --accent-success-rgb: 34, 197, 94;
+    --accent-warning: rgb(245, 158, 11);
+    --accent-warning-rgb: 245, 158, 11;
+    
+    /* Enhanced shadow variables */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    
+    /* Focus states */
+    --focus-ring: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.25);
+}
+
+[data-theme="dark"] {
+    /* Dark mode refinements */
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    
+    /* Enhanced dark mode colors */
+    /* --accent-secondary: #4b5563; */
+}
