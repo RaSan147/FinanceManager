@@ -342,8 +342,10 @@
   // Pre-compile regex patterns for better performance
   const markdownPatterns = {
     headers: /^#{1,6}\s+(.+)$/gm,
-    bold: /(\*\*|__)(?=\S)(.*?\S)\1/g,
-    italic: /(\*|_)(?=\S)(.*?\S)\1/g,
+    // FIX: Use more specific regex for bold to avoid mid-word matches
+    bold: /(?<!\w)(\*\*|__)(?=\S)(.+?[*_]*)(?<=\S)\1(?!\w)/g,
+    // FIX: Use more specific regex for italic to avoid mid-word matches
+    italic: /(?<!\w)(\*|_)(?=\S)(.+?)(?<=\S)\1(?!\w)/g,
     codeBlock: /```([\s\S]*?)```/gm,
     inlineCode: /`([^`]+)`/g,
     blockquote: /^>\s+(.+)$/gm,
@@ -428,6 +430,15 @@
       processed = processed.replace(/:::CODEBLOCK(\d+):::/g, (match, index) => {
         return `<pre><code>${escapeHtml(codeBlocks[parseInt(index)], false)}</code></pre>`;
       });
+      
+      // FIX: Clean up extra newlines around block elements to prevent double spacing
+      const blockTags = ['h3', 'h4', 'h5', 'h6', 'hr', 'blockquote', 'pre', 'ul', 'ol'];
+      blockTags.forEach(tag => {
+          const reBefore = new RegExp(`\\n+\\s*(<${tag}[^>]*>)`, 'g');
+          processed = processed.replace(reBefore, '$1');
+          const reAfter = new RegExp(`(<\\/${tag}>)\\s*\\n+`, 'g');
+          processed = processed.replace(reAfter, '$1');
+      });
 
       return formatTextWithWhitespace(processed);
     } else {
@@ -439,46 +450,55 @@
   }
 
   function processLists(text) {
-    // Process ordered and unordered lists with nesting support
-    let processed = text;
+    // This is a robust, stack-based list parser.
+    const listBlockRegex = /((?:^\s*[-*+]\s+.*\n?)|(?:^\s*\d+\.\s+.*\n?))+/gm;
 
-    // Process unordered lists
-    processed = processed.replace(markdownPatterns.unorderedList, (match, indentation, content) => {
-      const level = Math.min(Math.floor(indentation.length / 2), 4); // Max 5 levels deep (0-4)
-      return `<li class="nesting-level-${level}">${content}</li>`;
+    return text.replace(listBlockRegex, (listBlock) => {
+        const lines = listBlock.trim().split('\n');
+        let html = '';
+        const stack = []; // To track open list types and levels, e.g., { type: 'ul', level: 0 }
+        const itemRegex = /^(\s*)([-*+]|\d+\.)\s+(.*)/;
+
+        for (const line of lines) {
+            const match = line.match(itemRegex);
+            if (!match) continue;
+
+            const indent = match[1].length;
+            const level = Math.floor(indent / 2); // Assuming 2 spaces per indentation level
+            const type = /^\s*\d+\.\s+/.test(line) ? 'ol' : 'ul';
+            const content = match[3];
+
+            // Close deeper levels if we are moving up the tree
+            while (stack.length > 0 && level < stack.length) {
+                html += `</li></${stack.pop().type}>`;
+            }
+
+            // Close the previous list item if at the same level
+            if (stack.length > 0 && level < stack.length) {
+                html += `</li>`;
+            }
+
+            // Open new list(s) if we are moving deeper
+            while (level >= stack.length) {
+                // Check if list type has changed at the same level
+                if (level < stack.length && stack[level].type !== type) {
+                    html += `</${stack.pop().type}>`; // Close previous type
+                }
+                html += `<${type}>`;
+                stack.push({ type });
+            }
+            
+            // Add the list item
+            html += `<li>${content}`;
+        }
+
+        // At the end, close all remaining open tags
+        while (stack.length > 0) {
+            html += `</li></${stack.pop().type}>`;
+        }
+
+        return html;
     });
-
-    // Process ordered lists
-    processed = processed.replace(markdownPatterns.orderedList, (match, indentation, content) => {
-      const level = Math.min(Math.floor(indentation.length / 2), 4); // Max 5 levels deep (0-4)
-      return `<li class="nesting-level-${level}">${content}</li>`;
-    });
-
-    // Group list items into lists
-    processed = processed.replace(/(<li class="nesting-level-0">.*?<\/li>)+/g, match => {
-      return `<ul>${match}</ul>`;
-    });
-
-    for (let i = 1; i <= 4; i++) {
-      processed = processed.replace(new RegExp(`<li class="nesting-level-${i}">.*?<\\/li>`, "g"), match => {
-        return match;
-      });
-
-      processed = processed.replace(new RegExp(`(<li class="nesting-level-${i-1}">.*?)(<li class="nesting-level-${i}">.*?<\\/li>)+(.*?<\\/li>)`, "gs"), (match, before, nestedItems, after) => {
-        return `${before}<ul>${nestedItems}</ul>${after}`;
-      });
-    }
-
-    // Convert ordered list items (numbers followed by dots)
-    processed = processed.replace(/<ul>((\s*<li>.*?<\/li>\s*)+)<\/ul>/gs, (match, items) => {
-      // Check if the first item starts with a number (ordered list)
-      if (/<li>(\d+)\./.test(items)) {
-        return `<ol>${items}</ol>`;
-      }
-      return match;
-    });
-
-    return processed;
   }
 
   function formatTextWithWhitespace(text) {

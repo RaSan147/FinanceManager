@@ -1,185 +1,193 @@
+.markdown-content {
+    line-height: 1.7;
+    font-size: 1.05rem;
+}
 
-        .markdown-content {
-            line-height: 1.7;
-            font-size: 1.05rem;
-        }
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 1.8rem;
+    margin-bottom: 1.2rem;
+    color: #343a40;
+    font-weight: 600;
+}
 
-        .markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4, .markdown-content h5, .markdown-content h6 {
-            margin-top: 1.8rem;
-            margin-bottom: 1.2rem;
-            color: #343a40;
-            font-weight: 600;
-        }
+.markdown-content h1 {
+    font-size: 2.3rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.5rem;
+}
 
-        .markdown-content h1 {
-            font-size: 2.3rem;
-            border-bottom: 2px solid var(--primary-color);
-            padding-bottom: 0.5rem;
-        }
+.markdown-content h2 {
+    font-size: 1.9rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3rem;
+}
 
-        .markdown-content h2 {
-            font-size: 1.9rem;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0.3rem;
-        }
+.markdown-content h3 {
+    font-size: 1.6rem;
+    color: var(--primary-color);
+}
 
-        .markdown-content h3 {
-            font-size: 1.6rem;
-            color: var(--primary-color);
-        }
+.markdown-content p {
+    margin-bottom: 1.2rem;
+}
 
-        .markdown-content p {
-            margin-bottom: 1.2rem;
-        }
+.markdown-content blockquote {
+    background: linear-gradient(to right, var(--secondary-color) 0%, rgba(255, 255, 255, 0.9) 100%);
+    border-left: 4px solid var(--primary-color);
+    padding: 1.2rem 1.8rem;
+    margin: 1.8rem 0;
+    font-style: italic;
+    color: #495057;
+    border-radius: 0 6px 6px 0;
+    position: relative;
+}
 
-        .markdown-content blockquote {
-            background: linear-gradient(to right, var(--secondary-color) 0%, rgba(255,255,255,0.9) 100%);
-            border-left: 4px solid var(--primary-color);
-            padding: 1.2rem 1.8rem;
-            margin: 1.8rem 0;
-            font-style: italic;
-            color: #495057;
-            border-radius: 0 6px 6px 0;
-            position: relative;
-        }
+.markdown-content blockquote:before {
+    content: '"';
+    position: absolute;
+    top: -20px;
+    left: 10px;
+    font-size: 4rem;
+    color: var(--primary-color);
+    opacity: 0.2;
+    font-family: Georgia, serif;
+}
 
-        .markdown-content blockquote:before {
-            content: """;
-            position: absolute;
-            top: -20px;
-            left: 10px;
-            font-size: 4rem;
-            color: var(--primary-color);
-            opacity: 0.2;
-            font-family: Georgia, serif;
-        }
+.markdown-content pre {
+    background-color: #2d2d2d;
+    color: #f8f9fa;
+    padding: 1.2rem;
+    border-radius: 6px;
+    overflow: auto;
+    margin: 1.8rem 0;
+    border-left: 4px solid #ff6b6b;
+}
 
-        .markdown-content pre {
-            background-color: #2d2d2d;
-            color: #f8f9fa;
-            padding: 1.2rem;
-            border-radius: 6px;
-            overflow: auto;
-            margin: 1.8rem 0;
-            border-left: 4px solid #ff6b6b;
-        }
+.markdown-content code {
+    background-color: #f1f3f5;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95em;
+    color: #e83e8c;
+}
 
-        .markdown-content code {
-            background-color: #f1f3f5;
-            padding: 0.2rem 0.4rem;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.95em;
-            color: #e83e8c;
-        }
+.markdown-content pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
+}
 
-        .markdown-content pre code {
-            background: none;
-            padding: 0;
-            border-radius: 0;
-            color: inherit;
-        }
+/* Enhanced list styling with unique bullets for each level */
+.markdown-content ul,
+.markdown-content ol {
+    margin-bottom: 1.5rem;
+    padding-left: 2.2rem;
+}
 
-        /* Enhanced list styling with unique bullets for each level */
-        .markdown-content ul, .markdown-content ol {
-            margin-bottom: 1.5rem;
-            padding-left: 2.2rem;
-        }
+.markdown-content li {
+    margin-bottom: 0.7rem;
+    position: relative;
+}
 
-        .markdown-content li {
-            margin-bottom: 0.7rem;
-            position: relative;
-        }
+/* Level 1 bullets */
+.markdown-content ul>li::before {
+    content: "•";
+    color: var(--primary-color);
+    font-weight: bold;
+    display: inline-block;
+    width: 1.2em;
+    margin-left: -1.2em;
+}
 
-        /* Level 1 bullets */
-        .markdown-content ul > li::before {
-            content: "•";
-            color: var(--primary-color);
-            font-weight: bold;
-            display: inline-block;
-            width: 1.2em;
-            margin-left: -1.2em;
-        }
+/* Level 2 bullets */
+.markdown-content ul ul>li::before {
+    content: "◦";
+    color: #6c757d;
+}
 
-        /* Level 2 bullets */
-        .markdown-content ul ul > li::before {
-            content: "◦";
-            color: #6c757d;
-        }
+/* Level 3 bullets */
+.markdown-content ul ul ul>li::before {
+    content: "▪";
+    color: #ff6b6b;
+}
 
-        /* Level 3 bullets */
-        .markdown-content ul ul ul > li::before {
-            content: "▪";
-            color: #ff6b6b;
-        }
+/* Level 4 bullets */
+.markdown-content ul ul ul ul>li::before {
+    content: "▫";
+    color: #20c997;
+}
 
-        /* Level 4 bullets */
-        .markdown-content ul ul ul ul > li::before {
-            content: "▫";
-            color: #20c997;
-        }
+/* Level 5 bullets */
+.markdown-content ul ul ul ul ul>li::before {
+    content: "★";
+    color: #fd7e14;
+    font-size: 0.9em;
+}
 
-        /* Level 5 bullets */
-        .markdown-content ul ul ul ul ul > li::before {
-            content: "★";
-            color: #fd7e14;
-            font-size: 0.9em;
-        }
+/* Ordered list styling */
+.markdown-content ol {
+    list-style-type: decimal;
+}
 
-        /* Ordered list styling */
-        .markdown-content ol {
-            list-style-type: decimal;
-        }
+.markdown-content ol ol {
+    list-style-type: lower-alpha;
+}
 
-        .markdown-content ol ol {
-            list-style-type: lower-alpha;
-        }
+.markdown-content ol ol ol {
+    list-style-type: lower-roman;
+}
 
-        .markdown-content ol ol ol {
-            list-style-type: lower-roman;
-        }
+.markdown-content ol ol ol ol {
+    list-style-type: upper-alpha;
+}
 
-        .markdown-content ol ol ol ol {
-            list-style-type: upper-alpha;
-        }
+.markdown-content ol ol ol ol ol {
+    list-style-type: upper-roman;
+}
 
-        .markdown-content ol ol ol ol ol {
-            list-style-type: upper-roman;
-        }
+.markdown-content ul ul,
+.markdown-content ol ul,
+.markdown-content ul ol,
+.markdown-content ol ol {
+    margin-top: 0.7rem;
+    margin-bottom: 0.7rem;
+}
 
-        .markdown-content ul ul, .markdown-content ol ul, 
-        .markdown-content ul ol, .markdown-content ol ol {
-            margin-top: 0.7rem;
-            margin-bottom: 0.7rem;
-        }
+.markdown-content hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.1), var(--primary-color), rgba(0, 0, 0, 0.1));
+    /* FIX: Reduced margin for less aggressive spacing */
+    margin: 1.5rem 0;
+    height: 2px;
+}
 
-        .markdown-content hr {
-            border: none;
-            height: 1px;
-            background: linear-gradient(to right, rgba(0,0,0,0.1), var(--primary-color), rgba(0,0,0,0.1));
-            margin: 2.5rem 0;
-            height: 2px;
-        }
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 1.2rem 0;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+}
 
-        .markdown-content img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            margin: 1.2rem 0;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            border: 1px solid var(--border-color);
-        }
+.markdown-content a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px dotted var(--primary-color);
+    transition: all 0.2s ease;
+}
 
-        .markdown-content a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-            border-bottom: 1px dotted var(--primary-color);
-            transition: all 0.2s ease;
-        }
-
-        .markdown-content a:hover {
-            color: #5a32a3;
-            text-decoration: none;
-            border-bottom: 1px solid #5a32a3;
-        }
+.markdown-content a:hover {
+    color: #5a32a3;
+    text-decoration: none;
+    border-bottom: 1px solid #5a32a3;
+}
