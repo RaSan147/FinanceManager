@@ -56,6 +56,7 @@ body.dark-mode .card-header.bg-primary.text-white {
 .diary-item {
 	margin-bottom: 0 !important; /* Override default card margin since we're using grid gap */
 	height: fit-content;
+	cursor: pointer;
 }
 
 .diary-item .diary-title {
