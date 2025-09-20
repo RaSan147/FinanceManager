@@ -139,6 +139,7 @@ def _analysis_prompt(user: User) -> str:
         f"- Amounts are in {user.default_currency}.\n"
         "- Maintain a professional but encouraging tone.\n\n"
         "- Avoid duplicating tables/transactions that are already shown elsewhere in the main report."
+        "- Do not include any scripts/css files or external links. Bootstrap 5.3.8 is already loaded in the DOM.\n"
 
         f"\n\nUser Context: \n {json.dumps(financial_context, indent=2, default=str)}\n\n"
 
