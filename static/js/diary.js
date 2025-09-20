@@ -29,6 +29,10 @@
     items: []
   };
 
+  // Edit state cache and navigation warning flag
+  const diaryEditStateCache = {};
+  let hasUnsavedChanges = false;
+
   // Robust delegated click (backup in case per-item binding misses)
   listEl.addEventListener('click', e => {
     const item = e.target.closest('.diary-item');
@@ -141,6 +145,50 @@
     }, 30);
     detailModal?.hide();
   }
+
+  // Wire create-modal header controls after DOM available
+  (function wireCreateHeaderControls() {
+    const createMarkdownToggle = modalEl.querySelector('[data-diary-markdown-toggle]');
+    const createEditToggle = modalEl.querySelector('[data-diary-edit-toggle]');
+    const createSaveBtn = modalEl.querySelector('[data-diary-save-btn]');
+    const createCancelBtn = modalEl.querySelector('[data-diary-cancel-btn]');
+    const previewWrap = modalEl.querySelector('[data-diary-create-preview]');
+
+    function updateCreatePreview() {
+      const enabled = createMarkdownToggle?.checked;
+      if (!previewWrap) return;
+      if (enabled) {
+        previewWrap.style.display = '';
+        previewWrap.innerHTML = renderInlineContent(contentInput.value || '', 'create', true);
+      } else {
+        previewWrap.style.display = 'none';
+        previewWrap.innerHTML = '';
+      }
+    }
+
+    createMarkdownToggle && createMarkdownToggle.addEventListener('change', updateCreatePreview);
+
+    createEditToggle && createEditToggle.addEventListener('click', () => {
+      // Toggle preview (edit mode = show textarea, hide preview)
+      if (previewWrap && previewWrap.style.display === '') {
+        previewWrap.style.display = 'none';
+      } else if (previewWrap) {
+        previewWrap.style.display = '';
+        previewWrap.innerHTML = renderInlineContent(contentInput.value || '', 'create', createMarkdownToggle?.checked);
+      }
+    });
+
+    createCancelBtn && createCancelBtn.addEventListener('click', () => {
+      form.reset();
+      previewWrap && (previewWrap.style.display = 'none');
+      if (bsModal) bsModal.hide();
+    });
+
+    // Hook header save button to submit form
+    createSaveBtn && createSaveBtn.addEventListener('click', () => {
+      submitBtn && submitBtn.click();
+    });
+  })();
 
   function openEditModal(data) {
     form.reset();
@@ -275,6 +323,26 @@
       console.warn('Date formatting error:', e, dateValue);
       return 'Invalid date';
     }
+  }
+
+  // Ensure detail modal always starts in view mode
+  function switchToView() {
+    if (!detailModalEl) return;
+    const root = detailModalEl.querySelector('[data-diary-detail-root]');
+    if (!root) return;
+
+  const editForm = root.querySelector('[data-diary-detail-edit-form]');
+  // The header controls live in the modal header (moved out of the body), select from the modal element
+  const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+  const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+  const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+    const contentEl = root.querySelector('[data-diary-detail-content]');
+
+    if (editForm) editForm.classList.add('d-none');
+    if (contentEl) contentEl.classList.remove('d-none');
+    if (editBtn) editBtn.classList.remove('d-none');
+    if (saveBtn) saveBtn.classList.add('d-none');
+    if (cancelBtn) cancelBtn.classList.add('d-none');
   }
 
   // Cache markdown preferences
@@ -499,9 +567,16 @@
 
   function renderDetail(data) {
     if (!detailModalEl) return;
+
     const item = data.item || {};
     const root = detailModalEl.querySelector('[data-diary-detail-root]');
     if (!root) return;
+
+    const currentDiaryId = item._id;
+    root.dataset.currentDiaryId = currentDiaryId;
+
+    // Always start in view mode (we may switch to edit below based on cache)
+    switchToView();
 
     // Set up title and category
     const titleEl = root.querySelector('[data-diary-detail-title]');
@@ -515,8 +590,9 @@
     }
 
     // Set up markdown toggle
-    const markdownToggle = root.querySelector('[data-diary-markdown-toggle]');
-    const contentEl = root.querySelector('[data-diary-detail-content]');
+  // Markdown toggle and edit controls are now in the modal header, select from modal element
+  const markdownToggle = detailModalEl.querySelector('[data-diary-markdown-toggle]');
+  const contentEl = root.querySelector('[data-diary-detail-content]');
 
     function updateContent() {
       const markdownEnabled = markdownToggle?.checked || false;
@@ -575,25 +651,157 @@
     if (limitEl) limitEl.textContent = `${(data.comment_max || 4000)} chars max`;
     const formC = root.querySelector('[data-diary-comment-form]');
     if (formC) formC.dataset.diaryId = item._id;
-    // populate edit form
+    // populate edit form with cache awareness
     const editForm = root.querySelector('[data-diary-detail-edit-form]');
     if (editForm) {
-      editForm.querySelector('[data-diary-detail-edit-title]').value = item.title || '';
-      editForm.querySelector('[data-diary-detail-edit-category]').value = item.category || '';
-      editForm.querySelector('[data-diary-detail-edit-content]').value = item.content || '';
-      editForm.dataset.diaryId = item._id || '';
+      editForm.dataset.diaryId = currentDiaryId || '';
+
+      if (currentDiaryId && diaryEditStateCache[currentDiaryId]) {
+        // Restore from cache (unsaved changes)
+        const cached = diaryEditStateCache[currentDiaryId];
+        editForm.querySelector('[data-diary-detail-edit-title]').value = cached.title || '';
+        editForm.querySelector('[data-diary-detail-edit-category]').value = cached.category || '';
+        editForm.querySelector('[data-diary-detail-edit-content]').value = cached.content || '';
+
+        // Start in edit mode if we have cached unsaved changes
+        if (cached.isEditing) {
+          switchToEdit();
+        } else {
+          switchToView();
+        }
+      } else {
+        // Fresh data - no unsaved changes
+        editForm.querySelector('[data-diary-detail-edit-title]').value = item.title || '';
+        editForm.querySelector('[data-diary-detail-edit-category]').value = item.category || '';
+        editForm.querySelector('[data-diary-detail-edit-content]').value = item.content || '';
+        switchToView();
+      }
     }
-    const editBtn = root.querySelector('[data-diary-detail-edit-btn]');
-    const saveBtn = root.querySelector('[data-diary-detail-save-btn]');
-    const cancelBtn = root.querySelector('[data-diary-detail-cancel-btn]');
-    if (editBtn && saveBtn && cancelBtn && editForm) {
+  // Bind header controls (edit/save/cancel) which were moved to the modal header
+  const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+  const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+  const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+  if (editBtn && saveBtn && cancelBtn && editForm) {
       if (editForm.classList.contains('d-none')) {
         editBtn.classList.remove('d-none');
         saveBtn.classList.add('d-none');
         cancelBtn.classList.add('d-none');
       }
     }
+
+    // Ensure header buttons always trigger behavior even if DOM is re-rendered — delegate clicks from modal
+    if (!detailModalEl._headerClickBound) {
+      detailModalEl._headerClickBound = true;
+      detailModalEl.addEventListener('click', (e) => {
+        const rootInner = detailModalEl.querySelector('[data-diary-detail-root]');
+        const editFormInner = rootInner?.querySelector('[data-diary-detail-edit-form]');
+        if (e.target.closest('[data-diary-detail-edit-btn]')) {
+          // start editing
+          try { switchToEdit(); } catch (_) {}
+        }
+        if (e.target.closest('[data-diary-detail-cancel-btn]')) {
+          const diaryId = rootInner?.dataset.currentDiaryId;
+          if (diaryId) clearEditStateFromCache(diaryId);
+          try { switchToView(); } catch (_) {}
+          if (diaryId) openDetailModal(diaryId);
+        }
+        if (e.target.closest('[data-diary-detail-save-btn]')) {
+          // trigger the save button logic if present
+          const saveBtnInner = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+          saveBtnInner && saveBtnInner.click();
+        }
+      });
+    }
   }
+
+  // --- Edit state caching, navigation warnings, debounce helpers ---
+  function saveEditStateToCache(diaryId, root) {
+    const editForm = root.querySelector('[data-diary-detail-edit-form]');
+    if (!editForm) return;
+
+    const isEditing = !editForm.classList.contains('d-none');
+    const title = editForm.querySelector('[data-diary-detail-edit-title]').value;
+    const category = editForm.querySelector('[data-diary-detail-edit-category]').value;
+    const content = editForm.querySelector('[data-diary-detail-edit-content]').value;
+
+    const originalItem = state.items.find(item => item._id === diaryId);
+
+    const hasChanges = !originalItem ||
+      title !== (originalItem.title || '') ||
+      category !== (originalItem.category || '') ||
+      content !== (originalItem.content || '');
+
+    if (hasChanges || isEditing) {
+      diaryEditStateCache[diaryId] = {
+        isEditing,
+        title,
+        category,
+        content,
+        hasChanges
+      };
+      updateUnsavedChangesFlag();
+    } else {
+      delete diaryEditStateCache[diaryId];
+      updateUnsavedChangesFlag();
+    }
+  }
+
+  function updateUnsavedChangesFlag() {
+    hasUnsavedChanges = Object.values(diaryEditStateCache).some(s => !!s.hasChanges);
+    const originalTitle = document.title.replace(/^◌\s*/, '');
+    document.title = hasUnsavedChanges ? `◌ ${originalTitle}` : originalTitle;
+  }
+
+  function clearEditStateFromCache(diaryId) {
+    delete diaryEditStateCache[diaryId];
+    updateUnsavedChangesFlag();
+  }
+
+  function hasAnyUnsavedChanges() {
+    return hasUnsavedChanges;
+  }
+
+  function hasUnsavedChangesForDiary(diaryId) {
+    return !!(diaryEditStateCache[diaryId] && diaryEditStateCache[diaryId].hasChanges);
+  }
+
+  function getDiariesWithUnsavedChanges() {
+    return Object.keys(diaryEditStateCache).filter(id => diaryEditStateCache[id].hasChanges);
+  }
+
+  function setupNavigationWarnings() {
+    window.addEventListener('beforeunload', (e) => {
+      if (hasAnyUnsavedChanges()) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    });
+
+    if (window.addEventListener) {
+      window.addEventListener('popstate', (e) => {
+        if (hasAnyUnsavedChanges() && !confirm('You have unsaved changes. Are you sure you want to leave?')) {
+          history.pushState(null, '', window.location.href);
+          e.preventDefault();
+        }
+      });
+    }
+  }
+
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Initialize navigation warnings
+  setupNavigationWarnings();
 
   if (detailModalEl) {
     const root = detailModalEl.querySelector('[data-diary-detail-root]');
@@ -739,10 +947,11 @@
         } catch (_) {}
       });
     }
-    const editBtn = root.querySelector('[data-diary-detail-edit-btn]');
-    const saveBtn = root.querySelector('[data-diary-detail-save-btn]');
-    const cancelBtn = root.querySelector('[data-diary-detail-cancel-btn]');
-    const editForm = root.querySelector('[data-diary-detail-edit-form]');
+  // Use header controls for switching to edit/view
+  const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+  const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+  const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+  const editForm = root.querySelector('[data-diary-detail-edit-form]');
 
     // Bind inline image upload logic for the edit form (detail modal) once
     if (editForm && !editForm._inlineImgBound) {
@@ -839,22 +1048,23 @@
       cancelBtn.classList.remove('d-none');
     }
 
-    function switchToView() {
-      if (!editForm) return;
-      editForm.classList.add('d-none');
-      root.querySelector('[data-diary-detail-content]')?.classList.remove('d-none');
-      editBtn.classList.remove('d-none');
-      saveBtn.classList.add('d-none');
-      cancelBtn.classList.add('d-none');
-    }
+    // local switchToView behavior is handled by module-level `switchToView`
     editBtn && editBtn.addEventListener('click', e => {
       e.preventDefault();
       switchToEdit();
     });
     cancelBtn && cancelBtn.addEventListener('click', e => {
       e.preventDefault();
+      const diaryId = root?.dataset.currentDiaryId;
+      if (diaryId) {
+        // Clear cached state when explicitly canceling
+        clearEditStateFromCache(diaryId);
+      }
       switchToView();
+      // Reload fresh data to discard any changes
+      if (diaryId) openDetailModal(diaryId);
     });
+
     saveBtn && saveBtn.addEventListener('click', async e => {
       e.preventDefault();
       if (!editForm) return;
@@ -877,13 +1087,41 @@
           body: JSON.stringify(patch)
         });
         window.flash && window.flash('Updated', 'success');
+
+        // Clear cached edit state on successful save
+        clearEditStateFromCache(diaryId);
+
         switchToView();
-        openDetailModal(diaryId);
+        openDetailModal(diaryId); // Reload to get fresh data
         apiList();
       } catch (_) {
         window.flash && window.flash('Update failed', 'danger');
       }
     });
+
+    // Save edit state when modal is hidden
+    detailModalEl.addEventListener('hide.bs.modal', () => {
+      const rootHide = detailModalEl.querySelector('[data-diary-detail-root]');
+      const diaryId = rootHide?.dataset.currentDiaryId;
+      if (diaryId) saveEditStateToCache(diaryId, rootHide);
+    });
+
+    // Auto-save changes while editing (debounced)
+    if (editForm) {
+      const debouncedSaveState = debounce(() => {
+        const rootAuto = detailModalEl.querySelector('[data-diary-detail-root]');
+        const diaryId = rootAuto?.dataset.currentDiaryId;
+        if (diaryId && !editForm.classList.contains('d-none')) {
+          saveEditStateToCache(diaryId, rootAuto);
+        }
+      }, 500);
+      editForm.addEventListener('input', debouncedSaveState);
+    }
+  }
+
+  // Reset detail modal to view mode when hidden
+  if (detailModalEl) {
+    detailModalEl.addEventListener('hide.bs.modal', switchToView);
   }
 
   // Inline image pasting for create modal content input

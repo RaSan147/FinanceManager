@@ -169,12 +169,16 @@
 
 .markdown-content hr {
     border: none;
-    height: 1px;
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.1), var(--primary-color), rgba(0, 0, 0, 0.1));
-    /* FIX: Reduced margin for less aggressive spacing */
-    margin: 1.5rem 0;
     height: 2px;
+    margin: 1.5rem 0;
+    background: linear-gradient(
+        to right,
+        rgba(var(--accent-secondary-rgb), 0.3),
+        rgba(var(--accent-primary-rgb), 0.8),
+        rgba(var(--accent-secondary-rgb), 0.3)
+    );
 }
+
 
 .markdown-content img {
     max-width: 100%;

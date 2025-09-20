@@ -1,0 +1,231 @@
+/* Enhanced Toggle Switch
+   - improved contrast and visibility
+   - accessible focus styles
+   - clean, modern 'glow' and inner-shadow for depth
+   - supports disabled & dark mode
+*/
+
+:root {
+    /* sensible defaults; project variables (e.g. variables.css) will override these */
+    --switch-width: 2.0rem; /* 48px */
+    --switch-height: 1rem; /* 24px */
+    --switch-padding: 0px; /* padding inside track */
+    --knob-size: calc(var(--switch-height) - (var(--switch-padding) * 2));
+    --track-bg: var(--accent-muted, #e6e7ea);
+    --track-border: rgba(16,24,32,0.08);
+    --accent: var(--accent-primary, #0ea5a2);
+    --accent-rgb: 14,165,162;
+    --knob-bg: var(--knob-color, #ffffff);
+    --disabled-opacity: 0.45;
+    --focus-ring: rgba(var(--accent-rgb), 0.18);
+
+    /* Dark-mode specific accents (used when [data-theme="dark"]) */
+    --dm-accent-on: #008fbb; /* emerald-500 - clearly 'on' */
+    --dm-accent-off: #f97316; /* orange-500 - clear 'off' */
+    --dm-accent-on-rgb: 16,185,129;
+    --dm-accent-off-rgb: 249,115,22;
+}
+
+.form-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1;
+    padding-left: 0; /* spacing handled by layout */
+}
+/* Base styles moved to unified section below */
+
+/* ---------- Unified: Enhanced + Glassy Neon Toggle Switch ---------- */
+
+/* Note:
+   - This section merges the earlier 'enhanced' styles with the 'glassy neon' variant.
+   - The rules are consolidated to avoid duplication while keeping the visual options.
+   - Use `--accent`, `--accent-rgb`, and `data-theme="dark"` to control visual modes.
+*/
+
+/* Base track overrides (kept from enhanced, with neon-friendly additions) */
+.form-switch .form-check-input {
+    --w: var(--switch-width);
+    --h: var(--switch-height);
+    width: var(--w);
+    height: var(--h);
+    position: relative;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: calc(var(--h) / 2);
+    background: linear-gradient(180deg, var(--track-bg), color-mix(in srgb, var(--track-bg) 85%, black 15%));
+    border: 1px solid var(--track-border);
+    cursor: pointer;
+    box-shadow: 
+        0 4px 12px rgba(16,24,32,0.12),  /* soft outer shadow */
+        0 0 0 1px rgba(255,255,255,0.05) inset,
+        inset 0 -4px 8px rgba(255,255,255,0.05), /* inner highlight */
+        inset 0 2px 6px rgba(255,255,255,0.06);
+    transition: background-color 200ms ease, box-shadow 220ms cubic-bezier(.2,.9,.2,1), border-color 200ms ease, transform 150ms ease;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Knob (merged styles) */
+.form-switch .form-check-input::before {
+    content: "";
+    position: absolute;
+    top: var(--switch-padding);
+    left: var(--switch-padding);
+    width: var(--knob-size);
+    height: var(--knob-size);
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--knob-bg), color-mix(in srgb, var(--knob-bg) 88%, black 12%));
+    box-shadow: 
+        0 6px 16px rgba(16,24,32,0.18), /* outer lift */
+        0 0 8px rgba(255,255,255,0.08) inset,
+        inset 0 1px 2px rgba(255,255,255,0.7), /* inner highlight */
+        inset 0 -1px 2px rgba(0,0,0,0.08); /* inner depth */
+    transition: transform 240ms cubic-bezier(.2,.9,.2,1), box-shadow 200ms ease;
+    will-change: transform;
+}
+
+/* Checked state: combines enhanced glow + neon overlays */
+.form-switch .form-check-input:checked {
+    background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 85%, black 15%));
+    border-color: rgba(var(--accent-rgb), 0.9);
+    box-shadow: 
+        0 6px 20px rgba(var(--accent-rgb), 0.18), /* stronger outer glow */
+        0 6px 20px rgba(var(--accent-rgb),0.3),   /* neon layer */
+        inset 0 -3px 6px rgba(255,255,255,0.08), /* subtle inner sheen */
+        inset 0 2px 4px rgba(0,0,0,0.08); /* inner depth */
+}
+
+.form-switch .form-check-input:checked::before {
+    transform: translateX(calc(var(--switch-width) - var(--switch-height)));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--knob-bg) 60%, var(--accent) 40%), color-mix(in srgb, var(--knob-bg) 85%, black 15%));
+    box-shadow: 0 6px 20px rgba(var(--accent-rgb),0.6), 0 0 10px rgba(var(--accent-rgb),0.4) inset, inset 0 1px 0 rgba(255,255,255,0.45);
+}
+
+/* subtle checked glow overlay (keeps both variants) */
+.form-switch .form-check-input:checked::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.06), 0 0 20px rgba(var(--accent-rgb),0.25);
+    pointer-events: none;
+}
+
+/* Hover gives subtle lift */
+.form-switch .form-check-input:hover::before {
+    box-shadow: 
+        0 10px 22px rgba(16,24,32,0.24), /* lift on hover */
+        inset 0 1px 2px rgba(255,255,255,0.6),
+        inset 0 -1px 2px rgba(0,0,0,0.1);
+}
+
+/* Active press */
+.form-switch .form-check-input:active::before {
+    transform: translateX(calc(var(--switch-width) - var(--switch-height))) scale(0.96);
+    box-shadow: 
+        0 4px 12px rgba(16,24,32,0.22), /* pressed state */
+        inset 0 1px 2px rgba(255,255,255,0.5),
+        inset 0 -1px 2px rgba(0,0,0,0.12);
+}
+
+/* Disabled */
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input[disabled] {
+    cursor: not-allowed;
+    opacity: var(--disabled-opacity);
+    filter: grayscale(10%);
+}
+
+/* Compact label spacing when used next to text */
+.form-switch .form-check-label {
+    margin-left: 0.25rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary, #374151);
+    user-select: none;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    .form-switch .form-check-input,
+    .form-switch .form-check-input::before,
+    .form-switch .form-check-input::after {
+        transition: none !important;
+    }
+}
+
+/* Dark mode adjustments (merged) */
+[data-theme="dark"] .form-switch .form-check-input {
+    --track-bg: color-mix(in srgb, var(--bg-tertiary, #0b1220) 56%, black);
+    background: linear-gradient(180deg, var(--track-bg), color-mix(in srgb, var(--track-bg) 85%, black 15%));
+    border-color: rgba(255,255,255,0.06);
+    box-shadow:
+        0 4px 14px rgba(0,0,0,0.72),
+        0 0 0 1px rgba(255,255,255,0.03) inset,
+        inset 0 -4px 12px rgba(255,255,255,0.03),
+        inset 0 2px 4px rgba(0,0,0,0.12);
+}
+
+[data-theme="dark"] .form-switch .form-check-input::before {
+    background: linear-gradient(180deg, var(--knob-bg, #f8fafc), color-mix(in srgb, var(--knob-bg, #f8fafc) 86%, black 14%));
+    box-shadow:
+        0 8px 20px rgba(0,0,0,0.6),
+        inset 0 1px 2px rgba(255,255,255,0.05),
+        inset 0 -1px 2px rgba(0,0,0,0.2);
+}
+
+[data-theme="dark"] .form-switch .form-check-input:checked {
+    background: linear-gradient(180deg, var(--dm-accent-on), color-mix(in srgb, var(--dm-accent-on) 85%, black 12%));
+    border-color: rgba(var(--dm-accent-on-rgb), 0.9);
+    box-shadow:
+        0 8px 26px rgba(var(--dm-accent-on-rgb), 0.24),
+        0 8px 28px rgba(var(--dm-accent-on-rgb),0.35),
+        inset 0 -3px 6px rgba(255,255,255,0.05),
+        inset 0 2px 4px rgba(0,0,0,0.12);
+}
+
+[data-theme="dark"] .form-switch .form-check-input:not(:checked) {
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+    border-color: rgba(255,255,255,0.06);
+}
+
+[data-theme="dark"] .form-switch .form-check-input:not(:checked)::after {
+    /* add a subtle orange tint when off, low opacity */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 10px 30px rgba(var(--dm-accent-off-rgb), 0.4);
+    pointer-events: none;
+}
+
+[data-theme="dark"] .form-switch .form-check-input:checked::before {
+    /* slight green tint on the knob when on */
+    box-shadow: 0 10px 30px rgba(var(--dm-accent-on-rgb), 1);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--knob-bg, #f8fafc) 78%, var(--dm-accent-on) 22%), color-mix(in srgb, var(--knob-bg, #f8fafc) 86%, black 14%));
+}
+
+[data-theme="dark"] .form-switch .form-check-input:focus-visible {
+    outline: none;
+    box-shadow: 0 8px 28px rgba(var(--dm-accent-on-rgb), 0.14), 0 0 0 5px rgba(var(--dm-accent-on-rgb), 0.06);
+    border-color: rgba(var(--dm-accent-on-rgb), 0.9);
+}
+
+/* Tiny utility: small variant */
+.form-switch.form-switch--sm .form-check-input {
+    --switch-width: 2.4rem;
+    --switch-height: 1.2rem;
+    --switch-padding: 2px;
+}
+
+/* Make sure labels align when stacked */
+.form-switch--stacked {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+}
+
+
+/* End unified toggle styles */
+
