@@ -11,19 +11,19 @@
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Income</h6>
                             <h4 class="mb-0 text-success" data-ms-income>{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h4>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Expenses</h6>
                             <h4 class="mb-0 text-danger" data-ms-expenses>{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h4>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Savings</h6>
                             <h4 class="mb-0 text-info" data-ms-savings>{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h4>
@@ -39,19 +39,19 @@
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Total Income</h6>
                             <h4 class="mb-0 text-success" data-lt-income>{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_income) }}</h4>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Total Expenses</h6>
                             <h4 class="mb-0 text-danger" data-lt-expenses>{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_expenses) }}</h4>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Current Balance</h6>
                             <h4 class="mb-0 text-info" data-lt-balance>{{ currency_symbol }}{{ "{:,.2f}".format(balance.current_balance) }}</h4>

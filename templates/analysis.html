@@ -11,19 +11,19 @@
             </div>
             <div class="card-body">
                 <div class="row mb-4 text-center">
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Income</h6>
                             <h3 class="mb-0 text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h3>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Expenses</h6>
                             <h3 class="mb-0 text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h3>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-sm-6 col-md-4  mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Savings</h6>
                             <h3 class="mb-0 text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h3>
