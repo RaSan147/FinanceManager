@@ -276,58 +276,6 @@
       return 'Invalid date';
     }
   }
-  // Add URL validation function
-  function isValidHttpUrl(string) {
-    try {
-      const url = new URL(string);
-      return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // Enhanced escapeHtml function (if not already robust)
-  function __escapeHtml(unsafe) {
-    return unsafe
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return '';
-
-    // Temporary placeholder for img tags
-    const imgPlaceholder = '___IMG_TAG_PLACEHOLDER___';
-    const imgTags = [];
-
-    // Extract and store img tags with placeholders
-    const withPlaceholders = unsafe.replace(
-      /(<img\b[^>]*>)/gi,
-      (match) => {
-        imgTags.push(match);
-        return imgPlaceholder;
-      }
-    );
-
-    // Escape HTML in the remaining content
-    const escaped = withPlaceholders
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-
-    // Restore the original img tags
-    let result = escaped;
-    imgTags.forEach(imgTag => {
-      result = result.replace(imgPlaceholder, imgTag);
-    });
-
-    return result;
-  }
 
   // Cache markdown preferences
   let markdownPreference = null;
@@ -341,6 +289,7 @@
 
   // Pre-compile regex patterns for better performance
   const markdownPatterns = {
+    blockquote: /^&gt;\s+(.+)$/gm,
     headers: /^#{1,6}\s+(.+)$/gm,
     // FIX: Use more specific regex for bold to avoid mid-word matches
     bold: /(?<!\w)(\*\*|__)(?=\S)(.+?[*_]*)(?<=\S)\1(?!\w)/g,
@@ -348,7 +297,6 @@
     italic: /(?<!\w)(\*|_)(?=\S)(.+?)(?<=\S)\1(?!\w)/g,
     codeBlock: /```([\s\S]*?)```/gm,
     inlineCode: /`([^`]+)`/g,
-    blockquote: /^>\s+(.+)$/gm,
     image: /!\[([^\]]*)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
     link: /\[([^\]]+)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
     hr: /^[-*_]{3,}$/gm,
@@ -392,7 +340,7 @@
     };
 
     if (markdownEnabled) {
-      let processed = escapeHtml(raw, false);
+      let processed = escapeHtml(raw, true);
 
       // Process images first to avoid markdown processing within URLs
       processed = processImages(processed);
@@ -408,13 +356,14 @@
       processed = processLists(processed);
 
       // Then process other markdown elements
+      console.log('Processed after lists:', processed);
       processed = processed
+        .replace(markdownPatterns.blockquote, '<blockquote>$1</blockquote>')
         .replace(markdownPatterns.headers, (match, text) => {
           const level = match.match(/^#+/)[0].length;
           return `<h${Math.min(level + 2, 6)}>${text}</h${Math.min(level + 2, 6)}>`;
         })
         .replace(markdownPatterns.hr, '<hr/>')
-        .replace(markdownPatterns.blockquote, '<blockquote>$1</blockquote>')
         .replace(markdownPatterns.bold, '<strong>$2</strong>')
         .replace(markdownPatterns.italic, '<em>$2</em>')
         .replace(markdownPatterns.inlineCode, '<code>$1</code>')
@@ -464,25 +413,25 @@
             if (!match) continue;
 
             const indent = match[1].length;
-            const level = Math.floor(indent / 2); // Assuming 2 spaces per indentation level
+            const level = Math.floor(indent / 4); // Assuming 4 spaces per indentation level
             const type = /^\s*\d+\.\s+/.test(line) ? 'ol' : 'ul';
             const content = match[3];
 
             // Close deeper levels if we are moving up the tree
             while (stack.length > 0 && level < stack.length) {
-                html += `</li></${stack.pop().type}>`;
+                html += `</li></${stack.pop().type}>\n`;
             }
 
             // Close the previous list item if at the same level
             if (stack.length > 0 && level < stack.length) {
-                html += `</li>`;
+                html += `</li>\n`;
             }
 
             // Open new list(s) if we are moving deeper
             while (level >= stack.length) {
                 // Check if list type has changed at the same level
                 if (level < stack.length && stack[level].type !== type) {
-                    html += `</${stack.pop().type}>`; // Close previous type
+                    html += `</${stack.pop().type}>\n`; // Close previous type
                 }
                 html += `<${type}>`;
                 stack.push({ type });
@@ -494,7 +443,7 @@
 
         // At the end, close all remaining open tags
         while (stack.length > 0) {
-            html += `</li></${stack.pop().type}>`;
+            html += `</li></${stack.pop().type}>\n`;
         }
 
         return html;
@@ -532,7 +481,7 @@
 
         return processedLine;
       })
-      .join('<br/>');
+      .join('<br/>\n');
   }
 
 
@@ -560,7 +509,8 @@
     function updateContent() {
       const markdownEnabled = markdownToggle?.checked || false;
       if (contentEl) {
-        contentEl.classList.toggle('markdown', markdownEnabled);
+        // Use class name that matches CSS file selector `.markdown-content`
+        contentEl.classList.toggle('markdown-content', markdownEnabled);
         contentEl.innerHTML = renderInlineContent(item.content || '', item._id, markdownEnabled);
       }
       // Save preference

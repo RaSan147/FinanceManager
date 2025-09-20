@@ -1,15 +1,21 @@
 /* Modal styling */
-.modal-content {
-	background: linear-gradient(180deg, var(--bg-secondary), var(--bg-tertiary));
-	border: 1px solid var(--border-color);
-	border-radius: 16px;
-	box-shadow: 0 16px 40px rgba(0, 0, 0, .25), 0 4px 12px rgba(0, 0, 0, .12);
-	backdrop-filter: blur(calc(var(--glass-blur) - 2px)) saturate(140%);
-	-webkit-backdrop-filter: blur(calc(var(--glass-blur) - 2px)) saturate(140%);
-	overflow: hidden;
-	position: relative;
-}
+.modal-content { 
+	/* A more subtle, layered box-shadow for a "softer" feel */ 
+	--cool-shadow: 0 4.5px 5.3px rgba(0, 0, 0, 0.028), 
+	0 15.1px 17.9px rgba(0, 0, 0, 0.042), 
+	0 68px 80px rgba(0, 0, 0, 0.07); 
 
+	/* A slightly more vibrant, multi-step gradient */ 
+	background: linear-gradient(175deg, var(--bg-secondary), var(--bg-tertiary) 85%); 
+	border: 1px solid var(--border-color); 
+	border-radius: 16px; 
+	box-shadow: var(--cool-shadow); 
+	backdrop-filter: blur(calc(var(--glass-blur) - 2px)) saturate(140%); 
+	-webkit-backdrop-filter: blur(calc(var(--glass-blur) - 2px)) saturate(140%); 
+	overflow: hidden; 
+	position: relative; 
+	color: var(--text-primary); 
+} 
 .modal-header {
 	background: linear-gradient(135deg, var(--header-grad-1), var(--header-grad-2));
 	border-bottom: 1px solid rgba(var(--accent-primary-bright-rgb), .25);
