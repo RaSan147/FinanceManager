@@ -95,9 +95,15 @@
     margin-bottom: 0.7rem;
     position: relative;
 }
+.markdown-content ul,
+.markdown-content ol {
+    list-style: none; /* removes default bullets/numbers */
+    padding-left: 1.2em; /* keep indentation */
+    margin: 0; /* adjust if spacing looks off */
+}
 
 /* Level 1 bullets */
-.markdown-content ul>li::before {
+.markdown-content ul > li::before {
     content: "•";
     color: var(--primary-color);
     font-weight: bold;
@@ -107,25 +113,25 @@
 }
 
 /* Level 2 bullets */
-.markdown-content ul ul>li::before {
+.markdown-content ul ul > li::before {
     content: "◦";
     color: #6c757d;
 }
 
 /* Level 3 bullets */
-.markdown-content ul ul ul>li::before {
+.markdown-content ul ul ul > li::before {
     content: "▪";
     color: #ff6b6b;
 }
 
 /* Level 4 bullets */
-.markdown-content ul ul ul ul>li::before {
+.markdown-content ul ul ul ul > li::before {
     content: "▫";
     color: #20c997;
 }
 
 /* Level 5 bullets */
-.markdown-content ul ul ul ul ul>li::before {
+.markdown-content ul ul ul ul ul > li::before {
     content: "★";
     color: #fd7e14;
     font-size: 0.9em;
@@ -133,23 +139,24 @@
 
 /* Ordered list styling */
 .markdown-content ol {
-    list-style-type: decimal;
+    list-style: decimal; /* custom numbering only */
+    padding-left: 1.2em;
 }
 
 .markdown-content ol ol {
-    list-style-type: lower-alpha;
+    list-style: lower-alpha;
 }
 
 .markdown-content ol ol ol {
-    list-style-type: lower-roman;
+    list-style: lower-roman;
 }
 
 .markdown-content ol ol ol ol {
-    list-style-type: upper-alpha;
+    list-style: upper-alpha;
 }
 
 .markdown-content ol ol ol ol ol {
-    list-style-type: upper-roman;
+    list-style: upper-roman;
 }
 
 .markdown-content ul ul,
@@ -190,4 +197,28 @@
     color: #5a32a3;
     text-decoration: none;
     border-bottom: 1px solid #5a32a3;
+}
+
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .markdown-content {
+        font-size: 1rem;
+        padding: 0 .7rem;
+    }
+    .markdown-content ol, .markdown-content ul {
+        padding-left: 0.7rem !important;
+    }
+    .markdown-content h1 {
+        font-size: 1.8rem;
+    }
+    .markdown-content h2 {
+        font-size: 1.5rem;
+    }
+    .markdown-content h3 {
+        font-size: 1.3rem;
+    }
+    .markdown-content pre {
+        font-size: 0.9rem;
+    }
 }
