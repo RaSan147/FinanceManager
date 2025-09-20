@@ -87,7 +87,7 @@
 	}
 }
 
-@media (max-width:576px) {
+@media (max-width:991.98px) {
 	.stat-bubble {
 		backdrop-filter: saturate(130%) blur(var(--glass-blur-mobile));
 		-webkit-backdrop-filter: saturate(130%) blur(var(--glass-blur-mobile));
