@@ -665,7 +665,7 @@
           }
         }
         if (files.length) {
-          if (!confirm('Paste image(s) into comment?')) return;
+          // if (!confirm('Paste image(s) into comment?')) return;
           handleFiles(files, 'Pasted');
         }
       });
@@ -784,7 +784,7 @@
       function handleFiles(files, label) {
         if (!files || !files.length) return;
         for (const f of files) {
-          if (!confirm(`Insert ${label} image?`)) return; // one confirm per action batch
+          // if (!confirm(`Insert ${label} image?`)) return; // one confirm per action batch
           const id = insertUploadingPlaceholder();
           uploadAndReplace(f, id);
         }
@@ -887,7 +887,7 @@
           window.flash && window.flash('Image too large', 'warning');
           continue;
         }
-        if (!confirm('Insert image into entry?')) return;
+        // if (!confirm('Insert image into entry?')) return;
         const placeholder = '\n![uploading]()';
         const start = contentInput.selectionStart,
           end = contentInput.selectionEnd;
