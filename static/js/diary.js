@@ -353,8 +353,9 @@
       });
 
       // Process lists
+      processed = autoLinkUrls(processed);
       processed = processLists(processed);
-
+      // Auto-link URLs not inside markdown links/images
       // Then process other markdown elements
       console.log('Processed after lists:', processed);
       processed = processed
@@ -397,6 +398,17 @@
       return formatTextWithWhitespace(withImgs);
     }
   }
+
+  function autoLinkUrls(text) {
+    // Match http/https URLs with optional surrounding spaces/newlines
+    return text.replace(
+      /(^|\s)(https?:\/\/[^\s<]+)(?=\s|$)/g,
+      (match, prefix, url) => {
+        return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+      }
+    );
+  }
+
 
   function processLists(text) {
     // This is a robust, stack-based list parser.
