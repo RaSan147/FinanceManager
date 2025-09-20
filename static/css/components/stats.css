@@ -87,7 +87,7 @@
 	}
 }
 
-@media (max-width:991.98px) {
+@media (max-width:576px) {
 	.stat-bubble {
 		backdrop-filter: saturate(130%) blur(var(--glass-blur-mobile));
 		-webkit-backdrop-filter: saturate(130%) blur(var(--glass-blur-mobile));
@@ -120,6 +120,14 @@
 		-webkit-backdrop-filter: blur(calc(var(--glass-blur-mobile) - 2px));
 	}
 }
+
+
+@media (min-width: 768px) and (max-width: 991.98px) {
+	.col-md-4 .stat-bubble h4{
+		font-size: 1rem;
+	}
+}
+
 
 .stat-bubble--income {
 	border-color: rgba(var(--success-rgb), .35);
