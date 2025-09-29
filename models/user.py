@@ -89,6 +89,13 @@ class User(UserMixin):
         """
         return calculate_lifetime_transaction_summary(self.id, self.db)
 
+    def get_lifetime_transaction_summary_cached(self, cache_id: str | None = None):
+        """Cached variant which accepts a cache_id created by utils.finance_calculator.create_cache_session.
+
+        This lets callers avoid reloading transactions repeatedly within the same request.
+        """
+        return calculate_lifetime_transaction_summary(self.id, self.db, cache_id=cache_id)
+
     # --- UI preference helpers ---
     # NOTE: individual shorthand setters like `set_goal_sort` and `set_todo_sort`
     # have been removed in favor of the generic `set_sort_mode(name, sort)` API.

@@ -45,7 +45,7 @@
   });
 
   async function apiList(forceFresh = false) {
-    let url = `/api/diary?per_page=500` + (forceFresh ? `&__ts=${Date.now()}` : '');
+    let url = `/api/diary?per_page=100` + (forceFresh ? `&__ts=${Date.now()}` : '');
     if (state.q) url += `&q=${encodeURIComponent(state.q)}`;
     if (state.category) url += `&category=${encodeURIComponent(state.category)}`;
     // Only include sort if user explicitly selected it this session. Otherwise let server apply persisted sort.
@@ -53,12 +53,12 @@
     try {
       const data = await App.utils.fetchJSONUnified(url);
       state.items = data.items || [];
-        // If server returned a persisted sort, apply it to the UI unless user explicitly changed sort this session
-          if (data.sort && !state.sortExplicit) {
-            state.sort = data.sort;
-            updateSortLabel();
-            updateSortMenuActive();
-          }
+      // If server returned a persisted sort, apply it to the UI unless user explicitly changed sort this session
+      if (data.sort && !state.sortExplicit) {
+        state.sort = data.sort;
+        updateSortLabel();
+        updateSortMenuActive();
+      }
       renderList();
     } catch (e) {
       console.warn('Diary list fetch failed', e);
@@ -151,7 +151,7 @@
     setTimeout(() => {
       try {
         form.querySelector('[name="title"]').focus();
-      } catch (_) {}
+      } catch (_) { }
     }, 30);
     detailModal?.hide();
   }
@@ -169,7 +169,7 @@
       if (!previewWrap) return;
       if (enabled) {
         previewWrap.style.display = '';
-        previewWrap.innerHTML = renderInlineContent(contentInput.value || '', 'create', true);
+        previewWrap.innerHTML = RichText.renderInlineContent(contentInput.value || '', 'create', true);
       } else {
         previewWrap.style.display = 'none';
         previewWrap.innerHTML = '';
@@ -184,7 +184,7 @@
         previewWrap.style.display = 'none';
       } else if (previewWrap) {
         previewWrap.style.display = '';
-        previewWrap.innerHTML = renderInlineContent(contentInput.value || '', 'create', createMarkdownToggle?.checked);
+        previewWrap.innerHTML = RichText.renderInlineContent(contentInput.value || '', 'create', createMarkdownToggle?.checked);
       }
     });
 
@@ -253,7 +253,7 @@
     const chips = [];
     if (state.category) chips.push(`<span class='badge text-bg-info text-dark'>Cat: ${state.category}</span>`);
     if (state.q) chips.push(`<span class='badge text-bg-dark'>Q: ${state.q}</span>`);
-  // Do not show sort in the active filters bar (consistent with To-Dos)
+    // Do not show sort in the active filters bar (consistent with To-Dos)
     activeFiltersBar.innerHTML = chips.join(' ');
     activeFiltersBar.style.display = chips.length ? 'flex' : 'none';
   }
@@ -282,10 +282,15 @@
     try {
       await App.utils.fetchJSONUnified('/api/sort-pref', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'diary', sort: s })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: 'diary',
+          sort: s
+        })
       });
-    } catch (_) {}
+    } catch (_) { }
   }
 
   function updateFilterBtnActive() {
@@ -389,11 +394,11 @@
     const root = detailModalEl.querySelector('[data-diary-detail-root]');
     if (!root) return;
 
-  const editForm = root.querySelector('[data-diary-detail-edit-form]');
-  // The header controls live in the modal header (moved out of the body), select from the modal element
-  const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
-  const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
-  const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+    const editForm = root.querySelector('[data-diary-detail-edit-form]');
+    // The header controls live in the modal header (moved out of the body), select from the modal element
+    const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+    const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+    const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
     const contentEl = root.querySelector('[data-diary-detail-content]');
 
     if (editForm) editForm.classList.add('d-none');
@@ -413,214 +418,6 @@
     return markdownPreference;
   }
 
-  // Pre-compile regex patterns for better performance
-  const markdownPatterns = {
-    blockquote: /^&gt;\s+(.+)$/gm,
-    headers: /^#{1,6}\s+(.+)$/gm,
-    // FIX: Use more specific regex for bold to avoid mid-word matches
-    bold: /(?<!\w)(\*\*|__)(?=\S)(.+?[*_]*)(?<=\S)\1(?!\w)/g,
-    // FIX: Use more specific regex for italic to avoid mid-word matches
-    italic: /(?<!\w)(\*|_)(?=\S)(.+?)(?<=\S)\1(?!\w)/g,
-    codeBlock: /```([\s\S]*?)```/gm,
-    inlineCode: /`([^`]+)`/g,
-    image: /!\[([^\]]*)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
-    link: /\[([^\]]+)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
-    hr: /^[-*_]{3,}$/gm,
-    unorderedList: /^(\s*)[-*+]\s+(.+)$/gm,
-    orderedList: /^(\s*)\d+\.\s+(.+)$/gm
-  };
-
-  function escapeHtml(text, preserveUrls = false) {
-    if (!text) return '';
-
-    const div = document.createElement('div');
-    div.textContent = text;
-    let result = div.innerHTML;
-
-    if (preserveUrls) {
-      // Preserve URL encoding
-      result = result.replace(/%20/g, ' ');
-    }
-
-    return result;
-  }
-
-  function renderInlineContent(raw, id, markdownEnabled = false) {
-    if (!raw) return '';
-
-    // Mock ImageUploader for demonstration
-    const ikThumb = (url) => url;
-
-    const group = id ? `diary-inline-${id}` : 'diary-inline';
-
-    // Process images first (both markdown and plain text modes)
-    const processImages = (text) => {
-      return text.replace(
-        /!\[([^\]]*)\]\(((https?:\/\/[^\s)]+)(?:\s+"([^"]*)")?)\)/g,
-        (match, altText, fullUrl, cleanUrl, title) => {
-          const t = ikThumb(cleanUrl);
-          const titleAttr = title ? ` title="${escapeHtml(title, false)}"` : '';
-          return `<img src='${t}' data-viewer-thumb data-viewer-group='${group}' data-viewer-src='${cleanUrl}' style='max-width:140px;max-height:140px;cursor:pointer;object-fit:cover;margin:4px;border:1px solid var(--border-color);border-radius:4px;' alt='${escapeHtml(altText, false)}'${titleAttr}/>`;
-        }
-      );
-    };
-
-    if (markdownEnabled) {
-      let processed = escapeHtml(raw, true);
-
-      // Process images first to avoid markdown processing within URLs
-      processed = processImages(processed);
-
-      // Process code blocks first to avoid processing inside them
-      const codeBlocks = [];
-      processed = processed.replace(markdownPatterns.codeBlock, (match, code) => {
-        codeBlocks.push(code);
-        return `:::CODEBLOCK${codeBlocks.length - 1}:::`;
-      });
-
-      // Process lists
-      processed = autoLinkUrls(processed);
-      processed = processLists(processed);
-      // Auto-link URLs not inside markdown links/images
-      // Then process other markdown elements
-      console.log('Processed after lists:', processed);
-      processed = processed
-        .replace(markdownPatterns.blockquote, '<blockquote>$1</blockquote>')
-        .replace(markdownPatterns.headers, (match, text) => {
-          const level = match.match(/^#+/)[0].length;
-          return `<h${Math.min(level + 2, 6)}>${text}</h${Math.min(level + 2, 6)}>`;
-        })
-        .replace(markdownPatterns.hr, '<hr/>')
-        .replace(markdownPatterns.bold, '<strong>$2</strong>')
-        .replace(markdownPatterns.italic, '<em>$2</em>')
-        .replace(markdownPatterns.inlineCode, '<code>$1</code>')
-        .replace(
-          markdownPatterns.link,
-          (match, text, fullUrl, cleanUrl, title) => {
-            const titleAttr = title ? ` title="${escapeHtml(title, false)}"` : '';
-            return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
-          }
-        );
-
-      // Restore code blocks
-      processed = processed.replace(/:::CODEBLOCK(\d+):::/g, (match, index) => {
-        return `<pre><code>${escapeHtml(codeBlocks[parseInt(index)], false)}</code></pre>`;
-      });
-      
-      // FIX: Clean up extra newlines around block elements to prevent double spacing
-      const blockTags = ['h3', 'h4', 'h5', 'h6', 'hr', 'blockquote', 'pre', 'ul', 'ol'];
-      blockTags.forEach(tag => {
-          const reBefore = new RegExp(`\\n+\\s*(<${tag}[^>]*>)`, 'g');
-          processed = processed.replace(reBefore, '$1');
-          const reAfter = new RegExp(`(<\\/${tag}>)\\s*\\n+`, 'g');
-          processed = processed.replace(reAfter, '$1');
-      });
-
-      return formatTextWithWhitespace(processed);
-    } else {
-      // For plain text mode
-      const withPreservedImgs = escapeHtml(raw, true);
-      const withImgs = processImages(withPreservedImgs);
-      return formatTextWithWhitespace(withImgs);
-    }
-  }
-
-  function autoLinkUrls(text) {
-    // Match http/https URLs with optional surrounding spaces/newlines
-    return text.replace(
-      /(^|\s)(https?:\/\/[^\s<]+)(?=\s|$)/g,
-      (match, prefix, url) => {
-        return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-      }
-    );
-  }
-
-
-  function processLists(text) {
-    // This is a robust, stack-based list parser.
-    const listBlockRegex = /((?:^\s*[-*+]\s+.*\n?)|(?:^\s*\d+\.\s+.*\n?))+/gm;
-
-    return text.replace(listBlockRegex, (listBlock) => {
-        const lines = listBlock.trim().split('\n');
-        let html = '';
-        const stack = []; // To track open list types and levels, e.g., { type: 'ul', level: 0 }
-        const itemRegex = /^(\s*)([-*+]|\d+\.)\s+(.*)/;
-
-        for (const line of lines) {
-            const match = line.match(itemRegex);
-            if (!match) continue;
-
-            const indent = match[1].length;
-            const level = Math.floor(indent / 4); // Assuming 4 spaces per indentation level
-            const type = /^\s*\d+\.\s+/.test(line) ? 'ol' : 'ul';
-            const content = match[3];
-
-            // Close deeper levels if we are moving up the tree
-            while (stack.length > 0 && level < stack.length) {
-                html += `</li></${stack.pop().type}>\n`;
-            }
-
-            // Close the previous list item if at the same level
-            if (stack.length > 0 && level < stack.length) {
-                html += `</li>\n`;
-            }
-
-            // Open new list(s) if we are moving deeper
-            while (level >= stack.length) {
-                // Check if list type has changed at the same level
-                if (level < stack.length && stack[level].type !== type) {
-                    html += `</${stack.pop().type}>\n`; // Close previous type
-                }
-                html += `<${type}>`;
-                stack.push({ type });
-            }
-            
-            // Add the list item
-            html += `<li>${content}`;
-        }
-
-        // At the end, close all remaining open tags
-        while (stack.length > 0) {
-            html += `</li></${stack.pop().type}>\n`;
-        }
-
-        return html;
-    });
-  }
-
-  function formatTextWithWhitespace(text) {
-    // Preserve multiple spaces and convert newlines properly
-    return text
-      .split('\n')
-      .map(line => {
-        // Skip processing if the line is a list item
-        if (line.startsWith('<li') || line.startsWith('</ul>') || line.startsWith('</ol>')) {
-          return line;
-        }
-
-        // Convert multiple spaces to non-breaking spaces
-        let processedLine = line;
-
-        // Handle tabs (4 spaces each)
-        processedLine = processedLine.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
-
-        // Convert leading spaces to non-breaking spaces
-        const leadingSpacesMatch = processedLine.match(/^(\s+)/);
-        if (leadingSpacesMatch) {
-          const leadingSpaces = leadingSpacesMatch[1];
-          const preservedSpaces = leadingSpaces.replace(/ /g, '&nbsp;');
-          processedLine = preservedSpaces + processedLine.slice(leadingSpaces.length);
-        }
-
-        // Convert multiple consecutive spaces within line
-        processedLine = processedLine.replace(/ {2,}/g, spaces =>
-          spaces.replace(/ /g, '&nbsp;')
-        );
-
-        return processedLine;
-      })
-      .join('<br/>\n');
-  }
 
 
   function renderDetail(data) {
@@ -648,16 +445,16 @@
     }
 
     // Set up markdown toggle
-  // Markdown toggle and edit controls are now in the modal header, select from modal element
-  const markdownToggle = detailModalEl.querySelector('[data-diary-markdown-toggle]');
-  const contentEl = root.querySelector('[data-diary-detail-content]');
+    // Markdown toggle and edit controls are now in the modal header, select from modal element
+    const markdownToggle = detailModalEl.querySelector('[data-diary-markdown-toggle]');
+    const contentEl = root.querySelector('[data-diary-detail-content]');
 
     function updateContent() {
       const markdownEnabled = markdownToggle?.checked || false;
       if (contentEl) {
         // Use class name that matches CSS file selector `.markdown-content`
         contentEl.classList.toggle('markdown-content', markdownEnabled);
-        contentEl.innerHTML = renderInlineContent(item.content || '', item._id, markdownEnabled);
+        contentEl.innerHTML = RichText.renderInlineContent(item.content || '', item._id, markdownEnabled);
       }
       // Save preference
       localStorage.setItem('diary-markdown-enabled', markdownEnabled);
@@ -688,7 +485,7 @@
           // Use shared comment formatter to preserve whitespace and formatting
           const formattedText = window.CommentFormatter ?
             window.CommentFormatter.formatText(c.body) :
-            escapeHtml(c.body).replace(/\n/g, '<br/>'); // fallback
+            RichText.escapeHtml(c.body).replace(/\n/g, '<br/>');
           const timestamp = safeFormatDate(c.created_at["$date"]);
           return `<div class='diary-comment'><div class='body'><div class='content'>${formattedText}</div>${images}<div class='meta d-flex align-items-center'><div class='datetime text-muted small'>${timestamp}</div><div class='ms-auto'><button class='btn btn-sm btn-outline-danger' data-comment-del='${c._id}'><i class='bi bi-trash'></i></button></div></div></div></div>`;
         }).join('');
@@ -735,11 +532,11 @@
         switchToView();
       }
     }
-  // Bind header controls (edit/save/cancel) which were moved to the modal header
-  const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
-  const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
-  const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
-  if (editBtn && saveBtn && cancelBtn && editForm) {
+    // Bind header controls (edit/save/cancel) which were moved to the modal header
+    const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+    const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+    const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+    if (editBtn && saveBtn && cancelBtn && editForm) {
       if (editForm.classList.contains('d-none')) {
         editBtn.classList.remove('d-none');
         saveBtn.classList.add('d-none');
@@ -748,25 +545,38 @@
     }
 
     // Ensure header buttons always trigger behavior even if DOM is re-rendered — delegate clicks from modal
+    // NOTE: calling `.click()` here caused the save handler to run twice (native click -> bubbled handler -> programmatic click).
+    // To avoid duplicate network requests we call the action functions directly.
     if (!detailModalEl._headerClickBound) {
       detailModalEl._headerClickBound = true;
       detailModalEl.addEventListener('click', (e) => {
         const rootInner = detailModalEl.querySelector('[data-diary-detail-root]');
-        const editFormInner = rootInner?.querySelector('[data-diary-detail-edit-form]');
         if (e.target.closest('[data-diary-detail-edit-btn]')) {
-          // start editing
-          try { switchToEdit(); } catch (_) {}
+          try {
+            switchToEdit();
+          } catch (_) { }
         }
         if (e.target.closest('[data-diary-detail-cancel-btn]')) {
           const diaryId = rootInner?.dataset.currentDiaryId;
           if (diaryId) clearEditStateFromCache(diaryId);
-          try { switchToView(); } catch (_) {}
+          try {
+            switchToView();
+          } catch (_) { }
           if (diaryId) openDetailModal(diaryId);
         }
         if (e.target.closest('[data-diary-detail-save-btn]')) {
-          // trigger the save button logic if present
-          const saveBtnInner = detailModalEl.querySelector('[data-diary-detail-save-btn]');
-          saveBtnInner && saveBtnInner.click();
+          // If the click originated from the actual save button element, let its
+          // own click handler handle the action to avoid double-invocation.
+          const matched = e.target.closest('[data-diary-detail-save-btn]');
+          const canonicalSaveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+          if (matched && matched === canonicalSaveBtn) {
+            return;
+          }
+          // Otherwise (some external control requested save), call the save routine directly.
+          try {
+            const editFormInner = rootInner?.querySelector('[data-diary-detail-edit-form]');
+            if (editFormInner) diaryPerformDetailSave(editFormInner);
+          } catch (_) { }
         }
       });
     }
@@ -1002,14 +812,14 @@
           renderPreviews();
           delete diaryDrafts[diaryId];
           openDetailModal(diaryId);
-        } catch (_) {}
+        } catch (_) { }
       });
     }
-  // Use header controls for switching to edit/view
-  const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
-  const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
-  const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
-  const editForm = root.querySelector('[data-diary-detail-edit-form]');
+    // Use header controls for switching to edit/view
+    const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+    const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+    const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+    const editForm = root.querySelector('[data-diary-detail-edit-form]');
 
     // Bind inline image upload logic for the edit form (detail modal) once
     if (editForm && !editForm._inlineImgBound) {
@@ -1123,15 +933,15 @@
       if (diaryId) openDetailModal(diaryId);
     });
 
-    saveBtn && saveBtn.addEventListener('click', async e => {
-      e.preventDefault();
-      if (!editForm) return;
-      const diaryId = editForm.dataset.diaryId;
+    // Reusable save function so delegated modal clicks and direct button clicks share behavior
+    async function diaryPerformDetailSave(editFormEl) {
+      if (!editFormEl) return;
+      const diaryId = editFormEl.dataset.diaryId;
       if (!diaryId) return;
       const patch = {
-        title: editForm.querySelector('[data-diary-detail-edit-title]').value,
-        category: editForm.querySelector('[data-diary-detail-edit-category]').value,
-        content: editForm.querySelector('[data-diary-detail-edit-content]').value
+        title: editFormEl.querySelector('[data-diary-detail-edit-title]').value,
+        category: editFormEl.querySelector('[data-diary-detail-edit-category]').value,
+        content: editFormEl.querySelector('[data-diary-detail-edit-content]').value
       };
       if (patch.title === '') patch.title = null;
       if (patch.category === '') patch.category = null;
@@ -1145,16 +955,21 @@
           body: JSON.stringify(patch)
         });
         window.flash && window.flash('Updated', 'success');
-
-        // Clear cached edit state on successful save
         clearEditStateFromCache(diaryId);
-
         switchToView();
         openDetailModal(diaryId); // Reload to get fresh data
         apiList();
-      } catch (_) {
+      } catch (e) {
+        console.warn('Diary update failed', e);
         window.flash && window.flash('Update failed', 'danger');
       }
+    }
+
+    saveBtn && saveBtn.addEventListener('click', async e => {
+      e.preventDefault();
+      if (!editForm) return;
+      // call shared save routine
+      diaryPerformDetailSave(editForm);
     });
 
     // Save edit state when modal is hidden

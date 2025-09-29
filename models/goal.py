@@ -367,7 +367,7 @@ class Goal:
         return progress_data
 
     @staticmethod
-    def compute_allocations(user_id: str, db, *, sort_by: str = 'algorithmic') -> Dict[str, float]:
+    def compute_allocations(user_id: str, db, *, sort_by: str = 'algorithmic', cache_id: str | None = None, goals_list: List[GoalInDB] | None = None) -> Dict[str, float]:
         """Allocate lifetime current balance across active goals (FIFO-style).
 
         Algorithm:
@@ -394,16 +394,17 @@ class Goal:
             bson.errors.InvalidId: If user_id is not a valid ObjectId.
         """
         # Get lifetime current balance as savings pool
-        lifetime = calculate_lifetime_transaction_summary(user_id, db)
+        lifetime = calculate_lifetime_transaction_summary(user_id, db, cache_id=cache_id)
         pool = max(float(lifetime.get('current_balance', 0) or 0), 0.0)
         # Determine user's base currency for conversions
         user_doc = db.users.find_one({'_id': ObjectId(user_id)})
         base_ccy = (user_doc or {}).get('default_currency', 'USD').upper()
 
-        # Fetch active goals (exclude large ai_plan field for performance)
-        goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
-        # Sort in Python to avoid index requirements
-        goals_list = [GoalInDB(**g) for g in goals_cursor]
+        # Fetch active goals (exclude large ai_plan field for performance) unless provided by caller
+        if goals_list is None:
+            goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
+            # Sort in Python to avoid index requirements
+            goals_list = [GoalInDB(**g) for g in goals_cursor]
 
         if sort_by == 'algorithmic':
             def _algorithmic_sort_key(goalindb: GoalInDB):
@@ -723,12 +724,12 @@ class Allocator:
         return max(0.0, min(1.0, float(default)))
 
     @staticmethod
-    def compute_allocations(user_id: str, db, *, sort_by: str = 'algorithmic') -> Dict[str, float]:
+    def compute_allocations(user_id: str, db, *, sort_by: str = 'algorithmic', cache_id: str | None = None, goals_list: List[GoalInDB] | None = None) -> Dict[str, float]:
         """Improved allocation algorithm: two-pass (secure urgent needs, then proportional by value).
         Returns mapping goal_id -> allocation (base currency amount, rounded to 2 decimals).
         """
         # --- Gather pool and base currency ---
-        lifetime = calculate_lifetime_transaction_summary(user_id, db) or {}
+        lifetime = calculate_lifetime_transaction_summary(user_id, db, cache_id=cache_id) or {}
         pool = max(float(lifetime.get('current_balance', 0) or 0), 0.0)
         if pool == 0:
             return {}
@@ -748,9 +749,10 @@ class Allocator:
         if monthly_savings_est is None or monthly_savings_est <= 0:
             monthly_savings_est = max(0.0, pool / 12.0)
 
-        # Fetch goals (exclude heavy ai_plan)
-        goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
-        goals_list = [GoalInDB(**g) for g in goals_cursor]
+        # Fetch goals (exclude heavy ai_plan) unless provided by caller
+        if goals_list is None:
+            goals_cursor = db.goals.find({"user_id": user_id, "is_completed": False}, {"ai_plan": 0})
+            goals_list = [GoalInDB(**g) for g in goals_cursor]
 
         # early exit
         if not goals_list:

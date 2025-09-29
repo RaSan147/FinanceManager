@@ -40,10 +40,21 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
         # only need lightweight fields for listing; exclude ai_plan to save bandwidth
         proj = {'ai_plan': 0}
         goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page, sort_mode=sort_param, projection=proj)
-        monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-        user_doc = User.get_by_id(current_user.id, mongo.db)
-        user_default_code = user_doc.default_currency
-        allocations = Goal.compute_allocations(current_user.id, mongo.db)
+
+        # Use a per-request transaction cache so monthly summary and allocations
+        # reuse a single in-memory transaction list instead of scanning DB repeatedly.
+        from utils.finance_calculator import create_cache_session, drop_cache_session
+        cache_id = create_cache_session(current_user.id, mongo.db)
+        try:
+            monthly_summary = calculate_monthly_summary(current_user.id, mongo.db, cache_id=cache_id)
+            user_doc = User.get_by_id(current_user.id, mongo.db)
+            user_default_code = user_doc.default_currency
+            allocations = Goal.compute_allocations(current_user.id, mongo.db, cache_id=cache_id)
+        finally:
+            try:
+                drop_cache_session(cache_id)
+            except Exception:
+                pass
         goals_with_progress = []
         for gm in goal_models:
             alloc_amt = allocations.get(gm.id, None)
@@ -166,10 +177,20 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
         total = mongo.db.goals.count_documents({'user_id': current_user.id})
         proj = {'ai_plan': 0}
         goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page, sort_mode=sort_param or 'created_desc', projection=proj)
-        monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
-        allocations = Goal.compute_allocations(current_user.id, mongo.db)
+
+        # Cache transactions for the duration of this request to avoid multiple scans
+        from utils.finance_calculator import create_cache_session, drop_cache_session
+        cache_id = create_cache_session(current_user.id, mongo.db)
+        try:
+            monthly_summary = calculate_monthly_summary(current_user.id, mongo.db, cache_id=cache_id)
+            user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+            user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
+            allocations = Goal.compute_allocations(current_user.id, mongo.db, cache_id=cache_id)
+        finally:
+            try:
+                drop_cache_session(cache_id)
+            except Exception:
+                pass
         items: list[dict[str, Any]] = []
         page_goal_ids = [ObjectId(gm.id) for gm in goal_models]
         if page_goal_ids:

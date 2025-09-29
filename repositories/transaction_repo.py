@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from typing import Any, Iterable, List, Dict
+from utils.finance_calculator import drop_user_cache_sessions
 from bson import ObjectId
+from datetime import datetime, timezone
 
 
 class TransactionRepository:
@@ -13,7 +15,17 @@ class TransactionRepository:
 
     # ---- Create / Read ----
     def insert(self, doc: dict) -> ObjectId:
-        return self._col.insert_one(doc).inserted_id
+        oid = self._col.insert_one(doc).inserted_id
+        try:
+            # Invalidate any in-process cache sessions for this user so subsequent
+            # reads in the same process get fresh data. Cross-process invalidation
+            # intentionally NOT performed (per user's request).
+            uid = doc.get('user_id')
+            if uid:
+                drop_user_cache_sessions(uid)
+        except Exception:
+            pass
+        return oid
 
     def get_by_id(self, user_id: str, tx_id: ObjectId) -> dict | None:
         return self._col.find_one({'_id': tx_id, 'user_id': user_id})
@@ -30,11 +42,22 @@ class TransactionRepository:
     # ---- Update ----
     def update_fields(self, user_id: str, tx_id: ObjectId, update: dict) -> dict | None:
         self._col.update_one({'_id': tx_id, 'user_id': user_id}, {'$set': update})
+        try:
+            # Only drop local in-process sessions; do NOT attempt cross-process invalidation
+            drop_user_cache_sessions(user_id)
+        except Exception:
+            pass
         return self.get_by_id(user_id, tx_id)
 
     # ---- Delete ----
     def delete(self, user_id: str, tx_id: ObjectId) -> bool:
         res = self._col.delete_one({'_id': tx_id, 'user_id': user_id})
+        try:
+            if res.deleted_count:
+                # Only drop local in-process sessions; do not touch other processes
+                drop_user_cache_sessions(user_id)
+        except Exception:
+            pass
         return res.deleted_count == 1
 
 

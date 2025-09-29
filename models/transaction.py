@@ -60,11 +60,12 @@ class Transaction:
         )
     
     @staticmethod
-    def get_recent_transactions(user_id, db, limit=5):
+    def get_recent_transactions(user_id, db, limit=5, cache_id: str | None = None):
         return get_transactions(
             user_id, db,
             sort=[('date', -1), ('created_at', -1)],
-            limit=limit
+            limit=limit,
+            cache_id=cache_id
         )
     
     @staticmethod

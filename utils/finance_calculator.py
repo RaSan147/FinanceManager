@@ -3,53 +3,130 @@ from datetime import datetime, timezone, timedelta
 from utils.timezone_utils import now_utc, ensure_utc
 from collections import defaultdict
 from typing import Any, Dict, cast, List, Tuple, Optional
+from bson import ObjectId
 import uuid
+import logging
+import threading
+from utils.mongo_cache import MongoCache
 
-# ---------------- In-memory session cache -----------------
-# A lightweight (process-local) cache to avoid multiple Mongo round trips during
-# a single higher-level operation (e.g. building AI analysis). A caller creates
-# a cache session (create_cache_session) which pre-loads all user transactions
-# once. Subsequent calls to the existing helper functions can pass cache_id to
-# reuse that list with pure-Python filtering, sorting, and pagination.
+# ---------------------------------------------------------------------------
+# Mongo-backed cache (MANDATORY)
+# The project now requires a Mongo-backed cache instance. All session creation,
+# reads and invalidation are proxied to the MongoCache implementation. This
+# removes any in-process fallback to avoid stale/fragmented caching behavior.
 #
-# Not persistent and safe only for the lifetime of the Python process. Caller
-# is responsible for discarding cache_id when done. Memory growth is bounded by
-# explicit drop_cache_session or process lifetime.
+# Call `enable_mongo_cache(mongo.db)` during application startup (see app.py)
+# before any cache-using helpers are invoked. If the cache is not enabled, the
+# cache-related functions here will raise RuntimeError to fail fast and make the
+# missing initialization obvious.
+# ---------------------------------------------------------------------------
 
-_TX_CACHE: dict[str, Dict[str, Any]] = {}
-_CACHE_KEY_TRANSACTIONS = 'transactions'
+# Session TTL used by the Mongo cache (seconds)
+_SESSION_TTL_SECONDS = int(60 * 60)  # 1 hour
+
+# When the cached transaction list is larger than this threshold, prefer a
+# MongoDB aggregation pipeline rather than materializing many documents into
+# memory for each session.
+AGGREGATION_THRESHOLD = 1000
+
+# Logger for diagnostics
+logger = logging.getLogger(__name__)
+
+# Mandatory process-local MongoCache instance (set via enable_mongo_cache)
+_MONGO_CACHE: Optional[MongoCache] = None
+
+
+def enable_mongo_cache(db) -> MongoCache:
+    """Enable a process-local MongoCache instance and return it.
+
+    Call this once at app startup if you want to share cache sessions across
+    workers in the same process (note: cross-process sharing still requires a
+    shared DB; this provides a shared Mongo-backed cache instance per process).
+    """
+    global _MONGO_CACHE
+    # Let any exceptions propagate — cache is mandatory and startup should
+    # fail loudly if the MongoCache can't be created.
+    _MONGO_CACHE = MongoCache(db)
+    return _MONGO_CACHE
+
+
+def get_mongo_cache_stats() -> dict:
+    """Return stats from the enabled MongoCache or empty stats if disabled."""
+    try:
+        if _MONGO_CACHE is None:
+            return {'enabled': False, 'sessions': 0, 'total_transactions': 0}
+        stats = _MONGO_CACHE.get_stats()
+        stats.update({'enabled': True})
+        return stats
+    except Exception:
+        return {'enabled': False, 'sessions': 0, 'total_transactions': 0}
 
 
 def create_cache_session(user_id: str, db) -> str:
     """Create a cache session for a user and return cache_id.
 
-    Loads all user transactions once. Returns UUID4 string.
-    If a session already exists for same user with identical data needs, a new
-    session is still created (isolation). Caller should drop when finished.
+    This function requires the Mongo-backed cache to be enabled via
+    `enable_mongo_cache(db)`. It will raise RuntimeError if the cache hasn't
+    been initialized. Small user datasets (<= AGGREGATION_THRESHOLD) will be
+    materialized and stored in the Mongo cache; larger datasets will store a
+    session record without full transactions and callers will rely on
+    aggregation for heavy workloads.
     """
-    cache_id = str(uuid.uuid4())
-    all_tx = list(db.transactions.find({'user_id': user_id}))
-    _TX_CACHE[cache_id] = {
-        'user_id': user_id,
-        _CACHE_KEY_TRANSACTIONS: all_tx,
-        'created_at': now_utc(),
-        'count': len(all_tx)
-    }
-    return cache_id
+    if _MONGO_CACHE is None:
+        raise RuntimeError('Mongo-backed cache is not enabled. Call enable_mongo_cache(db) at startup')
+
+    try:
+        total_count = int(db.transactions.count_documents({'user_id': user_id}))
+    except Exception:
+        total_count = 0
+
+    txs = None
+    if total_count <= AGGREGATION_THRESHOLD:
+        try:
+            proj = {'ai_plan': 0, 'notes': 0}
+            txs = list(db.transactions.find({'user_id': user_id}, proj).sort([('date', -1), ('created_at', -1)]))
+        except Exception:
+            logger.exception('create_cache_session: failed to preload transactions for user=%s', user_id)
+            txs = None
+
+    cid = _MONGO_CACHE.create_session(user_id, transactions=txs, ttl_seconds=_SESSION_TTL_SECONDS)
+    return cid
+
+
+# NOTE: in-process cleanup/no-op helpers removed — all session lifecycle is
+# managed by the MongoCache implementation.
 
 
 def drop_cache_session(cache_id: str) -> None:
-    """Remove a cache session (idempotent)."""
-    _TX_CACHE.pop(cache_id, None)
+    """Remove a cache session (idempotent).
+
+    This proxies to the Mongo-backed cache and requires it to be enabled.
+    """
+    if _MONGO_CACHE is None:
+        raise RuntimeError('Mongo-backed cache is not enabled. Call enable_mongo_cache(db) at startup')
+    try:
+        _MONGO_CACHE.drop_session(cache_id)
+    except Exception:
+        logger.exception('drop_cache_session: failed for %s', cache_id)
 
 
 def _get_cached_transactions(cache_id: Optional[str], user_id: str) -> Optional[List[Dict[str, Any]]]:
+    """Retrieve cached transactions for a session id from the Mongo cache.
+
+    Raises RuntimeError if Mongo cache is not enabled.
+    """
     if not cache_id:
         return None
-    entry = _TX_CACHE.get(cache_id)
-    if not entry or entry.get('user_id') != user_id:
-        return None
-    return entry.get(_CACHE_KEY_TRANSACTIONS)  # type: ignore
+    if _MONGO_CACHE is None:
+        raise RuntimeError('Mongo-backed cache is not enabled. Call enable_mongo_cache(db) at startup')
+    try:
+        s = _MONGO_CACHE.get_session(cache_id)
+        if s and s.get('user_id') == user_id:
+            txs = s.get('transactions')
+            return list(txs) if isinstance(txs, list) else None
+    except Exception:
+        logger.exception('mongo_cache: failed to read session %s', cache_id)
+    return None
 
 # Shared duration map (approximate days) for period summaries
 DURATION_MAP: dict[str, int] = {
@@ -142,23 +219,115 @@ def calculate_summary(user_id, db, start_date: datetime, end_date: datetime, *, 
 
     NOTE: Core aggregation function used by higher level helpers. Keeps return shape stable.
     """
-    transactions = get_transactions(user_id, db, start_date, end_date, cache_id=cache_id)
+    # If we have a small in-memory cached list, do Python processing (fast for small N).
+    # If no cache or the cached list is large, prefer a Mongo aggregation which
+    # runs in C and avoids Python-loop overhead for thousands of transactions.
+    cached = _get_cached_transactions(cache_id, user_id)
 
-    total_income = 0.0
-    total_expenses = 0.0
-    income_categories: defaultdict[str, float] = defaultdict(float)
-    expense_categories: defaultdict[str, float] = defaultdict(float)
+    if cached is not None and len(cached) <= AGGREGATION_THRESHOLD:
+        transactions = get_transactions(user_id, db, start_date, end_date, cache_id=cache_id)
 
-    for t in transactions:
-        amount = round(t.get('amount', 0.0), 2)
-        t_type = t.get('type')
-        category = t.get('category', 'uncategorized')
-        if t_type == 'income':
-            total_income += amount
-            income_categories[category] += amount
-        elif t_type == 'expense':
-            total_expenses += amount
-            expense_categories[category] += amount
+        total_income = 0.0
+        total_expenses = 0.0
+        income_categories: defaultdict[str, float] = defaultdict(float)
+        expense_categories: defaultdict[str, float] = defaultdict(float)
+
+        for t in transactions:
+            amount = round(t.get('amount', 0.0), 2)
+            t_type = t.get('type')
+            category = t.get('category', 'uncategorized')
+            if t_type == 'income':
+                total_income += amount
+                income_categories[category] += amount
+            elif t_type == 'expense':
+                total_expenses += amount
+                expense_categories[category] += amount
+
+        transaction_count = len(transactions)
+    else:
+        # Build a Mongo aggregation to compute totals and per-category breakdowns.
+        try:
+            logger.debug(
+                "finance_calculator: using aggregation for user=%s start=%s end=%s cached_len=%s",
+                user_id, start_date, end_date, (len(cached) if cached is not None else 'None')
+            )
+            match = {'user_id': user_id}
+            if start_date and end_date:
+                match['date'] = {'$gte': ensure_utc(start_date), '$lt': ensure_utc(end_date)}
+
+            pipeline = [
+                {'$match': match},
+                {'$facet': {
+                    'type_totals': [
+                        {'$group': {'_id': '$type', 'total': {'$sum': '$amount'}, 'count': {'$sum': 1}}}
+                    ],
+                    'cat_totals': [
+                        {'$group': {'_id': {'type': '$type', 'category': {'$ifNull': ['$category', 'uncategorized']}}, 'total': {'$sum': '$amount'}}}
+                    ],
+                    'tx_count': [
+                        {'$group': {'_id': None, 'count': {'$sum': 1}}}
+                    ]
+                }}
+            ]
+
+            res = list(db.transactions.aggregate(pipeline))
+            if res:
+                out = res[0]
+            else:
+                out = {'type_totals': [], 'cat_totals': [], 'tx_count': []}
+
+            total_income = 0.0
+            total_expenses = 0.0
+            income_categories: defaultdict[str, float] = defaultdict(float)
+            expense_categories: defaultdict[str, float] = defaultdict(float)
+
+            for tt in out.get('type_totals', []):
+                typ = tt.get('_id')
+                total = float(tt.get('total') or 0.0)
+                if typ == 'income':
+                    total_income = round(total, 2)
+                elif typ == 'expense':
+                    total_expenses = round(total, 2)
+
+            for ct in out.get('cat_totals', []):
+                key = ct.get('_id') or {}
+                typ = key.get('type')
+                cat = key.get('category') or 'uncategorized'
+                total = round(float(ct.get('total') or 0.0), 2)
+                if typ == 'income':
+                    income_categories[cat] += total
+                elif typ == 'expense':
+                    expense_categories[cat] += total
+
+            txcount = out.get('tx_count') or []
+            transaction_count = int(txcount[0].get('count')) if txcount else 0
+        except Exception:
+            # Log full exception so we can diagnose why aggregation falls back
+            try:
+                logger.exception("finance_calculator: aggregation failed for user=%s", user_id)
+            except Exception:
+                # Best-effort logging; never raise from here
+                pass
+            # Fallback to Python path if aggregation fails for any reason
+            transactions = get_transactions(user_id, db, start_date, end_date, cache_id=cache_id)
+
+            total_income = 0.0
+            total_expenses = 0.0
+            income_categories: defaultdict[str, float] = defaultdict(float)
+            expense_categories: defaultdict[str, float] = defaultdict(float)
+
+            for t in transactions:
+                amount = round(t.get('amount', 0.0), 2)
+                t_type = t.get('type')
+                category = t.get('category', 'uncategorized')
+                if t_type == 'income':
+                    total_income += amount
+                    income_categories[category] += amount
+                elif t_type == 'expense':
+                    total_expenses += amount
+                    expense_categories[category] += amount
+
+            transaction_count = len(transactions)
 
     return {
         'total_income': round(total_income, 2),
@@ -166,7 +335,7 @@ def calculate_summary(user_id, db, start_date: datetime, end_date: datetime, *, 
         'savings': round(total_income - total_expenses, 2),
         'income_categories': dict(income_categories),
         'expense_categories': dict(expense_categories),
-        'transaction_count': len(transactions)
+        'transaction_count': int(transaction_count)
     }
 
 
@@ -246,10 +415,38 @@ def calculate_lifetime_transaction_summary(user_id, db, *, cache_id: str | None 
         "currency": transactions[0]['base_currency'] if transactions else 'USD'
     }
 
+
+def get_cache_stats() -> dict:
+    """Return stats from the Mongo-backed cache. Raises if cache not enabled."""
+    if _MONGO_CACHE is None:
+        raise RuntimeError('Mongo-backed cache is not enabled. Call enable_mongo_cache(db) at startup')
+    try:
+        stats = _MONGO_CACHE.get_stats()
+        stats.update({'enabled': True})
+        return stats
+    except Exception:
+        logger.exception('get_cache_stats failed')
+        return {'enabled': True, 'sessions': 0, 'total_transactions': 0}
+
+
+def drop_user_cache_sessions(user_id: str) -> int:
+    """Remove all cache sessions associated with a given user_id.
+
+    Proxies to the Mongo cache implementation and returns the number of
+    sessions removed. Raises if the Mongo cache is not enabled.
+    """
+    if _MONGO_CACHE is None:
+        raise RuntimeError('Mongo-backed cache is not enabled. Call enable_mongo_cache(db) at startup')
+    try:
+        return _MONGO_CACHE.drop_user_sessions(user_id)
+    except Exception:
+        logger.exception('drop_user_cache_sessions failed for %s', user_id)
+        return 0
+
 # Public cache-related helpers exported for external use.
 __all__ = [
     'DURATION_MAP',
-    'create_cache_session', 'drop_cache_session', 'get_transactions',
+    'create_cache_session', 'drop_cache_session', 'drop_user_cache_sessions', 'get_transactions',
     'calculate_summary', 'calculate_period_summary', 'get_expense_amounts_for_period',
-    'calculate_monthly_summary', 'get_N_month_income_expense', 'calculate_lifetime_transaction_summary'
+    'calculate_monthly_summary', 'get_N_month_income_expense', 'calculate_lifetime_transaction_summary', 'get_cache_stats'
 ]

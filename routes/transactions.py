@@ -183,8 +183,28 @@ def init_transactions_blueprint(mongo):
     @bp.route('/api/transactions', methods=['GET'])
     @login_required
     def api_transactions():
-        txs = list(mongo.db.transactions.find({'user_id': current_user.id}).sort('date', -1))
-        return jsonify(txs)
+        # Return a lightweight transaction representation for API consumers.
+        proj = {
+            'amount': 1,
+            'amount_original': 1,
+            'currency': 1,
+            'base_currency': 1,
+            'type': 1,
+            'category': 1,
+            'description': 1,
+            'date': 1,
+            'related_person': 1,
+            'created_at': 1,
+        }
+        txs = list(mongo.db.transactions.find({'user_id': current_user.id}, proj).sort('date', -1))
+        # Convert ObjectId to string for JSON serialization
+        out = []
+        for t in txs:
+            t = dict(t)
+            if '_id' in t:
+                t['_id'] = str(t['_1d'] if '_1d' in t else t['_id'])
+            out.append(t)
+        return jsonify(out)
 
     @bp.route('/api/transactions/list', methods=['GET'])
     @login_required
@@ -193,7 +213,22 @@ def init_transactions_blueprint(mongo):
         per_page = request.args.get('per_page', 10, type=int)
         if per_page > 100:
             per_page = 100
-        txs = Transaction.get_user_transactions(current_user.id, mongo.db, page, per_page)
+        # Use a lightweight projection to avoid transferring heavy fields
+        proj = {
+            'amount': 1,
+            'amount_original': 1,
+            'currency': 1,
+            'base_currency': 1,
+            'type': 1,
+            'category': 1,
+            'description': 1,
+            'date': 1,
+            'related_person': 1,
+            'created_at': 1,
+        }
+        skip = (page - 1) * per_page
+        cursor = mongo.db.transactions.find({'user_id': current_user.id}, proj).sort([('date', -1), ('created_at', -1)]).skip(skip).limit(per_page)
+        txs = list(cursor)
         total = Transaction.count_user_transactions(current_user.id, mongo.db)
         items = []
         for t in txs:

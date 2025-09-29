@@ -1,58 +1,212 @@
 /* To-Dos page styles (migrated from css/components/todos.css) */
-.todo-stage-badge { font-size: 0.7rem; }
-.todo-item.done .todo-title { text-decoration: line-through; opacity: 0.7; }
-.todo-item.paused { opacity: 0.6; }
-.todo-item.gave_up { opacity: 0.5; font-style: italic; }
-.todo-item.in_progress { border-left: 4px solid var(--bs-primary); }
-.todo-item.planning { border-left: 4px solid var(--bs-info); }
-.todo-item.wondering { border-left: 4px solid var(--bs-secondary); }
-.todo-item.done { border-left: 4px solid var(--bs-success); }
-.todo-item.gave_up { border-left: 4px solid var(--bs-danger); }
-.todo-item.paused { border-left: 4px solid var(--bs-warning); }
-.todo-filters .form-select, .todo-filters .form-control { font-size: .85rem; }
+.todo-stage-badge {
+  font-size: 0.7rem;
+}
 
-.todos-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:.75rem; align-items:start; }
-@media (max-width:575.98px){ .todos-grid { grid-template-columns:1fr; } }
+.todo-item.done .todo-title {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
 
-.todo-item { position:relative; transition:background-color .15s, box-shadow .15s; cursor:pointer; }
-.view-selector { min-width:170px; }
-.view-select-pop { width:200px; z-index:30; }
-.view-toggle-heading { font-size:1.05rem; }
-@media (max-width:575.98px){ .view-toggle-heading { font-size:1rem; } }
+.todo-item.paused {
+  opacity: 0.6;
+}
 
-@media (max-width:425px){
-  .todos-page-header{ flex-wrap:wrap; gap:.5rem; align-items:center; }
-  .todos-page-header .heading-responsive{ font-size:1.15rem; }
-  .todos-page-header .heading-responsive .heading-extra{ display:none; }
-  #btnNewTodoTop{ font-size:.9rem; padding:.45rem .8rem; }
-  .todos-toolbar{ flex-wrap:wrap; gap:.55rem !important; align-items:center !important; }
-  .todos-toolbar-right{ flex-wrap:wrap; gap:.55rem !important; }
-  #activeFiltersBar{ order:3; flex:1 1 100%; }
-  #btnSortMenu{ white-space:nowrap; }
-  #btnSortMenu .d-none.d-md-inline, #currentSortLabel{ display:none !important; }
-  #btnFilterToggle span{ display:none !important; }
-  #btnFilterToggle{ padding:.45rem .65rem; }
-  .todos-grid{ grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:.6rem; }
-  .todo-item.card{ padding:.55rem .6rem; }
-  .todo-item .todo-desc{ font-size:.78rem; }
-  .todo-item .todo-stage-select-inline{ font-size:.72rem; }
-  .stage-header-toggle { font-size: 1rem; }
+.todo-item.gave_up {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.todo-item.in_progress {
+  border-left: 4px solid var(--bs-primary);
+}
+
+.todo-item.planning {
+  border-left: 4px solid var(--bs-info);
+}
+
+.todo-item.wondering {
+  border-left: 4px solid var(--bs-secondary);
+}
+
+.todo-item.done {
+  border-left: 4px solid var(--bs-success);
+}
+
+.todo-item.gave_up {
+  border-left: 4px solid var(--bs-danger);
+}
+
+.todo-item.paused {
+  border-left: 4px solid var(--bs-warning);
+}
+
+.todo-filters .form-select,
+.todo-filters .form-control {
+  font-size: .85rem;
+}
+
+.todos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: .75rem;
+  align-items: start;
+}
+
+@media (max-width:575.98px) {
+  .todos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.todo-item {
+  position: relative;
+  transition: background-color .15s, box-shadow .15s;
+  cursor: pointer;
+}
+
+.view-selector {
+  min-width: 170px;
+}
+
+.view-select-pop {
+  width: 200px;
+  z-index: 30;
+}
+
+.view-toggle-heading {
+  font-size: 1.05rem;
+}
+
+@media (max-width:575.98px) {
+  .view-toggle-heading {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width:425px) {
+  .todos-page-header {
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+  }
+
+  .todos-page-header .heading-responsive {
+    font-size: 1.15rem;
+  }
+
+  .todos-page-header .heading-responsive .heading-extra {
+    display: none;
+  }
+
+  #btnNewTodoTop {
+    font-size: .9rem;
+    padding: .45rem .8rem;
+  }
+
+  .todos-toolbar {
+    flex-wrap: wrap;
+    gap: .55rem !important;
+    align-items: center !important;
+  }
+
+  .todos-toolbar-right {
+    flex-wrap: wrap;
+    gap: .55rem !important;
+  }
+
+  #activeFiltersBar {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  #btnSortMenu {
+    white-space: nowrap;
+  }
+
+  #btnSortMenu .d-none.d-md-inline,
+  #currentSortLabel {
+    display: none !important;
+  }
+
+  #btnFilterToggle span {
+    display: none !important;
+  }
+
+  #btnFilterToggle {
+    padding: .45rem .65rem;
+  }
+
+  .todos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: .6rem;
+  }
+
+  .todo-item.card {
+    padding: .55rem .6rem;
+  }
+
+  .todo-item .todo-desc {
+    font-size: .78rem;
+  }
+
+  .todo-item .todo-stage-select-inline {
+    font-size: .72rem;
+  }
+
+  .stage-header-toggle {
+    font-size: 1rem;
+  }
 }
 
 /* Stage header toggle */
-.stage-header-toggle { cursor:pointer; font-weight:600; line-height:1.1; padding:4px 6px; border-radius:4px; }
-.stage-header-toggle:focus { outline:none; box-shadow:none; }
-.stage-header-toggle:hover { background: var(--bs-light-bg-subtle, rgba(0,0,0,0.04)); }
-body.dark-mode .stage-header-toggle:hover { background: rgba(255,255,255,0.08); }
-.stage-header-toggle i.bi-kanban { opacity:.85; }
+.stage-header-toggle {
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.1;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.stage-header-toggle:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.stage-header-toggle:hover {
+  background: var(--bs-light-bg-subtle, rgba(0, 0, 0, 0.04));
+}
+
+body.dark-mode .stage-header-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.stage-header-toggle i.bi-kanban {
+  opacity: .85;
+}
 
 /* Detail modal & comments */
-#todoDetailModal .modal-body { font-size:.9rem; }
-#todoDetailModal [data-todo-detail-description]{ white-space:pre-wrap; font-size:.92rem; line-height:1.35; }
-#todoDetailModal [data-todo-comments] img{ max-width:100%; height:auto; }
-#todoDetailModal [data-todo-comments] .border{ background: var(--bs-body-bg); }
-body.dark-mode #todoDetailModal [data-todo-comments] .border{ background: rgba(255,255,255,0.03); }
-.todo-item .todo-desc{ max-height:5.5em; overflow:hidden; }
+#todoDetailModal .modal-body {
+  font-size: .9rem;
+}
+
+#todoDetailModal [data-todo-comments] img {
+  max-width: 100%;
+  height: auto;
+}
+
+#todoDetailModal [data-todo-comments] .border {
+  background: var(--bs-body-bg);
+}
+
+body.dark-mode #todoDetailModal [data-todo-comments] .border {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.todo-item .todo-desc {
+  max-height: 5.5em;
+  overflow: hidden;
+}
 
 /* Enhanced styling for To-Dos detail view */
 
@@ -68,64 +222,124 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border{ background: rgba(2
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 } */
 
-/* Description */
-#todoDetailModal [data-todo-detail-description] {
-  font-size: 1rem;
-  line-height: 1.6;
-  color: var(--text-primary, #1f2937);
-  margin-bottom: 1rem;
-}
-
 /* Comments */
 
 /* Detail header & actions */
-#todoDetailModal .todo-detail-header{
-  display:flex;
-  gap:.75rem;
-  align-items:flex-start;
-  justify-content:space-between;
+#todoDetailModal .todo-detail-header {
+  display: flex;
+  gap: .75rem;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: .6rem;
 }
-#todoDetailModal .todo-detail-header .left{ display:flex; gap:.6rem; align-items:center; min-width:0; }
+
+#todoDetailModal .todo-detail-header .left {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  min-width: 0;
+}
+
 /* Title should ellipsize to avoid pushing actions off-screen */
-#todoDetailModal .todo-detail-header .left .modal-title{ font-size:1.05rem; font-weight:700; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw; }
-#todoDetailModal .todo-detail-header .meta{ font-size:.82rem; color:var(--text-secondary, #6c757d); }
+#todoDetailModal .todo-detail-header .left .modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
+}
+
+#todoDetailModal .todo-detail-header .meta {
+  font-size: .82rem;
+  color: var(--text-secondary, #6c757d);
+}
 
 /* Ensure actions wrap under the title when there isn't enough horizontal space */
-#todoDetailModal .todo-detail-actions{ flex-shrink:0; }
+#todoDetailModal .todo-detail-actions {
+  flex-shrink: 0;
+}
 
 /* Action buttons aligned to the right, using site button styles */
-#todoDetailModal .todo-detail-actions{ display:flex; gap:.45rem; align-items:center; }
-#todoDetailModal .todo-detail-actions .btn{ padding:.45rem .75rem; font-size:.88rem; }
+#todoDetailModal .todo-detail-actions {
+  display: flex;
+  gap: .45rem;
+  align-items: center;
+}
+
+#todoDetailModal .todo-detail-actions .btn {
+  padding: .45rem .75rem;
+  font-size: .88rem;
+}
 
 /* Description area: allow long content but keep modal tidy */
-#todoDetailModal .todo-detail-description-wrap{
-  max-height: 42vh; /* keeps modal from growing too tall */
-  overflow:auto;
+#todoDetailModal .todo-detail-description-wrap {
+  max-height: 42vh;
+  /* keeps modal from growing too tall */
+  overflow: auto;
   padding: .6rem .65rem;
-  border-radius:8px;
+  border-radius: 8px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   margin-bottom: .8rem;
 }
-#todoDetailModal .todo-detail-card-title h4{
-  font-size:1.25rem; margin:0; word-break:break-word; color:var(--text-primary); font-weight:700;
+
+#todoDetailModal .todo-detail-card-title h4 {
+  font-size: 1.25rem;
+  margin: 0;
+  word-break: break-word;
+  color: var(--text-primary);
+  font-weight: 700;
 }
-#todoDetailModal .todo-detail-card-title .small{ color:var(--text-secondary); }
-#todoDetailModal .card[data-todo-detail-title-body], #todoDetailModal .card{ border-radius:10px; }
-@media (max-width:575.98px){
-  #todoDetailModal .todo-detail-card-title h4{ font-size:1.05rem; }
-  #todoDetailModal .todo-detail-card-actions{ display:none; }
+
+#todoDetailModal .todo-detail-card-title .small {
+  color: var(--text-secondary);
+}
+
+#todoDetailModal .card[data-todo-detail-title-body],
+#todoDetailModal .card {
+  border-radius: 10px;
+}
+
+@media (max-width:575.98px) {
+  #todoDetailModal .todo-detail-card-title h4 {
+    font-size: 1.05rem;
+  }
+
+  #todoDetailModal .todo-detail-card-actions {
+    display: none;
+  }
 }
 
 /* Section headings inside modal (Description, Stage History, Comments) */
-#todoDetailModal h5{ font-size:1.05rem; font-weight:700; margin-top:1rem; }
-#todoDetailModal h6{ font-size:1rem; font-weight:600; }
-#todoDetailModal .todo-detail-description-wrap pre{ white-space:pre-wrap; }
+#todoDetailModal h5 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 1rem;
+}
+
+#todoDetailModal h6 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+#todoDetailModal .todo-detail-description-wrap pre {
+  white-space: pre-wrap;
+}
 
 /* Comments list */
-#todoDetailModal [data-todo-comments]{ display:flex; flex-direction:column; gap:.6rem; }
-.todo-comments-list{ display:flex; flex-direction:column; gap:.6rem; }
+#todoDetailModal [data-todo-comments] {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+
+.todo-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
 
 .todo-comment {
   display: flex;
@@ -148,8 +362,17 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border{ background: rgba(2
   margin-bottom: 0.25rem;
 }
 
-.todo-comment .body{ flex:1 1 auto; min-width:0; }
-.todo-comment .body .content{ margin-top:.25rem; font-size:.95rem; line-height:1.45; color:var(--text-primary); }
+.todo-comment .body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.todo-comment .body .content {
+  margin-top: .25rem;
+  font-size: .95rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
 
 .todo-comment .meta {
   font-size: 0.8rem;
@@ -182,6 +405,7 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border{ background: rgba(2
   background: transparent;
   padding: 0;
 }
+
 [data-todo-paste-hint]:hover {
   color: var(--text-primary);
 }
@@ -192,6 +416,7 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border{ background: rgba(2
   display: inline-block;
   cursor: pointer;
 }
+
 .file-input-wrapper input[type=file] {
   position: absolute;
   left: 0;
@@ -201,45 +426,130 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border{ background: rgba(2
   width: 100%;
   height: 100%;
 }
+
 .file-input-wrapper .btn-icon {
   cursor: pointer;
 }
 
 /* Comment action buttons (edit/delete/reply) */
-.todo-comment .actions{ display:flex; gap:.4rem; align-items:center; margin-left:8px; }
-.todo-comment .actions .btn{ padding:.26rem .44rem; font-size:.8rem; border-radius:6px; min-width:36px; display:inline-flex; align-items:center; justify-content:center; }
-.todo-comment .actions .btn i{ font-size: .95rem; }
+.todo-comment .actions {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.todo-comment .actions .btn {
+  padding: .26rem .44rem;
+  font-size: .8rem;
+  border-radius: 6px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.todo-comment .actions .btn i {
+  font-size: .95rem;
+}
 
 /* Make action buttons icon-only on narrow screens */
-@media (max-width:575.98px){
-  .todo-comment .actions .btn span{ display:none !important; }
-  .todo-detail-actions .btn span{ display:none !important; }
-  .todo-detail-actions .btn{ padding:.32rem .45rem; }
-  #todoDetailModal .btn-sm{ padding:.28rem .48rem; }
+@media (max-width:575.98px) {
+  .todo-comment .actions .btn span {
+    display: none !important;
+  }
+
+  .todo-detail-actions .btn span {
+    display: none !important;
+  }
+
+  .todo-detail-actions .btn {
+    padding: .32rem .45rem;
+  }
+
+  #todoDetailModal .btn-sm {
+    padding: .28rem .48rem;
+  }
 }
 
 /* Comment form */
-.todo-comment-form{ display:flex; gap:.6rem; align-items:flex-start; }
-.todo-comment-form textarea{ flex:1 1 auto; min-height:64px; resize:vertical; padding:.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-surface); }
-.todo-comment-form .btn{ align-self:flex-end; margin-left:auto; }
+.todo-comment-form {
+  display: flex;
+  gap: .6rem;
+  align-items: flex-start;
+}
+
+.todo-comment-form textarea {
+  flex: 1 1 auto;
+  min-height: 64px;
+  resize: vertical;
+  padding: .6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+}
+
+.todo-comment-form .btn {
+  align-self: flex-end;
+  margin-left: auto;
+}
 
 /* Smaller screens adjustments */
-@media (max-width:575.98px){
-  #todoDetailModal .todo-detail-header{ flex-direction:row; align-items:center; gap:.45rem; }
+@media (max-width:575.98px) {
+  #todoDetailModal .todo-detail-header {
+    flex-direction: row;
+    align-items: center;
+    gap: .45rem;
+  }
+
   /* place actions on a new row when necessary */
-  #todoDetailModal .todo-detail-header .left{ flex:1 1 auto; }
-  #todoDetailModal .todo-detail-actions{ flex:0 0 auto; }
+  #todoDetailModal .todo-detail-header .left {
+    flex: 1 1 auto;
+  }
+
+  #todoDetailModal .todo-detail-actions {
+    flex: 0 0 auto;
+  }
+
   /* reduce title max width to allow actions to sit alongside */
-  #todoDetailModal .todo-detail-header .left .modal-title{ max-width:46vw; }
-  #todoDetailModal .todo-detail-description-wrap{ max-height:30vh; }
-  .todo-comment { padding:.45rem; }
-  .todo-comment .meta .datetime{ display:block; margin-left:0; }
+  #todoDetailModal .todo-detail-header .left .modal-title {
+    max-width: 46vw;
+  }
+
+  #todoDetailModal .todo-detail-description-wrap {
+    max-height: 30vh;
+  }
+
+  .todo-comment {
+    padding: .45rem;
+  }
+
+  .todo-comment .meta .datetime {
+    display: block;
+    margin-left: 0;
+  }
 }
 
 /* Dark mode tweaks */
-body.dark-mode #todoDetailModal .todo-detail-description-wrap{ background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.04); }
-body.dark-mode .todo-comment{ background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.04); }
+body.dark-mode #todoDetailModal .todo-detail-description-wrap {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+body.dark-mode .todo-comment {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.04);
+}
 
 /* Small action-btn helper to match misc.action-btn */
-.action-btn{ padding:.28rem .48rem; font-size:.88rem; display:inline-flex; align-items:center; gap:.35rem; }
-.action-btn i{ font-size:1rem; }
+.action-btn {
+  padding: .28rem .48rem;
+  font-size: .88rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.action-btn i {
+  font-size: 1rem;
+}
