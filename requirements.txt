@@ -9,3 +9,6 @@ dnspython
 gunicorn
 pydantic
 imagekitio
+aiohttp
+requests
+pymongo
