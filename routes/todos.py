@@ -39,7 +39,8 @@ def init_todos_blueprint(mongo):
         page = max(1, int(request.args.get('page', 1)))
         per_page = min(100, int(request.args.get('per_page', 20)))
         skip = (page - 1) * per_page
-        sort = request.args.get('sort') or getattr(current_user, 'todo_sort', 'created_desc')
+        # Prefer explicit query param, otherwise use user's persisted preference via get_sort_mode
+        sort = request.args.get('sort') or current_user.get_sort_mode('todo') or 'created_desc'
         items, total = Todo.list(
             current_user.id,
             mongo.db,
@@ -249,19 +250,6 @@ def init_todos_blueprint(mongo):
             return jsonify({'error': 'Cannot delete (in use or not found)'}), 400
         return jsonify({'success': True})
 
-    # Preference: save todo sort
-    @bp.route('/api/todo-pref/sort', methods=['POST'], endpoint='api_todo_pref_sort')
-    @login_required
-    def api_todo_pref_sort():  # type: ignore[override]
-        data = request.get_json(force=True, silent=True) or {}
-        sort = data.get('sort')
-        if not sort:
-            return jsonify({'error': 'sort required'}), 400
-        if not getattr(current_user, 'set_todo_sort', None):
-            return jsonify({'error': 'unsupported'}), 400
-        ok = current_user.set_todo_sort(sort)
-        if not ok:
-            return jsonify({'error': 'invalid sort'}), 400
-        return jsonify({'success': True, 'sort': sort})
+    # Note: todo sort preference is now handled by the unified /api/sort-pref endpoint
 
     return bp

@@ -331,6 +331,9 @@ class GoalsModule {
             total: 0,
             goalsMap: {}
         };
+        // track sort preference state: null = not set locally, sortExplicit = user chose this session
+        this.state.sort = null;
+        this.state.sortExplicit = false;
         if (this.utils.qs('[data-goals-root]')) {
             this.initGoalsPage();
         }
@@ -349,14 +352,24 @@ class GoalsModule {
                 e.preventDefault();
                 const mode = a.getAttribute('data-sort');
                 this.state.sort = mode;
+                this.state.sortExplicit = true; // user explicitly chose a sort this session
                 sortMenu.querySelectorAll('a[data-sort]').forEach(el => el.classList.remove('active'));
                 a.classList.add('active');
                 this.loadGoals(1);
+                // Persist per-user preference (fire-and-forget)
+                try {
+                    (async (s) => {
+                        await App.utils.fetchJSONUnified('/api/sort-pref', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: 'goals', sort: s })
+                        });
+                    })(mode).catch(()=>{});
+                } catch(_) {}
             });
-            const def = sortMenu.querySelector('a[data-sort="created_desc"]');
-            def && def.classList.add('active');
+            // Do not assume a default active sort here; apply server-returned persisted sort on load instead.
         }
-        if (!this.state.sort) this.state.sort = 'created_desc';
+        // Don't force a client-side default sort here. If the server returns a persisted sort it will be applied on load.
 
         // Remove local submit handler to avoid duplicate POST; global_modals handles creation.
         if (addForm) {
@@ -417,16 +430,30 @@ class GoalsModule {
         const root = qs('[data-goals-list]');
         if (!root) return;
         const perPage = parseInt(root.getAttribute('data-per-page') || '5', 10);
-        const sortVal = this.state.sort || 'created_desc';
+
+        // Only include sort when user explicitly selected it during this session. Otherwise let server apply persisted sort.
+        let url = `/api/goals/list?page=${page}&per_page=${perPage}`;
+        if (this.state.sortExplicit && this.state.sort) {
+            url += `&sort=${encodeURIComponent(this.state.sort)}`;
+        }
 
         try {
-            const data = await fetchJSON(`/api/goals/list?page=${page}&per_page=${perPage}&sort=${encodeURIComponent(sortVal)}`);
+            const data = await fetchJSON(url);
             this.state.page = data.page;
             this.state.perPage = data.per_page;
             this.state.total = data.total;
             this.renderGoals(data.items || []);
             this.renderPagination();
-            if (data.sort) this.state.sort = data.sort;
+            // If server returned a persisted sort, apply it to the UI unless user explicitly changed sort this session.
+            if (data.sort) {
+                if (!this.state.sortExplicit) {
+                    this.state.sort = data.sort;
+                    const sm = document.querySelector('[data-goals-sort-menu]');
+                    if (sm) {
+                        sm.querySelectorAll('a[data-sort]').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-sort') === this.state.sort));
+                    }
+                }
+            }
         } catch (e) {
             root.innerHTML = '<div class="text-danger">Failed to load goals</div>';
         }

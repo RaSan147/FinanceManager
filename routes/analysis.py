@@ -13,7 +13,10 @@ def init_analysis_blueprint(mongo, ai_engine):
     def analysis():
         from app import calculate_monthly_summary
         monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-        goal_models = Goal.get_active_goals(current_user.id, mongo.db)
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+        proj = {'ai_plan': 0}
+        goal_models = Goal.get_active_goals(current_user.id, mongo.db, sort_mode=user_goal_sort, projection=proj)
         allocations = GoalAllocator.compute_allocations(current_user.id, mongo.db)
         user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
         user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])

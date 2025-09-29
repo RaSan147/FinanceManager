@@ -125,6 +125,9 @@ class GoalInDB(GoalBase):
             raise ValueError("Invalid ObjectId")
         return str(v)
 
+
+
+
 class Goal:
     """Storage and domain utilities for Goal records.
 
@@ -209,7 +212,7 @@ class Goal:
         return result.deleted_count > 0
 
     @staticmethod
-    def get_user_goals(user_id: str, db, skip: int = 0, limit: int = 10) -> List[GoalInDB]:
+    def get_user_goals(user_id: str, db, skip: int = 0, limit: int = 10, batch_size: int = -1, sort_mode: str | None = None, projection: Dict[str, int] | None = None) -> List[GoalInDB]:
         """List goals for a user with pagination and deterministic sorting.
 
         Default order: newest first (created_at desc).
@@ -230,40 +233,81 @@ class Goal:
             db: Mongo database handle
             skip: Pagination offset
             limit: Page size
+            batch_size: Optional Mongo cursor batch_size to use when fetching (<=0 means no batch_size call)
 
         Returns:
             List[GoalInDB]
         """
-        sort_mode = getattr(db, '_goal_sort_mode', 'created_desc')  # ephemeral attr optionally set by caller
-        sort_mode = (sort_mode or 'created_desc').lower()
+        # Normalize sort mode and map to mongo sort tuples
+        # Priority: explicit param `sort_mode`, then per-user `sort_modes.goals` via User.get_sorting, then default
+        if sort_mode is None:
+            try:
+                user_obj = User.get_by_id(user_id, db)
+                sort_mode = user_obj.get_sort_mode('goals') if user_obj else None
+            except Exception:
+                sort_mode = None
+        if not sort_mode:
+            sort_mode = 'created_desc'
         sort_map: dict[str, list[tuple[str, int]]] = {
             'created_desc': [('created_at', -1)],
             'created_asc': [('created_at', 1)],
             'target_date': [('target_date', 1), ('created_at', -1)],
             'target_date_desc': [('target_date', -1), ('created_at', -1)],
-            'priority': [('ai_priority', -1), ('created_at', -1)],
+            'priority': [('ai_priority', -1), ('target_date', 1), ('created_at', -1)],
         }
-        mongo_sort = sort_map.get(sort_mode, sort_map['created_desc'])
-        cursor = db.goals.find({"user_id": user_id}, {  # projection excludes large plan body
-            'ai_plan': 0
-        }).sort(mongo_sort).skip(skip).limit(limit)
+        mongo_sort = sort_map.get((sort_mode or 'created_desc').lower(), sort_map['created_desc'])
+
+        # Ensure completed goals sort last by prepending is_completed ascending
+        mongo_sort = [('is_completed', 1)] + mongo_sort
+
+        # Default projection excludes large `ai_plan` field unless caller provided a projection
+        if projection is None:
+            projection = {'ai_plan': 0}
+        cursor = db.goals.find({"user_id": user_id}, projection).sort(mongo_sort).skip(skip).limit(limit)
+        if isinstance(batch_size, int) and batch_size > 0:
+            try:
+                cursor = cursor.batch_size(int(batch_size))
+            except Exception:
+                pass
         return [GoalInDB(**g) for g in cursor]
 
     @staticmethod
-    def get_active_goals(user_id: str, db) -> List[GoalInDB]:
+    def get_active_goals(user_id: str, db, skip: int = 0, N: int = -1, batch_size: int = -1, sort_mode: str | None = None, projection: Dict[str, int] | None = None) -> List[GoalInDB]:
         """List non-completed goals with deterministic ordering.
 
-        Uses ai_priority desc then target_date asc then created_at desc so that
-        newly added goals without AI data naturally fall toward the end but
-        still appear before very old, far future goals if priorities tie.
+        Defaults to ai_priority desc, target_date asc, created_at desc.
         """
-        cursor = (db.goals
-                  .find({"user_id": user_id, "is_completed": False}, {'ai_plan': 0})
-                  .sort([
-                      ('ai_priority', -1),
-                      ('target_date', 1),
-                      ('created_at', -1)
-                  ]))
+        sort_map: dict[str, list[tuple[str, int]]] = {
+            'created_desc': [('created_at', -1)],
+            'created_asc': [('created_at', 1)],
+            'target_date': [('target_date', 1), ('created_at', -1)],
+            'target_date_desc': [('target_date', -1), ('created_at', -1)],
+            'priority': [('ai_priority', -1), ('target_date', 1), ('created_at', -1)],
+        }
+    # Resolve sort_mode: prefer explicit param, then per-user `sort_modes.goals` via User.get_sorting, then default
+        if not sort_mode:
+            try:
+                user_obj = User.get_by_id(user_id, db)
+                sort_mode = user_obj.get_sort_mode('goals') if user_obj else None
+            except Exception:
+                sort_mode = None
+        if not sort_mode:
+            sort_mode = 'priority'
+        mongo_sort = sort_map.get((sort_mode or 'priority').lower(), sort_map['priority'])
+
+        # Default projection excludes large `ai_plan` field unless caller provided a projection
+        if projection is None:
+            projection = {'ai_plan': 0}
+        cursor = db.goals.find({"user_id": user_id, "is_completed": False}, projection).sort(mongo_sort)
+        if isinstance(batch_size, int) and batch_size > 0:
+            try:
+                cursor = cursor.batch_size(int(batch_size))
+            except Exception:
+                pass
+        if skip > 0:
+            cursor = cursor.skip(skip)
+        if N > 0:
+            cursor = cursor.limit(N)
         return [GoalInDB(**g) for g in cursor]
 
     @staticmethod
@@ -538,8 +582,22 @@ class Goal:
     @staticmethod
     def get_prioritized(user_id: str, db) -> List[dict]:
         """Return goals sorted by ai_priority descending (excluding large ai_plan body)."""
-        cursor = db.goals.find({'user_id': user_id}, {'ai_plan': 0}).sort('ai_priority', -1)
-        return [GoalInDB(**g).model_dump(by_alias=True) for g in cursor]
+        cursor = db.goals.find({'user_id': user_id}, {'ai_plan': 0})
+        goals_list = [GoalInDB(**g) for g in cursor]
+
+        # sort by ai_priority desc then created_at desc, but always place completed goals at the end
+        def _priority_key(g: GoalInDB):
+            p = getattr(g, 'ai_priority', None)
+            try:
+                p_val = float(p) if p is not None else 0.0
+            except Exception:
+                p_val = 0.0
+            created = getattr(g, 'created_at', now_utc()) or now_utc()
+            # We want primary key: is_completed (False first), then priority desc, then created_at desc
+            return (1 if getattr(g, 'is_completed', False) else 0, -p_val, -created.timestamp())
+
+        goals_list.sort(key=_priority_key)
+        return [GoalInDB(**g.model_dump(by_alias=True)).model_dump(by_alias=True) if isinstance(g, GoalInDB) else GoalInDB(**g).model_dump(by_alias=True) for g in goals_list]
 
     @staticmethod
     def mark_as_completed(user_id: str, goal_id: ObjectId, db):

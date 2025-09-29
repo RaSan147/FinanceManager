@@ -90,9 +90,21 @@ def _build_financial_context(user: User) -> dict:
         last_30D_details = get_transactions(user.id, db, start_30, end_now, cache_id=cache_id, clean=True)
         recent_3M_summary = get_N_month_income_expense(user.id, db, n=3, cache_id=cache_id)
 
-        goals = Goal.get_active_goals(user.id, db)
+        # Respect user's saved goal sort preference when available (new sort_modes dict preferred)
+        user_doc = db.users.find_one({'_id': ObjectId(user.id)})
+        user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+        # Include AI analysis fields but exclude heavy ai_plan content
+        proj = {
+            'ai_plan': 0,
+            'ai_priority': 1,
+            'ai_urgency': 1,
+            'ai_impact': 1,
+            'ai_health_impact': 1,
+            'ai_confidence': 1,
+            'ai_suggestions': 1,
+        }
+        goals = Goal.get_active_goals(user.id, db, sort_mode=user_goal_sort, projection=proj)
         compact_goals = [_compact_goal_with_local_currency(g, user, lifetime_summary["current_balance"]) for g in goals]
-
 
     finally:
         if cache_id:

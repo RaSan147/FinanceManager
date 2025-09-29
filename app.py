@@ -500,6 +500,7 @@ def register_blueprints():
     from routes.ai_features import init_ai_blueprint
     from routes.todos import init_todos_blueprint
     from routes.diary import init_diary_blueprint
+    from routes.prefs import init_prefs_blueprint
 
     # Only register if not already present (debug reloader imports twice)
     if 'dashboard' not in app.blueprints:
@@ -520,6 +521,8 @@ def register_blueprints():
         app.register_blueprint(init_todos_blueprint(mongo))
     if 'diary_bp' not in app.blueprints:
         app.register_blueprint(init_diary_blueprint(mongo))
+    if 'prefs_bp' not in app.blueprints:
+        app.register_blueprint(init_prefs_blueprint(mongo))
 
 
 # Ensure blueprints are registered at import time

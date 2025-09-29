@@ -28,7 +28,18 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
         per_page = 5
         skip = (page - 1) * per_page
         total_goals = mongo.db.goals.count_documents({'user_id': current_user.id})
-        goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page)
+        # Prefer user's persisted goals sort when rendering the initial goals page
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        # New schema: sort_modes dict with key 'goals'
+        sort_param = ''
+        if user_doc:
+            sort_param = (user_doc.get('sort_modes') or {}).get('goals') or ''
+        if not sort_param:
+            sort_param = 'created_desc'
+        # Pass resolved sort_param directly to Goal.get_user_goals (no DB-side attribute hack)
+        # only need lightweight fields for listing; exclude ai_plan to save bandwidth
+        proj = {'ai_plan': 0}
+        goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page, sort_mode=sort_param, projection=proj)
         monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
         user_doc = User.get_by_id(current_user.id, mongo.db)
         user_default_code = user_doc.default_currency
@@ -141,12 +152,20 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
         per_page = min(per_page, 50)
         skip = (page - 1) * per_page
         sort_param = (request.args.get('sort') or '').lower().strip()
-        allowed_sorts = {'', 'created_desc', 'created_asc', 'target_date', 'target_date_desc', 'priority'}
+        # Use central allowed sort options from User class for consistency
+        allowed = User.SORT_MODE_OPTIONS['goals']
+        allowed_sorts = set(allowed) | {''}
         if sort_param not in allowed_sorts:
+            sort_param = ''
+        # If client did not explicitly request a sort, prefer user's persisted preference
+        if not sort_param:
+            user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+            sort_param = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else ''
+        if not sort_param:
             sort_param = 'created_desc'
-        setattr(mongo.db, '_goal_sort_mode', sort_param or 'created_desc')
         total = mongo.db.goals.count_documents({'user_id': current_user.id})
-        goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page)
+        proj = {'ai_plan': 0}
+        goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page, sort_mode=sort_param or 'created_desc', projection=proj)
         monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
         user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
         user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
@@ -277,5 +296,7 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
                 except Exception:
                     pass
         return jsonify({'error': 'Plan unavailable'}), 404
+
+    # Note: goals sort preference is now handled by the unified /api/sort-pref endpoint
 
     return bp

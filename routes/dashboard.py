@@ -29,7 +29,13 @@ def init_dashboard_blueprint(mongo):
             )
         except Exception:
             pass
-        active_goal_models = Goal.get_active_goals(current_user.id, mongo.db)
+        # Respect user's saved goals sorting preference when available
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        # Prefer new sort_modes dict
+        user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+        # Only need core fields for dashboard; exclude heavy ai_plan content
+        proj = {'ai_plan': 0}
+        active_goal_models = Goal.get_active_goals(current_user.id, mongo.db, sort_mode=user_goal_sort, projection=proj)
         from app import calculate_monthly_summary  # lazy import to avoid circular
         monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
         full_balance = user_obj.get_lifetime_transaction_summary()
@@ -85,7 +91,10 @@ def init_dashboard_blueprint(mongo):
         from app import calculate_monthly_summary, currency_service
         monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
         full_balance = User(user, mongo.db).get_lifetime_transaction_summary()
-        active_goal_models = Goal.get_active_goals(current_user.id, mongo.db)
+        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+        user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+        proj = {'ai_plan': 0}
+        active_goal_models = Goal.get_active_goals(current_user.id, mongo.db, sort_mode=user_goal_sort, projection=proj)
         allocations = Goal.compute_allocations(current_user.id, mongo.db)
         user_default_code = (user or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
         goals = []
