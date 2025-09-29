@@ -81,7 +81,7 @@ def init_ai_blueprint(mongo, spending_advisor: SpendingAdvisor, pastebin_client)
                 return jsonify({"error": "User not authenticated."}), 401
             user_doc = mongo.db.users.find_one({'_id': ObjectId(user_id)})
             user_base_currency = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY']).upper()
-            from app import currency_service
+            from utils.currency import currency_service
             input_currency = (data.get('currency') or user_base_currency).upper()
             converted_amount = currency_service.convert_amount(amount, input_currency, user_base_currency)
             item_data = {

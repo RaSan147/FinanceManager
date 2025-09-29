@@ -91,6 +91,12 @@ class CurrencyService:
 		self._rates_lock = threading.Lock()
 		self.supported_currencies: list[str] = list(self.STATIC_USD_PER_UNIT.keys())
 
+		# Simple in-memory conversion result cache to avoid repeated math and
+		# background-trigger checks when many conversions are requested in a
+		# single request (e.g. allocation algorithms). Keyed by (amt_rounded, from, to)
+		self._conv_cache: Dict[tuple[float, str, str], float] = {}
+		self._conv_cache_max = 2000
+
 
 		self._backoff_seconds = int(os.getenv("CURRENCY_RATES_BACKOFF_SECONDS", "600"))
 		self._ttl_seconds = int(os.getenv("CURRENCY_RATES_TTL_SECONDS", "86400"))  # 24h
@@ -276,6 +282,11 @@ class CurrencyService:
 		if mapping:
 			with self._rates_lock:
 				self._usd_per_unit = self._apply_supported_filter(mapping)
+				# Clear conversion cache since new rates may change results
+				try:
+					self._conv_cache.clear()
+				except Exception:
+					pass
 			self._last_load_ts = now
 			self._save_cache(api_url=api_url)
 			return True
@@ -287,10 +298,43 @@ class CurrencyService:
 		return False
 
 	def _ensure_fresh(self) -> None:
+		# Keep for callers that explicitly want a synchronous ensure.
+		# Prefer non-blocking background refresh in hot paths (e.g. conversions used in templates)
 		try:
 			self.refresh_rates(force=False)
 		except Exception:
 			pass
+
+	def _refresh_in_thread(self, force: bool = False) -> None:
+		"""Start a daemon thread to refresh rates without blocking the caller."""
+		def _worker():
+			try:
+				self.refresh_rates(force=force)
+			except Exception:
+				# Swallow errors in background worker
+				pass
+		threading.Thread(target=_worker, daemon=True).start()
+
+	def trigger_background_refresh_if_stale(self, force: bool = False) -> None:
+		"""Trigger a non-blocking refresh if the cached rates appear stale.
+
+		This is intended for high-frequency call sites (like currency conversions
+		inside request rendering) where we prefer to return quickly using the
+		current in-memory rates and update rates asynchronously instead of
+		blocking on network I/O.
+		"""
+		now = time.time()
+		# If caller requests force, always refresh in background
+		if force:
+			self._refresh_in_thread(force=True)
+			return
+
+		# If never loaded or TTL expired, and we haven't recently attempted, trigger refresh
+		if self._last_load_ts is None or (now - (self._last_load_ts or 0)) > self._ttl_seconds:
+			if self._last_attempt_ts and (now - self._last_attempt_ts) < self._backoff_seconds:
+				# recent attempt in progress or recently failed — skip triggering
+				return
+			self._refresh_in_thread(force=False)
 
 	def get_currency_symbol(self, code: str | None) -> str:
 		if not code:
@@ -305,7 +349,24 @@ class CurrencyService:
 
 		If either currency is unsupported or any rate invalid, returns the input amount unchanged.
 		"""
-		self._ensure_fresh()
+		# Use a small in-memory cache to avoid repeating conversions during
+		# heavy loops (allocations, sorting). Key on rounded amount and codes.
+		try:
+			key = (round(float(amount), 2), (from_code or '').upper(), (to_code or '').upper())
+			cached = self._conv_cache.get(key)
+			if cached is not None:
+				return cached
+		except Exception:
+			# ignore cache errors and continue
+			key = None
+
+		# Trigger a background refresh if rates look stale, but don't block the request
+		# on network I/O. Use the existing in-memory mapping immediately.
+		try:
+			self.trigger_background_refresh_if_stale()
+		except Exception:
+			# Defensive: fall back to synchronous ensure if the trigger fails
+			self._ensure_fresh()
 		if not self.is_supported(from_code) or not self.is_supported(to_code):
 			return amount
 		f = self._usd_per_unit.get(from_code.upper(), 0)
@@ -314,7 +375,18 @@ class CurrencyService:
 			return amount
 		amount_usd = amount * f
 		out = amount_usd / t
-		return round(out, 2)
+		out_r = round(out, 2)
+		# store in cache (bounded)
+		try:
+			if key is not None:
+				if len(self._conv_cache) >= self._conv_cache_max:
+					# simple eviction: clear half to avoid slow deletion loops
+					for _ in range(self._conv_cache_max // 2):
+						self._conv_cache.pop(next(iter(self._conv_cache)), None)
+				self._conv_cache[key] = out_r
+		except Exception:
+			pass
+		return out_r
 
 	def background_initial_refresh(self):
 		"""Non-blocking initial refresh; intended to be run inside a thread started by the app."""

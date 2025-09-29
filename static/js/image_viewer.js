@@ -17,7 +17,7 @@
       if (nodes.length) return nodes.filter(n => n.tagName === 'IMG' || n.hasAttribute('data-viewer-src'));
     }
     // Fallback: siblings in same container
-    const parent = el.closest('[data-diary-detail-content],[data-todo-comments],[data-diary-comments]') || el.parentElement;
+    const parent = el.closest('[data-markdown-container],[data-todo-comments],[data-diary-comments]') || el.parentElement;
     if (!parent) return [el];
     const imgs = [...parent.querySelectorAll('img[data-viewer-thumb]')];
     return imgs.length ? imgs : [el];

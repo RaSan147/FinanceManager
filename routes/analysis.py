@@ -11,33 +11,47 @@ def init_analysis_blueprint(mongo, ai_engine):
     @bp.route('/analysis', endpoint='analysis')
     @login_required
     def analysis():
-        from app import calculate_monthly_summary
-        monthly_summary = calculate_monthly_summary(current_user.id, mongo.db)
-        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
-        proj = {'ai_plan': 0}
-        goal_models = Goal.get_active_goals(current_user.id, mongo.db, sort_mode=user_goal_sort, projection=proj)
-        allocations = GoalAllocator.compute_allocations(current_user.id, mongo.db)
-        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
-        goals = []
-        for gm in goal_models:
-            alloc_amt = allocations.get(gm.id, None)
-            progress = Goal.calculate_goal_progress(
-                gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code
-            )
-            gd = gm.model_dump(by_alias=True)
-            gd['progress'] = progress
-            if alloc_amt is not None:
-                gd['allocated_amount'] = alloc_amt
-            goals.append(gd)
-        user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        ai_analysis = user.get('ai_analysis') if user else None
-        return render_template('analysis.html',
-                               summary=monthly_summary,
-                               goals=goals,
-                               ai_analysis=ai_analysis,
-                               perf_metrics=metrics_summary())
+        from utils.finance_calculator import calculate_monthly_summary
+        # Create an in-process transaction cache session to avoid multiple DB
+        # round-trips when building the analysis page (monthly summary,
+        # lifetime allocations, and per-goal progress all scan transactions).
+        from utils.finance_calculator import create_cache_session, drop_cache_session
+        cache_id = create_cache_session(current_user.id, mongo.db)
+        try:
+            monthly_summary = calculate_monthly_summary(current_user.id, mongo.db, cache_id=cache_id)
+            user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+            user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+
+            proj = {'ai_plan': 0}
+            goal_models = Goal.get_active_goals(current_user.id, mongo.db, sort_mode=user_goal_sort, projection=proj)
+            # Compute allocations using the same cache session to avoid re-reading all transactions
+            allocations = GoalAllocator.compute_allocations(current_user.id, mongo.db, cache_id=cache_id)
+            user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
+
+            goals = []
+            for gm in goal_models:
+                alloc_amt = allocations.get(gm.id, None)
+                progress = Goal.calculate_goal_progress(
+                    gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code
+                )
+                gd = gm.model_dump(by_alias=True)
+                gd['progress'] = progress
+                if alloc_amt is not None:
+                    gd['allocated_amount'] = alloc_amt
+                goals.append(gd)
+
+            user = user_doc
+            ai_analysis = user.get('ai_analysis') if user else None
+            return render_template('analysis.html',
+                                   summary=monthly_summary,
+                                   goals=goals,
+                                   ai_analysis=ai_analysis,
+                                   perf_metrics=metrics_summary())
+        finally:
+            try:
+                drop_cache_session(cache_id)
+            except Exception:
+                pass
 
     @bp.route('/analysis/run', methods=['POST'])
     @login_required
@@ -47,7 +61,7 @@ def init_analysis_blueprint(mongo, ai_engine):
             return redirect(url_for('analysis_bp.analysis'))
         user = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
         user_obj = User(user, db=mongo.db)
-        from app import get_ai_analysis
+        from utils.ai_helper import get_ai_analysis
         ai_analysis = get_ai_analysis(user_obj)
         mongo.db.users.update_one(
             {'_id': ObjectId(current_user.id)},
