@@ -25,7 +25,9 @@
   const state = {
     q: '',
     category: '',
-    sort: 'created_desc',
+    // sort: client-local value; only send to API when user explicitly chose it this session
+    sort: null,
+    sortExplicit: false,
     items: []
   };
 
@@ -46,9 +48,17 @@
     let url = `/api/diary?per_page=500` + (forceFresh ? `&__ts=${Date.now()}` : '');
     if (state.q) url += `&q=${encodeURIComponent(state.q)}`;
     if (state.category) url += `&category=${encodeURIComponent(state.category)}`;
+    // Only include sort if user explicitly selected it this session. Otherwise let server apply persisted sort.
+    if (state.sortExplicit && state.sort) url += `&sort=${encodeURIComponent(state.sort)}`;
     try {
       const data = await App.utils.fetchJSONUnified(url);
       state.items = data.items || [];
+        // If server returned a persisted sort, apply it to the UI unless user explicitly changed sort this session
+          if (data.sort && !state.sortExplicit) {
+            state.sort = data.sort;
+            updateSortLabel();
+            updateSortMenuActive();
+          }
       renderList();
     } catch (e) {
       console.warn('Diary list fetch failed', e);
@@ -243,8 +253,39 @@
     const chips = [];
     if (state.category) chips.push(`<span class='badge text-bg-info text-dark'>Cat: ${state.category}</span>`);
     if (state.q) chips.push(`<span class='badge text-bg-dark'>Q: ${state.q}</span>`);
+  // Do not show sort in the active filters bar (consistent with To-Dos)
     activeFiltersBar.innerHTML = chips.join(' ');
     activeFiltersBar.style.display = chips.length ? 'flex' : 'none';
+  }
+
+  function currentSortLabelText() {
+    const map = {
+      created_desc: 'Newest',
+      created_asc: 'Oldest'
+    };
+    return map[state.sort] || 'Sort';
+  }
+
+  function updateSortLabel() {
+    const el = document.getElementById('currentSortLabel');
+    if (!el) return;
+    el.textContent = currentSortLabelText();
+  }
+
+  function updateSortMenuActive() {
+    const menu = document.getElementById('sortMenu');
+    if (!menu) return;
+    menu.querySelectorAll('[data-sort]').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-sort') === state.sort));
+  }
+
+  async function persistDiarySort(s) {
+    try {
+      await App.utils.fetchJSONUnified('/api/sort-pref', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'diary', sort: s })
+      });
+    } catch (_) {}
   }
 
   function updateFilterBtnActive() {
@@ -271,6 +312,23 @@
     state.category = '';
     apiList();
   });
+
+  // Wire diary sort menu
+  const diarySortMenu = document.getElementById('sortMenu');
+  if (diarySortMenu) {
+    diarySortMenu.querySelectorAll('[data-sort]').forEach(el => el.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const s = el.getAttribute('data-sort');
+      if (!s) return;
+      state.sort = s;
+      state.sortExplicit = true;
+      updateSortLabel();
+      updateSortMenuActive();
+      apiList();
+      // Persist per-user preference (fire-and-forget)
+      persistDiarySort(s);
+    }));
+  }
 
   // Detail modal logic
   const detailModalEl = document.getElementById('diaryDetailModal');

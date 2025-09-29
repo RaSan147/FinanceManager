@@ -30,7 +30,11 @@ class SpendingAdvisor:
         lifetime_summary = user_obj.get_lifetime_transaction_summary()
         balance = lifetime_summary.get('current_balance', 0)
         usual_income_date = user_doc.get('usual_income_date')
-        active_goals: list[GoalInDB] = Goal.get_active_goals(user_id, self.db)
+        # Respect user's saved goal sort when fetching active goals for context
+        user_goal_sort = user_obj.get_sort_mode('goals')
+        # spending advisor only needs lightweight goal fields + ai_priority/urgency for context
+        proj = {'ai_plan': 0}
+        active_goals: list[GoalInDB] = Goal.get_active_goals(user_id, self.db, sort_mode=user_goal_sort, projection=proj)
 
         return get_purchase_advice(
             user=user_obj,

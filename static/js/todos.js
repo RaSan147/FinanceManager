@@ -661,14 +661,12 @@
 	});
 	async function saveSortPreference(s) {
 		try {
-			await App.utils.fetchJSONUnified('/api/todo-pref/sort', {
+			await App.utils.fetchJSONUnified('/api/sort-pref', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({
-					sort: s
-				})
+				body: JSON.stringify({ name: 'todo', sort: s })
 			});
 		} catch (_) {}
 	}

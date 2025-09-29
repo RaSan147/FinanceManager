@@ -46,8 +46,10 @@ class User(UserMixin):
         self.monthly_income_currency = user_data.get('monthly_income_currency', self.default_currency)
         # DB handle
         self.db = db
-        # UI preferences
-        self.todo_sort = user_data.get('todo_sort', 'created_desc')
+        # Unified sort modes container (primary source of truth for list sort preferences)
+        # Merge stored preferences over class defaults so every key exists
+        stored = user_data.get('sort_modes', {}) or {}
+        self.sort_modes = {**self.DEFAULT_SORT_MODES, **stored}
 
     def get_recent_income_expense(self, months=3):
         """
@@ -88,12 +90,55 @@ class User(UserMixin):
         return calculate_lifetime_transaction_summary(self.id, self.db)
 
     # --- UI preference helpers ---
-    def set_todo_sort(self, sort: str):
-        allowed = {'created_desc','created_asc','updated_desc','updated_asc','due_date'}
-        if sort not in allowed:
+    # NOTE: individual shorthand setters like `set_goal_sort` and `set_todo_sort`
+    # have been removed in favor of the generic `set_sort_mode(name, sort)` API.
+
+    # --- Generic sort-mode helpers ---
+    # --- Class-level configuration for sorting ---
+    # Define allowed sort mode values for each named list and the default per-list value.
+    SORT_MODE_OPTIONS: dict[str, set[str]] = {
+        'goals': {'created_desc', 'created_asc', 'target_date', 'target_date_desc', 'priority'},
+        'todo': {'created_desc', 'created_asc', 'updated_desc', 'updated_asc', 'due_date'},
+        'diary': {'created_desc', 'created_asc', 'updated_desc', 'updated_asc'},
+    }
+
+    DEFAULT_SORT_MODES: dict[str, str] = {
+        'goals': 'created_desc',
+        'todo': 'created_desc',
+        'diary': 'created_desc',
+    }
+
+    # Removed get_sorting; use get_sort_mode which always returns a usable default
+
+    def get_sort_mode(self, name: str, default: str | None = None):
+        """Return the user's sort mode for `name`, validating against allowed values.
+
+        If the user has no preference, returns the class default for that name. If the
+        name is unknown, returns the provided `default` or None.
+        """
+        if not name:
+            return default
+        val = (self.sort_modes or {}).get(name)
+        allowed = self.SORT_MODE_OPTIONS.get(name)
+        if val and allowed and val in allowed:
+            return val
+        # fall back to class default for the name
+        return self.DEFAULT_SORT_MODES.get(name, default)
+
+    def set_sort_mode(self, name: str, sort: str, allowed: set[str] | None = None):
+        """Persist a sort mode under `sort_modes.{name}` and update in-memory values.
+
+        If `allowed` is not provided, the class-level `SORT_MODE_OPTIONS` for `name` is used.
+        Returns True on success, False if value not allowed or unknown name.
+        """
+        if allowed is None:
+            allowed = self.SORT_MODE_OPTIONS.get(name)
+        if not allowed or sort not in allowed:
             return False
-        self.db.users.update_one({'_id': ObjectId(self.id)}, {'$set': {'todo_sort': sort}})
-        self.todo_sort = sort
+        # write into nested dict field
+        self.db.users.update_one({'_id': ObjectId(self.id)}, {'$set': {f'sort_modes.{name}': sort}})
+        # sync in-memory
+        self.sort_modes[name] = sort
         return True
 
     @classmethod

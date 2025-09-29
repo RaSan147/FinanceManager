@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import traceback
 from flask import Blueprint, render_template, request, jsonify
+from bson import ObjectId
 from flask_login import login_required, current_user
 from pydantic import ValidationError as PydValidationError
 from models.diary import Diary, DiaryCreate, DiaryUpdate, DIARY_COMMENT_MAX
@@ -30,7 +31,13 @@ def init_diary_blueprint(mongo):
         page = max(1, int(request.args.get('page', 1)))
         per_page = min(100, int(request.args.get('per_page', 50)))
         skip = (page - 1) * per_page
-        sort = request.args.get('sort') or 'created_desc'
+        sort = (request.args.get('sort') or '').strip()
+        # If client did not explicitly request sort, prefer user's persisted preference
+        if not sort:
+            user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)}) if hasattr(current_user, 'id') else None
+            sort = (user_doc.get('sort_modes') or {}).get('diary') if user_doc else ''
+        if not sort:
+            sort = 'created_desc'
         items, total = Diary.list(current_user.id, mongo.db, q=q, category=category, skip=skip, limit=per_page, sort=sort)
         return jsonify({'items': [i.model_dump(by_alias=True) for i in items], 'total': total, 'page': page, 'per_page': per_page, 'sort': sort})
 
