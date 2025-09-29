@@ -37,6 +37,6 @@ GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-90}"
 echo "Starting gunicorn bound to ${GUNICORN_BIND} with timeout ${GUNICORN_TIMEOUT}..."
 
 # If you prefer to use the project gunicorn.conf.py, uncomment the -c option below.
-exec gunicorn -c gunicorn.conf.py --bind "${GUNICORN_BIND}" --timeout "${GUNICORN_TIMEOUT}" app:create_app()
+exec gunicorn -c gunicorn.conf.py --bind "${GUNICORN_BIND}" --timeout "${GUNICORN_TIMEOUT}" "app:create_app()"
 
 # exec gunicorn --bind "${GUNICORN_BIND}" --timeout "${GUNICORN_TIMEOUT}" app:app
