@@ -60,7 +60,7 @@ class Config:
     # Currency fetch/backoff defaults
     CURRENCY_RATES_BACKOFF_SECONDS = int(os.getenv("CURRENCY_RATES_BACKOFF_SECONDS", "600"))
     CURRENCY_RATES_TTL_SECONDS = int(os.getenv("CURRENCY_RATES_TTL_SECONDS", "86400"))
-    CURRENCY_RATES_CACHE_FILE = os.getenv("CURRENCY_RATES_CACHE_FILE", os.path.join(os.path.dirname(__file__), "utils", "fx_rates_cache.tmp.json"))
+    CURRENCY_RATES_CACHE_FILE = os.getenv("CURRENCY_RATES_CACHE_FILE", "fx_rates_cache.tmp.json")
 
     # Toggle showing full tracebacks in error responses. Treats the
     # environment value as truthy if it matches one of the listed strings.
