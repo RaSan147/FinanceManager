@@ -137,7 +137,7 @@ def run_master_global_warmup(cache_mongo_uri: Optional[str] = None) -> None:
     """
     try:
         # Keep file-backed cache for master process (no DB passed)
-        currency_service.re_initialize(db=None, cache_backend='file', cache_file=os.path.join(os.path.dirname(__file__), 'fx_rates_cache.tmp.json'))
+        currency_service.re_initialize(db=None, cache_backend='file', cache_file='fx_rates_cache.tmp.json')
         currency_service.refresh_rates(force=True)
     except Exception as _e:
         print(f"[gunicorn-startup] Warning: currency refresh failed in master: {_e}")

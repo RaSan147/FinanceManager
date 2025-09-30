@@ -109,7 +109,7 @@ class CurrencyService:
 		self._usd_per_unit: Dict[str, float] = dict(self.STATIC_USD_PER_UNIT)
 
 		# default cache file and backend come from centralized Config
-		self._cache_file = cache_file or Config.CURRENCY_RATES_CACHE_FILE or os.path.join(os.path.dirname(__file__), "fx_rates_cache.tmp.json")
+		self._cache_file = cache_file or Config.CURRENCY_RATES_CACHE_FILE or "fx_rates_cache.tmp.json"
 		self._cache_backend = (cache_backend or Config.CURRENCY_CACHE_BACKEND or "file").lower()
 
 		self.re_initialize(
