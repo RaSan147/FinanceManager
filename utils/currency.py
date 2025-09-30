@@ -299,7 +299,7 @@ class CurrencyService:
 				col.update_one({"_id": self._mongo_doc_id}, {"$set": payload, "$setOnInsert": {"_id": self._mongo_doc_id}}, upsert=True)
 				return
 			# file backend or fallback: write to cache file
-			cache_file_path = self._cache_file or "fx_rates_cache.json"
+			cache_file_path = self._cache_file or "fx_rates_cache.tmp.json"
 			cache_dir = os.path.dirname(cache_file_path)
 			if cache_dir:
 				os.makedirs(cache_dir, exist_ok=True)
