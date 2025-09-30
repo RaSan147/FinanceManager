@@ -4,7 +4,7 @@ import asyncio
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_pymongo import PyMongo
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -56,29 +56,42 @@ def create_app(config_object=Config):
     mongo = PyMongo(app)
     bcrypt = Bcrypt(app)
     login_manager = LoginManager(app)
-    login_manager.login_view = 'login'
+    login_manager.login_view = 'login'  # type: ignore[assignment]
     login_manager.login_message_category = 'warning'
 
     # Initialize Mongo-backed cache (mandatory for finance helpers)
     # Cache must be present; fail startup if missing or initialization fails.
     from utils.finance_calculator import enable_mongo_cache
     from pymongo import MongoClient
-    import os
 
-    cache_uri = os.getenv('CACHE_MONGO_URI') or app.config.get('CACHE_MONGO_URI')
-    if not cache_uri:
-        # intentionally crash loudly if no cache URI is configured
-        raise RuntimeError('CACHE_MONGO_URI not configured; application requires a local cache DB')
+    cache_uri = app.config.get('CACHE_MONGO_URI')
 
     client = MongoClient(cache_uri)
-    try:
-        cache_db = client.get_default_database() or client['self_finance_tracker_cache']
-    except Exception:
-        cache_db = client['self_finance_tracker_cache']
+    cache_db = client['self_finance_tracker_cache']
 
     # This will raise if MongoCache init fails
     enable_mongo_cache(cache_db)
     app.logger.info('Mongo-backed cache initialized using %s', getattr(cache_db, 'name', str(cache_db)))
+
+    # Ensure the currency service is explicitly wired to the same cache DB
+    # Determine backend: prefer explicit app config. If unset, prefer mongo
+    # when we successfully created a cache DB above; otherwise fall back to file.
+    cfg_backend = app.config.get('CURRENCY_CACHE_BACKEND')
+    currency_backend = cfg_backend if cfg_backend is not None else ('mongo' if cache_db is not None else 'file')
+    c_collection = app.config.get('CURRENCY_MONGO_COLLECTION') or 'system_fx_rates'
+    c_doc_id = app.config.get('CURRENCY_MONGO_DOC_ID') or 'rates_usd_per_unit'
+    # Re-initialize the shared currency_service to point at the cache DB
+    currency_service.re_initialize(db=cache_db, cache_backend=currency_backend, mongo_collection=c_collection, mongo_doc_id=c_doc_id)  # type: ignore[arg-type]
+    print(f'currency_service wired to cache DB (backend={currency_backend}, coll={c_collection}, doc_id={c_doc_id})')
+    # Trigger a non-blocking background refresh so rates are fetched and
+    # saved to the cache DB without blocking startup. This mirrors the
+    # recommended integration in utils/currency.py documentation.
+    try:
+        import threading
+        threading.Thread(target=currency_service.background_initial_refresh).start()
+        app.logger.info('currency_service: background_initial_refresh started')
+    except Exception:
+        app.logger.exception('currency_service: failed to start background_initial_refresh')
 
     limiter = Limiter(
         key_func=get_remote_address,
@@ -90,26 +103,26 @@ def create_app(config_object=Config):
     )
 
     # Attach helpful objects to the app for other modules to access without re-creating
-    app.mongo = mongo
-    app.bcrypt = bcrypt
-    app.login_manager = login_manager
-    app.limiter = limiter
+    app.mongo = mongo  # type: ignore[attr-defined]
+    app.bcrypt = bcrypt  # type: ignore[attr-defined]
+    app.login_manager = login_manager  # type: ignore[attr-defined]
+    app.limiter = limiter  # type: ignore[attr-defined]
 
     # AI and external clients (some require DB to be available first)
-    app.ai_engine = FinancialBrain(app.config.get("GEMINI_API_KEY"))
+    app.ai_engine = FinancialBrain(app.config.get("GEMINI_API_KEY"))  # type: ignore[attr-defined]
 
     pastebin_client = PastebinClient(
         app.config.get('PASTEBIN_API_KEY'),
-        os.getenv('PASTEBIN_USERNAME'),
-        os.getenv('PASTEBIN_PASSWORD')
+        Config.PASTEBIN_USERNAME,
+        Config.PASTEBIN_PASSWORD,
     )
-    app.pastebin_client = pastebin_client
+    app.pastebin_client = pastebin_client  # type: ignore[attr-defined]
 
     # Spending advisor requires a DB handle; create after PyMongo initialized
     try:
-        app.spending_advisor = SpendingAdvisor(app.ai_engine, mongo.db)
+        app.spending_advisor = SpendingAdvisor(app.ai_engine, mongo.db)  # type: ignore[attr-defined]
     except Exception:
-        app.spending_advisor = None
+        app.spending_advisor = None  # type: ignore[attr-defined]
         app.logger.debug('Failed to initialize SpendingAdvisor')
 
     # JSON encoder
@@ -184,7 +197,7 @@ def create_app(config_object=Config):
             return None
         if not user_data:
             return None
-        return User(user_data, mongo.db)
+        return User(user_data, mongo.db)  # type: ignore[arg-type]
 
     # Simple auth routes kept here for convenience
     @app.route('/login', methods=['GET', 'POST'])
@@ -253,6 +266,12 @@ def create_app(config_object=Config):
     def logout():
         logout_user()
         return redirect(url_for('login'))
+
+    # Serve favicon at the application root to satisfy browsers that request '/favicon.ico'
+    @app.route('/favicon.ico')
+    def _favicon():
+        # Use send_from_directory to ensure correct MIME and caching behavior
+        return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/x-icon')
 
     # Example API endpoints that rely on services
     @app.route('/api/goals/prioritized')
@@ -338,7 +357,7 @@ def create_app(config_object=Config):
         from routes.analysis import init_analysis_blueprint
         from routes.loans import init_loans_blueprint
         from routes.ai_features import init_ai_blueprint
-        from routes.todos import init_todos_blueprint
+        from routes.todo import init_todo_blueprint
         from routes.diary import init_diary_blueprint
         from routes.prefs import init_prefs_blueprint
 
@@ -347,17 +366,17 @@ def create_app(config_object=Config):
         if 'transactions_routes' not in app.blueprints:
             app.register_blueprint(init_transactions_blueprint(mongo))
         if 'goals_bp' not in app.blueprints:
-            app.register_blueprint(init_goals_blueprint(mongo, app.ai_engine, pastebin_client))
+            app.register_blueprint(init_goals_blueprint(mongo, app.ai_engine, pastebin_client))  # type: ignore[attr-defined]
         if 'profile_bp' not in app.blueprints:
             app.register_blueprint(init_profile_blueprint(mongo))
         if 'analysis_bp' not in app.blueprints:
-            app.register_blueprint(init_analysis_blueprint(mongo, app.ai_engine))
+            app.register_blueprint(init_analysis_blueprint(mongo, app.ai_engine))  # type: ignore[attr-defined]
         if 'loans_bp' not in app.blueprints:
             app.register_blueprint(init_loans_blueprint(mongo))
         if 'ai_bp' not in app.blueprints:
-            app.register_blueprint(init_ai_blueprint(mongo, app.spending_advisor, pastebin_client))
-        if 'todos_bp' not in app.blueprints:
-            app.register_blueprint(init_todos_blueprint(mongo))
+            app.register_blueprint(init_ai_blueprint(mongo, app.spending_advisor, pastebin_client))  # type: ignore[attr-defined]
+        if 'todo_bp' not in app.blueprints:
+            app.register_blueprint(init_todo_blueprint(mongo))
         if 'diary_bp' not in app.blueprints:
             app.register_blueprint(init_diary_blueprint(mongo))
         if 'prefs_bp' not in app.blueprints:
@@ -371,7 +390,7 @@ def create_app(config_object=Config):
 if __name__ == '__main__':
     app = create_app()
     try:
-        run_local_startup(app.mongo, app.pastebin_client)
+        run_local_startup(app.cache_db, app.pastebin_client)  # type: ignore[attr-defined]
     except Exception:
         pass
     app.run(debug=True, host='0.0.0.0', port=5000)

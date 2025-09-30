@@ -806,7 +806,7 @@ class Allocator:
 
             # AI fields normalized 0..1
             priority_n = Allocator._safe_pct_field(g, 'ai_priority', 'priority_score', default=0.5)
-            urgency_n = Allocator._safe_pct_field(g, 'ai_urgency', 'urgency', default=None)
+            urgency_n = Allocator._safe_pct_field(g, 'ai_urgency', 'urgency', default=0.0)
             impact_n = Allocator._safe_pct_field(g, 'ai_impact', 'financial_impact', default=0.0)
             health_n = Allocator._safe_pct_field(g, 'ai_health_impact', 'health_impact', default=0.0)
             confidence = Allocator._safe_pct_field(g, 'ai_confidence', 'confidence', default=0.6)
@@ -899,7 +899,7 @@ class Allocator:
         for g in goals_list:
             gid = str(g.id)
             t_base, req_monthly, months_left = target_and_required(g)
-            urgency_n = Allocator._safe_pct_field(g, 'ai_urgency', 'urgency', default=None)
+            urgency_n = Allocator._safe_pct_field(g, 'ai_urgency', 'urgency', default=0.0)
             if urgency_n is None:
                 # infer if missing
                 if months_left <= 24.0:

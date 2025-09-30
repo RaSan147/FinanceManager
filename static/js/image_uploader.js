@@ -159,6 +159,6 @@
     });
   }
 
-  // Expose helper so other modules (todos/diary) can reuse consistent logic
+  // Expose helper so other modules (todo/diary) can reuse consistent logic
   window.ImageUploader = { thumbTransform, attachCommentUploader, attachInlineMarkdownUploader };
 })();

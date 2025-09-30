@@ -5,7 +5,7 @@ Feature: General (non-financial) personal to-do list items with categories and s
 Stages reflect lifecycle: wondering -> planning -> in_progress -> paused -> gave_up -> done (extensible).
 
 Mongo Collections Used:
- - todos
+ - todo
  - todo_categories (optional user-defined categories)
 
 Indexing is handled in utils.db_indexes.ensure_indexes.
@@ -18,6 +18,7 @@ from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator
 
 from utils.timezone_utils import now_utc, ensure_utc
+from models.blog import Blog
 
 # ----- Constants -----
 
@@ -184,15 +185,25 @@ __all__ = [
 class Todo:
     """Static CRUD helpers for Todo records."""
 
+    # internal Blog specialization for todo collections
+    class _B(Blog):
+        entries_collection = "todo"
+        categories_collection = "todo_categories"
+        text_search_fields = ["title", "description"]
+        category_max = TODO_CATEGORY_MAX
+
     @staticmethod
     def create(data: TodoCreate, db) -> TodoInDB:
-        doc = data.model_dump()
-        res = db.todos.insert_one(doc)
-        return TodoInDB(**{**doc, "_id": res.inserted_id})
+        # Use shared Blog storage helper
+        # set collection names on Blog via subclass attributes when needed
+        # For compatibility we call Blog.create_doc but ensure the correct collection name
+        # by temporarily copying class attributes.
+        doc = Todo._B.create_doc(data, db)
+        return TodoInDB(**doc)
 
     @staticmethod
     def get(todo_id: str, user_id: str, db) -> TodoInDB | None:
-        doc = db.todos.find_one({"_id": ObjectId(todo_id), "user_id": user_id})
+        doc = Todo._B.get_doc(todo_id, user_id, db)
         return TodoInDB(**doc) if doc else None
 
     @staticmethod
@@ -204,7 +215,7 @@ class Todo:
         *,
         allow_null: list[str] | None = None,
     ) -> TodoInDB | None:
-        existing = db.todos.find_one({"_id": ObjectId(todo_id), "user_id": user_id})
+        existing = db.todo.find_one({"_id": ObjectId(todo_id), "user_id": user_id})
         if not existing:
             return None
         # Allow explicit clearing (setting to None) for selected nullable fields
@@ -251,7 +262,7 @@ class Todo:
             }
         if not update_ops:
             return TodoInDB(**existing)
-        doc = db.todos.find_one_and_update(
+        doc = db.todo.find_one_and_update(
             {"_id": ObjectId(todo_id), "user_id": user_id},
             update_ops,
             return_document=True,
@@ -260,7 +271,7 @@ class Todo:
 
     @staticmethod
     def delete(todo_id: str, user_id: str, db) -> bool:
-        res = db.todos.delete_one({"_id": ObjectId(todo_id), "user_id": user_id})
+        res = db.todo.delete_one({"_id": ObjectId(todo_id), "user_id": user_id})
         return res.deleted_count == 1
 
     @staticmethod
@@ -275,52 +286,21 @@ class Todo:
         limit: int = 20,
         sort: str = "created_desc",
     ) -> tuple[list[TodoInDB], int]:
-        filt: Dict[str, Any] = {"user_id": user_id}
+        # Use blog listing for common filtering, then apply stage filter if present
+        docs, total = Todo._B.list_docs(user_id, db, q=q, category=category, skip=skip, limit=limit, sort=sort)
         if stage:
-            filt["stage"] = stage
-        if category:
-            filt["category"] = category
-        if q:
-            filt["$or"] = [
-                {"title": {"$regex": q, "$options": "i"}},
-                {"description": {"$regex": q, "$options": "i"}},
-            ]
-        sort_map: dict[str, list[tuple[str, int]]] = {
-            "created_desc": [("created_at", -1)],
-            "created_asc": [("created_at", 1)],
-            "updated_desc": [("updated_at", -1)],
-            "updated_asc": [("updated_at", 1)],
-            "title": [("title", 1)],
-            "due_date": [("due_date", 1), ("created_at", -1)],
-        }
-        mongo_sort = sort_map.get(sort, sort_map["created_desc"])
-        total = db.todos.count_documents(filt)
-        cursor = db.todos.find(filt).sort(mongo_sort).skip(skip).limit(limit)
-        return [TodoInDB(**d) for d in cursor], total
+            docs = [d for d in docs if d.get("stage") == stage]
+            total = len(docs) if q is None and category is None else sum(1 for d in docs)
+        return [TodoInDB(**d) for d in docs], total
 
     @staticmethod
     def list_categories(user_id: str, db) -> list[dict]:
-        return list(db.todo_categories.find({"user_id": user_id}).sort([("name", 1)]))
+        return Todo._B.list_categories(user_id, db)
 
     @staticmethod
     def add_category(user_id: str, name: str, db) -> dict:
-        norm = name.strip()
-        if not norm:
-            raise ValueError("Category name required")
-        if len(norm) > 60:
-            raise ValueError("Category max length is 60 characters")
-        existing = db.todo_categories.find_one({"user_id": user_id, "name": norm})
-        if existing:
-            return existing
-        doc = {"user_id": user_id, "name": norm, "created_at": now_utc()}
-        db.todo_categories.insert_one(doc)
-        return doc
+        return Todo._B.add_category(user_id, name, db)
 
     @staticmethod
     def delete_category(user_id: str, name: str, db) -> bool:
-        # Only allow deletion if no todos reference it (safety)
-        used = db.todos.find_one({"user_id": user_id, "category": name})
-        if used:
-            return False
-        res = db.todo_categories.delete_one({"user_id": user_id, "name": name})
-        return res.deleted_count == 1
+        return Todo._B.delete_category(user_id, name, db)

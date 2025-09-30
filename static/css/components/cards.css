@@ -54,7 +54,8 @@ body.dark-mode .card-header.bg-primary.text-white {
 }
 
 .diary-item {
-	margin-bottom: 0 !important; /* Override default card margin since we're using grid gap */
+	margin-bottom: 0 !important;
+	/* Override default card margin since we're using grid gap */
 	height: fit-content;
 	cursor: pointer;
 }
@@ -93,14 +94,16 @@ body.dark-mode .card-header.bg-primary.text-white {
 		grid-template-columns: 1fr;
 		gap: 0.75rem;
 	}
-	
+
 	.diary-item .diary-title {
-		-webkit-line-clamp: 2; /* Reduce to 2 lines on mobile */
+		-webkit-line-clamp: 2;
+		/* Reduce to 2 lines on mobile */
 		line-clamp: 2;
 	}
-	
+
 	.diary-item .diary-content-trunc {
-		-webkit-line-clamp: 3; /* Reduce to 3 lines on mobile */
+		-webkit-line-clamp: 3;
+		/* Reduce to 3 lines on mobile */
 		line-clamp: 3;
 	}
 }

@@ -1,10 +1,7 @@
 {% extends 'base.html' %}
-{% block title %}To-Dos{% endblock %}
-{% block extra_css %}
-{# Removed page-specific CSS link; consolidated into style.css imports #}
-{% endblock %}
+{% block title %}To-Do{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 todos-page-header">
+<div class="d-flex justify-content-between align-items-center mb-3 todo-page-header">
   <h2 class="mb-0 heading-responsive"><i class="fa-solid fa-list-check"></i> <span class="heading-text">To-Do <span class="heading-extra">List</span></span></h2>
   <button class="btn btn-sm btn-primary" id="btnNewTodoTop"><i class="fa-solid fa-plus" aria-hidden="true"></i> <span class="d-none d-sm-inline">Add</span><span class="visually-hidden"> new to-do</span></button>
 </div>
@@ -13,7 +10,7 @@
 
 <div class="card mb-3">
   <div class="card-body p-3">
-  <div class="d-flex flex-wrap align-items-center mb-3 gap-3 todos-toolbar">
+  <div class="d-flex flex-wrap align-items-center mb-3 gap-3 todo-toolbar">
       <div class="d-flex align-items-center gap-2 me-auto">
         <div class="dropdown" data-stage-filter-root>
           <div id="btnStageView" class="stage-header-toggle h5 mb-0 d-inline-flex align-items-center gap-2" data-bs-toggle="dropdown" aria-expanded="false" role="button" title="Filter by stage">
@@ -30,7 +27,7 @@
         </div>
       </div>
       <div class="d-flex align-items-center gap-2 small flex-grow-1" id="activeFiltersBar" style="display:none"></div>
-  <div class="d-flex align-items-center gap-2 ms-auto todos-toolbar-right">
+  <div class="d-flex align-items-center gap-2 ms-auto todo-toolbar-right">
         <div class="btn-group btn-group-sm">
           <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" id="btnSortMenu" aria-expanded="false"><i class="fa fa-arrow-up-wide-short"></i> <span class="d-none d-md-inline" id="currentSortLabel">Newest</span></button>
           <ul class="dropdown-menu dropdown-menu-end small" id="sortMenu">
@@ -43,27 +40,27 @@
           </ul>
         </div>
         <div class="btn-group btn-group-sm">
-          <button class="btn btn-outline-secondary" id="btnFilterToggle" title="Show filters"><i class="fa fa-filter"></i> <span class="d-none d-md-inline">Filter</span></button>
+          <button class="btn btn-outline-secondary" id="btnTodoFilterToggle" title="Show filters"><i class="fa fa-filter"></i> <span class="d-none d-md-inline">Filter</span></button>
         </div>
       </div>
     </div>
-    <div id="inlineFilters" class="row g-2 mb-2 d-none">
+    <div id="todoInlineFilters" class="row g-2 mb-2 d-none">
       <div class="col-12 col-md-4 col-lg-3">
         <input type="text" class="form-control form-control-sm" id="todoSearch" placeholder="Search...">
       </div>
       <div class="col-6 col-md-3 col-lg-2">
-        <select class="form-select form-select-sm" id="filterCategory">
+        <select class="form-select form-select-sm" id="todoFilterCategory">
           <option value="">Category (any)</option>
           {% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-12 col-md-2 col-lg-2 d-flex gap-2">
-        <button class="btn btn-sm btn-primary" id="btnApplyFilters">Apply</button>
+        <button class="btn btn-sm btn-primary" id="btnToDoApplyFilters">Apply</button>
         <button class="btn btn-sm btn-outline-secondary" id="btnClearFilters">Clear</button>
       </div>
     </div>
   
-    <div id="todosFlatList" class="todos-grid"></div>
+    <div id="todoFlatList" class="todo-grid"></div>
   </div>
 </div>
 
@@ -85,13 +82,10 @@
         </div>
       </div>
     <div class="d-flex flex-column gap-1 ms-2">
-  <button class="btn btn-outline-danger btn-delete" title="Delete" aria-label="Delete to-do"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+  <button class="btn btn-outline-danger btn-delete" title="Delete" aria-label="Delete to-do task"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
     </div>
     </div>
   </div>
 </template>
-{% endblock %}
-{# Note: todos.js is globally included in base.html; avoid duplicate include here to prevent double event binding #}
-{% block extra_js %}{% endblock %}
-
 {% include 'includes/todo_detail_modal.html' %}
+{% endblock %}

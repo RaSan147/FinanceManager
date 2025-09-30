@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
-import logging, os
+import logging
 from config import Config
 from datetime import datetime
 from bson import ObjectId
@@ -13,26 +13,26 @@ from utils.imagekit_client import upload_image
 from utils.request_metrics import summary as metrics_summary
 
 
-def init_todos_blueprint(mongo):
-    bp = Blueprint('todos_bp', __name__)
+def init_todo_blueprint(mongo):
+    bp = Blueprint('todo_bp', __name__)
 
     # ------------- HTML PAGE -------------
-    @bp.route('/todos', endpoint='todos')
+    @bp.route('/todo', endpoint='todo')
     @login_required
-    def todos_page():  # type: ignore[override]
+    def todo_page():  # type: ignore[override]
         # Initial page render; JS will fetch list via API
         categories = Todo.list_categories(current_user.id, mongo.db)
         return render_template(
-            'todos.html',
+            'todo.html',
             todo_stages=TODO_STAGES,
             categories=categories,
             perf_metrics=metrics_summary()
         )
 
     # ------------- JSON API -------------
-    @bp.route('/api/todos', methods=['GET'], endpoint='api_todos_list')
+    @bp.route('/api/todo', methods=['GET'], endpoint='api_todo_list')
     @login_required
-    def api_todos_list():  # type: ignore[override]
+    def api_todo_list():  # type: ignore[override]
         q = request.args.get('q')
         stage = request.args.get('stage') or None
         category = request.args.get('category') or None
@@ -59,7 +59,7 @@ def init_todos_blueprint(mongo):
             'sort': sort,
         })
 
-    @bp.route('/api/todos', methods=['POST'], endpoint='api_todo_create')
+    @bp.route('/api/todo', methods=['POST'], endpoint='api_todo_create')
     @login_required
     def api_todo_create():  # type: ignore[override]
         data = request.get_json(force=True, silent=True) or {}
@@ -83,7 +83,7 @@ def init_todos_blueprint(mongo):
                 pass
         return jsonify({'item': item.model_dump(by_alias=True)})
 
-    @bp.route('/api/todos/<todo_id>', methods=['PATCH'], endpoint='api_todo_update')
+    @bp.route('/api/todo/<todo_id>', methods=['PATCH'], endpoint='api_todo_update')
     @login_required
     def api_todo_update(todo_id):  # type: ignore[override]
         data = request.get_json(force=True, silent=True) or {}
@@ -108,7 +108,7 @@ def init_todos_blueprint(mongo):
         return jsonify({'item': upd.model_dump(by_alias=True)})
 
     # Stage-only fast update (lighter payload, avoids accidental clearing of other fields)
-    @bp.route('/api/todos/<todo_id>/stage', methods=['PATCH'], endpoint='api_todo_stage_update')
+    @bp.route('/api/todo/<todo_id>/stage', methods=['PATCH'], endpoint='api_todo_stage_update')
     @login_required
     def api_todo_stage_update(todo_id):  # type: ignore[override]
         data = request.get_json(force=True, silent=True) or {}
@@ -128,7 +128,7 @@ def init_todos_blueprint(mongo):
         return jsonify({'item': upd.model_dump(by_alias=True)})
 
     # Todo detailed fetch (includes comments + stage history)
-    @bp.route('/api/todos/<todo_id>/detail', methods=['GET'], endpoint='api_todo_detail')
+    @bp.route('/api/todo/<todo_id>/detail', methods=['GET'], endpoint='api_todo_detail')
     @login_required
     def api_todo_detail(todo_id):  # type: ignore[override]
         item = Todo.get(todo_id, current_user.id, mongo.db)
@@ -142,7 +142,7 @@ def init_todos_blueprint(mongo):
         })
 
     # Comments
-    @bp.route('/api/todos/<todo_id>/comments', methods=['POST'], endpoint='api_todo_comment_create')
+    @bp.route('/api/todo/<todo_id>/comments', methods=['POST'], endpoint='api_todo_comment_create')
     @login_required
     def api_todo_comment_create(todo_id):  # type: ignore[override]
         data = request.get_json(force=True, silent=True) or {}
@@ -182,7 +182,7 @@ def init_todos_blueprint(mongo):
             return jsonify({'error': 'image required'}), 400
         debug_enabled = (
             request.args.get('debug') is not None
-            or os.getenv('IMAGEKIT_DEBUG', '').lower() in {'1','true','yes','on'}
+            or getattr(Config, 'IMAGEKIT_DEBUG', False)
             or getattr(Config, 'SHOW_DETAILED_ERRORS', False)
         )
         # Fallback simple size heuristic (raw may be base64 or data URL)
@@ -213,7 +213,7 @@ def init_todos_blueprint(mongo):
             return jsonify(payload), 400
         return jsonify({'url': url})
 
-    @bp.route('/api/todos/<todo_id>', methods=['DELETE'], endpoint='api_todo_delete')
+    @bp.route('/api/todo/<todo_id>', methods=['DELETE'], endpoint='api_todo_delete')
     @login_required
     def api_todo_delete(todo_id):  # type: ignore[override]
         ok = Todo.delete(todo_id, current_user.id, mongo.db)

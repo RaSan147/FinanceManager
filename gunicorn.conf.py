@@ -1,19 +1,18 @@
 # Gunicorn configuration to run a global warmup once in the master process
-import os
+from config import Config
 from utils.startup import run_master_global_warmup
 
 # You can tune these worker settings for your deployment
 bind = '0.0.0.0:5001'
-workers = int(os.getenv('GUNICORN_WORKERS', '2'))
-timeout = int(os.getenv('GUNICORN_TIMEOUT', '30'))
+workers = int(Config.GUNICORN_WORKERS)
+timeout = int(Config.GUNICORN_TIMEOUT)
 
 
 def on_starting(server):
     """Runs once in the Gunicorn master process before workers are forked."""
     print('[gunicorn] on_starting: performing global warmup')
-    mongo_uri = os.getenv('MONGO_URI') or os.getenv('MONGO_CONNECTION')
     try:
-        run_master_global_warmup(mongo_uri=mongo_uri)
+        run_master_global_warmup(cache_mongo_uri=Config.CACHE_MONGO_URI)
     except Exception as e:
         print(f"[gunicorn] global warmup failed: {e}")
 

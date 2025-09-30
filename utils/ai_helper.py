@@ -19,16 +19,12 @@ from utils.finance_calculator import (
 )
 from .ai_engine import FinancialBrain
 
-"""High-level AI helper functions built atop FinancialBrain.
+"""Helpers that build prompts and context for the FinancialBrain AI engine.
 
-This module centralizes prompt construction for:
- - Sidebar financial analysis (HTML output)
- - Goal planning text output
- - Purchase advice (strict JSON)
- - Goal priority analysis (async JSON)
-
-It defers transport, retries, model selection, and fence stripping to
-`FinancialBrain` so we keep a single place for low-level AI concerns.
+This module assembles structured financial context and prompt texts used by
+higher-level features: sidebar analysis (HTML), goal planning (HTML),
+purchase advice (JSON) and goal-priority scoring (JSON). Low-level AI
+transport/selection/retries are handled by `FinancialBrain`.
 """
 
 # Single shared engine instance for helper-level calls.
@@ -37,12 +33,11 @@ _BRAIN = FinancialBrain()
 
 # ---------------- Serialization helpers -----------------
 def default_serializer(obj):
-    """Serialize extra types for json.dumps used in AI prompts.
+    """JSON serializer for non-standard types used in prompts.
 
-    Handles:
+    Supported conversions:
     - bson.ObjectId -> str
-    - datetime/date objects (anything with isoformat attr) -> ISO8601 string
-    Falls back to raising TypeError so unexpected types are surfaced early.
+    - datetime-like objects -> ISO8601 string (via isoformat)
     """
     if isinstance(obj, ObjectId):
         return str(obj)
@@ -56,7 +51,11 @@ def _strip(text: str, md_type: str) -> str:
 
 
 def _compact_goal_with_local_currency(goal_dict:dict|GoalInDB, user: User, current_balance: float, include_ai_analysis=False) -> dict:
-    """Compact goal representation with amounts converted to user's local currency."""
+    """Return a compact goal dict and convert current pool to the goal currency.
+
+    The compact representation intentionally keeps AI-facing fields
+    light-weight to reduce token usage.
+    """
     from utils.currency import currency_service
     compact_goal = Goal.compact_dict(goal_dict, include_ai_analysis=include_ai_analysis)
     goal_currency = compact_goal["currency"]
@@ -66,22 +65,18 @@ def _compact_goal_with_local_currency(goal_dict:dict|GoalInDB, user: User, curre
     return compact_goal
 
 def _build_financial_context(user: User) -> dict:
-    """
-    Build a reusable financial context dictionary for prompts.
-    Can be used in goal prioritization, analysis, or other AI-driven features.
+    """Assemble a compact financial context used by AI prompts.
+
+    Tries to load several pre-computed summaries using a cache session to
+    reduce DB load. On any internal failure we return a safe minimal context
+    so callers can still produce a graceful UI response.
     """
     db = user.db
     monthly_summary = calculate_monthly_summary(user.id, db)
 
-    # Default fallbacks
-    lifetime_summary = None
-    year_summary = None
-    last_30D_details = []
-    recent_3M_summary = []
     cache_id = None
-
     try:
-        # Use cache for efficiency
+        # Use cache for multi-query efficiency.
         cache_id = create_cache_session(user.id, db)
         lifetime_summary = calculate_lifetime_transaction_summary(user.id, db, cache_id=cache_id)
         year_summary = calculate_period_summary(user.id, db, 365, cache_id=cache_id)
@@ -90,10 +85,11 @@ def _build_financial_context(user: User) -> dict:
         last_30D_details = get_transactions(user.id, db, start_30, end_now, cache_id=cache_id, clean=True)
         recent_3M_summary = get_N_month_income_expense(user.id, db, n=3, cache_id=cache_id)
 
-        # Respect user's saved goal sort preference when available (new sort_modes dict preferred)
+        # Respect user's saved goal sort preference (if present).
         user_doc = db.users.find_one({'_id': ObjectId(user.id)})
         user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
-        # Include AI analysis fields but exclude heavy ai_plan content
+
+        # Exclude heavy `ai_plan` text to keep tokens low.
         proj = {
             'ai_plan': 0,
             'ai_priority': 1,
@@ -104,14 +100,20 @@ def _build_financial_context(user: User) -> dict:
             'ai_suggestions': 1,
         }
         goals = Goal.get_active_goals(user.id, db, sort_mode=user_goal_sort, projection=proj)
-        compact_goals = [_compact_goal_with_local_currency(g, user, lifetime_summary["current_balance"]) for g in goals]
+        compact_goals = [_compact_goal_with_local_currency(g, user, lifetime_summary.get("current_balance", 0)) for g in goals]
+
+    except Exception:
+        # If something goes wrong, return safe empty defaults so callers can
+        # still present a useful UI rather than crashing.
+        lifetime_summary = {"current_balance": 0}
+        year_summary = {}
+        last_30D_details = []
+        recent_3M_summary = []
+        compact_goals = []
 
     finally:
         if cache_id:
             drop_cache_session(cache_id)
-
-
-    # Simplify goals for JSON serialization
 
     return {
         "user": {
@@ -222,45 +224,22 @@ def _analysis_prompt(user: User) -> str:
         "</div>\n"
     )
 
-
     return prompt
 
 
 def _goal_priority_prompt(user: User, goal: dict) -> str:
+    """Build a concise prompt asking the AI to score priority/urgency for one goal.
+
+    The prompt instructs the model to return a strict JSON object only. We use
+    `default_serializer` when dumping context so dates/ObjectIds remain readable.
+    """
     financial_context = _build_financial_context(user)
-    compact_goal = _compact_goal_with_local_currency(goal, user, financial_context["lifetime_summary"]["current_balance"])
-
-    ( #return (
-        "You are a financial planning assistant. "
-        "Your task: evaluate the importance and urgency of the following financial goal, "
-        "given the user's overall financial context.\n\n"
-        f"{json.dumps(financial_context, indent=2, default=str)}\n\n"
-
-        f"With the given context, evaluate the importance and urgency of this financial goal:\n"
-        f"{json.dumps(compact_goal, indent=2, default=str)}\n\n"
-        "Respond with a STRICT JSON object only. No explanations, no markdown, no extra text.\n\n"
-        "JSON schema (all keys required unless noted):\n"
-        "{\n"
-        '  "priority_score": number (0-100, higher = more important to pursue soon),\n'
-        '  "urgency": number (0-100, 0 = far in the future (>24 months), 100 = due now or overdue),\n'
-        '  "financial_impact": number (0-100, map goal_amount/monthly_income ratio to 0..100; ratio 0->0, 10+->100),\n'
-        '  "health_impact": number (0-100, 0 if not applicable),\n'
-        '  "confidence": number (0-100, how confident this assessment is),\n'
-        '  "suggested_actions": [array of 2-4 short actionable recommendations],\n'
-        '''  "summary": string (1-2 concise sentences summarizing the goal's importance)\n'''
-        "}\n\n"
-        "Rules & guidance:\n"
-        "- Use user_balance, income, expenses, and existing_goals for context.\n"
-        "- Urgency heuristic: 0 when >24 months away, 100 when due today/overdue, scale in-between.\n"
-        "- Financial impact: higher when target is large vs monthly income (ratio).\n"
-        "- Compute priority_score with heavier emphasis on priority/urgency, but consider impact and (if applicable) health.\n"
-        "- Keep all numeric values within 0-100.\n"
-        "- If multiple goals exist, lower priority for less urgent or less impactful ones.\n"
-        "- Ensure valid JSON with no trailing commas.\n"
+    compact_goal = _compact_goal_with_local_currency(
+        goal, user, financial_context.get("lifetime_summary", {}).get("current_balance", 0)
     )
 
     return (
-        """You are a financial planning assistant. Your job: evaluate the importance and urgency of a single financial goal in the context of the user's finances. Respond with a STRICT JSON object only (no explanations, no markdown, no extra text).
+"""You are a financial planning assistant. Your job: evaluate the importance and urgency of a single financial goal in the context of the user's finances. Respond with a STRICT JSON object only (no explanations, no markdown, no extra text).
 """ + f"""
 Inputs:
 - financial_context: {json.dumps(financial_context, indent=2, default=str)}
@@ -446,18 +425,28 @@ def get_purchase_advice(
     balance: float,
 ):
     """Generate structured purchase advice JSON for a potential expense.
-
     Returns dict with keys: recommendation, reason, alternatives, impact.
+
+    This function builds a compact context and asks the AI to return strict
+    JSON. We only apply a small programmatic fallback if the AI call fails
+    (instead of providing a fallback to the engine itself) so issues are
+    easier to detect and log.
     """
     context = _build_financial_context(user)
     lifetime_summary = context["lifetime_summary"]
     last_3_months_summary = context["recent_3_months_summary"]
 
-    # Normalize weekly spending
-    if weekly_spending and isinstance(weekly_spending[0], (int, float)):
-        total_week_spend = round(sum(float(x) for x in weekly_spending), 2)
-    else:
-        total_week_spend = round(sum(float(getattr(t, 'amount', t.get('amount', 0))) for t in weekly_spending), 2)
+    # Robustly normalize weekly_spending which may be a list of numbers or dict-like objects
+    total_week_spend = 0.0
+    for s in (weekly_spending or []):
+        if isinstance(s, (int, float)):
+            total_week_spend += float(s)
+        elif isinstance(s, dict):
+            total_week_spend += float(s.get('amount', 0) or 0)
+        else:
+            # Try attribute access for objects with an `amount` attribute
+            total_week_spend += float(getattr(s, 'amount', 0) or 0)
+    total_week_spend = round(total_week_spend, 2)
 
     # Compact goals to reduce token usage
     goals_repr = []
@@ -491,16 +480,26 @@ def get_purchase_advice(
         "}"
     )
 
-    fallback = {
-        "recommendation": "maybe",
-        "reason": "AI unavailable or parse failure.",
-        "alternatives": [],
-        "impact": "unknown",
-    }
+    # Only use a simple fallback if the AI call fails; avoid passing a
+    # fallback into the engine which can mask problems.
+    try:
+        data = _BRAIN.get_json(prompt)
+    except Exception:
+        data = {
+            "recommendation": "maybe",
+            "reason": "AI unavailable or parse failure.",
+            "alternatives": [],
+            "impact": "unknown",
+        }
 
-    data = _BRAIN.get_json(prompt, fallback=fallback)
-    if "recommendation" not in data:
-        data.update(fallback)
+    # Ensure minimal validity
+    if not isinstance(data, dict) or 'recommendation' not in data:
+        data = {
+            "recommendation": "maybe",
+            "reason": "Invalid AI response.",
+            "alternatives": [],
+            "impact": "unknown",
+        }
     return data
 
 
@@ -510,6 +509,7 @@ async def run_goal_priority_analysis(user: User, ai_engine: FinancialBrain, goal
     Accepts an explicit engine (so callers can pass a shared instance).
     """
     prompt = _goal_priority_prompt(user, goal_dict)
+
     fallback = {
         "priority_score": 50,
         "urgency": 50,
@@ -519,12 +519,18 @@ async def run_goal_priority_analysis(user: User, ai_engine: FinancialBrain, goal
         "suggested_actions": ["Review manually"],
         "summary": "Fallback (AI unavailable)"
     }
+
     try:
-        data = await ai_engine.aget_json(prompt, fallback=fallback)
+        data = await ai_engine.aget_json(prompt)
     except Exception:
         data = fallback
-    if 'priority_score' not in data:
-        data['priority_score'] = fallback['priority_score']
+
+    # Validate and fill missing keys conservatively
+    if not isinstance(data, dict):
+        return fallback
+    for k, v in fallback.items():
+        if k not in data:
+            data[k] = v
     return data
 
 __all__ = [

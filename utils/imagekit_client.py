@@ -25,6 +25,7 @@ import os, base64, logging
 from typing import Union
 from imagekitio import ImageKit
 from imagekitio.models.UploadFileRequestOptions import UploadFileRequestOptions
+from config import Config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # set to INFO/ERROR in production
@@ -37,9 +38,9 @@ def _get_client() -> ImageKit:
     if _client:
         return _client
 
-    pk = os.getenv("IMAGEKIT_PRIVATE_KEY")
-    pub = os.getenv("IMAGEKIT_PUBLIC_KEY")
-    endpoint = os.getenv("IMAGEKIT_URL_ENDPOINT")
+    pk = Config.IMAGEKIT_PRIVATE_KEY
+    pub = Config.IMAGEKIT_PUBLIC_KEY
+    endpoint = Config.IMAGEKIT_URL_ENDPOINT
 
     if not (pk and pub and endpoint):
         logger.error("Missing IMAGEKIT_* environment variables")

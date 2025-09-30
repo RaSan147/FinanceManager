@@ -3,28 +3,14 @@
   'use strict';
 
   function normalizeDateInput(val){
-    if(!val) return null;
-    if(val instanceof Date && !isNaN(val)) return val;
-    if(typeof val === 'string') {
-      // Try to detect YYYY-MM-DD first
-      if(/^\d{4}-\d{2}-\d{2}$/.test(val)) return new Date(val + 'T00:00:00Z');
-      // Try full ISO
-      const iso = val.replace(/ /,'T');
-      const d = new Date(iso);
-      if(!isNaN(d)) return d;
-    }
-    if(typeof val === 'object') {
-      // Mongo extended JSON shapes
-      if(val.$date) return normalizeDateInput(val.$date);
-      if(val.date) return normalizeDateInput(val.date);
-      if(val._date) return normalizeDateInput(val._date);
-    }
-    return null;
+    if (!val) return null;
+    if (!window.SiteDate) throw new Error('SiteDate is required but missing');
+    return window.SiteDate.parse(val);
   }
 
   function isoDate(val){
-    const d = normalizeDateInput(val);
-    return d ? d.toISOString().slice(0,10) : '';
+    if (!window.SiteDate) throw new Error('SiteDate is required but missing');
+    return window.SiteDate.toDateString(val);
   }
 
   class TransactionModel {

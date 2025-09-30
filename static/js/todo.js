@@ -1,6 +1,6 @@
 (() => {
-	if (window.__todosModuleLoaded) return;
-	window.__todosModuleLoaded = true;
+	if (window.__todoModuleLoaded) return;
+	window.__todoModuleLoaded = true;
 	const modalEl = document.getElementById('todoModal');
 	if (!modalEl) return;
 	const form = modalEl.querySelector('[data-todo-form]');
@@ -11,16 +11,16 @@
 	const metaEl = form.querySelector('[data-todo-meta]');
 	let bsModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
 
-	const listEl = document.getElementById('todosFlatList');
+	const listEl = document.getElementById('todoFlatList');
 	const tmpl = document.getElementById('todoItemTemplate');
 	// Support multiple "new" buttons (header + toolbar)
 	const btnNews = [document.getElementById('btnNewTodoTop')].filter(Boolean);
 	const stageViewMenu = document.getElementById('stageViewMenu');
 	const stageViewLabel = document.getElementById('stageViewLabel');
-	const filterToggle = document.getElementById('btnFilterToggle');
-	const categorySel = document.getElementById('filterCategory');
+	const filterToggle = document.getElementById('btnTodoFilterToggle');
+	const categorySel = document.getElementById('todoFilterCategory');
 	const searchEl = document.getElementById('todoSearch');
-	const btnApplyFilters = document.getElementById('btnApplyFilters');
+	const btnToDoApplyFilters = document.getElementById('btnToDoApplyFilters');
 	const btnClearFilters = document.getElementById('btnClearFilters');
 	const sortMenuEl = document.getElementById('sortMenu');
 	const currentSortLabel = document.getElementById('currentSortLabel');
@@ -41,12 +41,8 @@
 		items: []
 	};
 
-// Use shared RichText helpers when available (centralized renderer)
-const RichText = window.RichText || {
-	renderInlineContent: (raw, id, markdownEnabled) => (raw ? (window.CommentFormatter ? window.CommentFormatter.formatText(raw) : (raw || '').replace(/\n/g, '<br/>')) : ''),
-	escapeHtml: (s) => (s || '').replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))
-};
-
+// Use the global RichText implementation only (no fallbacks). Let it fail loudly if missing.
+const RichText = window.RichText;
 // --- Edit-state caching + navigation warnings (for inline detail edit) ---
 const todoEditStateCache = {};
 let hasUnsavedChanges = false;
@@ -83,21 +79,14 @@ function updateUnsavedChangesFlag() {
 
 function hasAnyUnsavedChanges() { return hasUnsavedChanges; }
 
-function setupNavigationWarnings() {
-	window.addEventListener('beforeunload', (e) => {
-		if (hasAnyUnsavedChanges()) {
-			e.preventDefault();
-			e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-			return e.returnValue;
-		}
-	});
-}
-
-setupNavigationWarnings();
+// Wire navigation warnings and debounce from BlogHelpers
+// Use BlogHelpers (guaranteed). Let it throw if missing so we don't keep duplicate fallbacks.
+window.BlogHelpers.setupNavigationWarnings(() => hasAnyUnsavedChanges());
+var debounce = window.BlogHelpers.debounce;
 
 	async function apiList(forceFresh = false) {
 		// Add lightweight cache-buster when we know data changed (stage update/delete)
-		let url = `/api/todos?per_page=100` + (forceFresh ? `&__ts=${Date.now()}` : '');
+		let url = `/api/todo?per_page=100` + (forceFresh ? `&__ts=${Date.now()}` : '');
 		// Only include sort if user has explicitly picked one this session; otherwise
 		// let backend supply stored preference.
 		if (state.sortExplicit && state.sort) url += `&sort=${encodeURIComponent(state.sort)}`;
@@ -161,9 +150,11 @@ setupNavigationWarnings();
 		}
 		const due = node.querySelector('.todo-due');
 		if (it.due_date) {
-			const d = new Date(it.due_date);
-			due.textContent = d.toISOString().slice(0, 10);
-			due.classList.remove('d-none');
+			const dStr = date10(it.due_date);
+			if (dStr) {
+				due.textContent = dStr;
+				due.classList.remove('d-none');
+			}
 		}
 		const desc = node.querySelector('.todo-desc');
 		if (desc) desc.textContent = truncateDesc(it.description || '');
@@ -180,7 +171,7 @@ setupNavigationWarnings();
 		if (!stages.includes(newStage)) return;
 		node.classList.add('opacity-50');
 		try {
-			await App.utils.fetchJSONUnified(`/api/todos/${id}/stage`, {
+			await App.utils.fetchJSONUnified(`/api/todo/${id}/stage`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json'
@@ -227,7 +218,7 @@ setupNavigationWarnings();
 			btn.classList.toggle('active', s === state.sort);
 		});
 	}
-	const filterBtn = document.getElementById('btnFilterToggle');
+	const filterBtn = document.getElementById('btnTodoFilterToggle');
 
 	function updateFilterBtnActive() {
 		const active = !!(state.q || state.category || state.viewStage !== 'all');
@@ -246,7 +237,7 @@ setupNavigationWarnings();
 		const id = idInput.value.trim();
 		const payload = Object.fromEntries(fd.entries());
 		if (!payload.title) return;
-		const url = id ? `/api/todos/${id}` : '/api/todos';
+		const url = id ? `/api/todo/${id}` : '/api/todo';
 		const method = id ? 'PATCH' : 'POST';
 		if (id) {
 			normalizePatchClears(payload);
@@ -269,7 +260,7 @@ setupNavigationWarnings();
 	}
 	async function updateTodo(id, patch) {
 		try {
-			await App.utils.fetchJSONUnified(`/api/todos/${id}`, {
+			await App.utils.fetchJSONUnified(`/api/todo/${id}`, {
 				method: 'PATCH',
 				headers: {
 					'Content-Type': 'application/json'
@@ -283,7 +274,7 @@ setupNavigationWarnings();
 	async function deleteTodo(id) {
 		if (!confirm('Delete this item?')) return;
 		try {
-			await App.utils.fetchJSONUnified(`/api/todos/${id}`, {
+			await App.utils.fetchJSONUnified(`/api/todo/${id}`, {
 				method: 'DELETE'
 			});
 			window.flash && window.flash('Deleted', 'info');
@@ -333,68 +324,46 @@ setupNavigationWarnings();
 		} catch (_) {}
 	}
 
-	function openEditModal(data) {
-		form.reset();
-		idInput.value = data._id;
-		form.title.value = data.title || '';
-		form.category.value = data.category || '';
-		stageSelect.value = data.stage || 'wondering';
-		form.due_date.value = data.due_date ? data.due_date.slice(0, 10) : '';
-		form.description.value = data.description || '';
-		titleEl.textContent = 'Edit To-Do';
-		submitBtn.textContent = 'Update';
-		metaEl.textContent = '';
-		if (bsModal) bsModal.show();
-		else modalEl.style.display = 'block';
-		populateCategoryHints();
-		detailModal?.hide();
-	}
 	btnNews.forEach(btn => btn.addEventListener('click', populateCategoryHints, {
 		once: true
 	}));
 
 	// Detail modal logic
 	const detailModalEl = document.getElementById('todoDetailModal');
+	// Ensure modals are direct children of body for consistent Bootstrap stacking (fix backdrop/z-index issues)
+	[modalEl, detailModalEl].forEach(m => {
+		if (m && m.parentElement !== document.body) {
+			document.body.appendChild(m);
+		}
+	});
 	let detailModal = detailModalEl && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(detailModalEl) : null;
-	// Helpers for safe date formatting (handles Date, string, number)
+	// Use the site-wide SiteDate utilities (fail loudly if missing)
 	function extractDateVal(obj) {
-		if (!obj) return null;
-		if (obj instanceof Date) return obj;
-		if (typeof obj === 'string') {
-			const d = DateTime.parse(obj);
-			return d;
-		}
-		if (typeof obj === 'number') {
-			return new Date(obj > 1e12 ? obj : obj * 1000);
-		}
-		if (typeof obj === 'object') {
-			const cand = obj.$date || obj.date || obj.iso || obj.datetime || obj.at || obj.value;
-			if (cand) return extractDateVal(cand);
-		}
-		return null;
+		if (!window.SiteDate) throw new Error('SiteDate is required');
+		return window.SiteDate.parse(obj);
 	}
 
 	function fmtDate(v) {
-		const d = extractDateVal(v);
-		return d ? DateTime.formatDate(d) : '';
+		if (!window.SiteDate) throw new Error('SiteDate is required');
+		return window.SiteDate.toDateString(v);
 	}
 
 	function fmtDateTime(v) {
-		const d = extractDateVal(v);
-		return d ? DateTime.formatDateTime(d) : '';
+		if (!window.SiteDate) throw new Error('SiteDate is required');
+		return window.SiteDate.toDateTimeString(v);
 	}
 
 	function date10(v) {
-		const d = extractDateVal(v);
-		if (!d) return '';
-		return d.toISOString().slice(0, 10);
+		if (!window.SiteDate) throw new Error('SiteDate is required');
+		return window.SiteDate.toDateString(v);
 	} // keep legacy use
 	function date16(v) {
-		return fmtDateTime(v);
+		if (!window.SiteDate) throw new Error('SiteDate is required');
+		return window.SiteDate.toDateTimeString(v);
 	}
 	async function openDetailModal(id) {
 		try {
-			const data = await App.utils.fetchJSONUnified(`/api/todos/${id}/detail`, {
+			const data = await App.utils.fetchJSONUnified(`/api/todo/${id}/detail`, {
 				dedupe: true
 			});
 			try {
@@ -454,9 +423,7 @@ setupNavigationWarnings();
 			function updateDescContent() {
 				const markdownEnabled = isMarkdownEnabled();
 				descEl.classList.toggle('markdown-content', markdownEnabled);
-				descEl.innerHTML = (RichText && RichText.renderInlineContent)
-					? RichText.renderInlineContent(item.description || '', item._id, !!markdownEnabled)
-					: (window.CommentFormatter ? window.CommentFormatter.formatText(item.description || '') : (item.description || '').replace(/\n/g, '<br/>'));
+				descEl.innerHTML = RichText.renderInlineContent(item.description || '', item._id, !!markdownEnabled);
 				// Persist preference
 				localStorage.setItem('todo-markdown-enabled', markdownEnabled ? 'true' : 'false');
 			}
@@ -499,14 +466,7 @@ setupNavigationWarnings();
 				const markdownEnabled = mt ? !!mt.checked : (localStorage.getItem('todo-markdown-enabled') === 'true');
 				commentsWrap.innerHTML = commentsList.map(c => {
 					const images = (c.images || []).map((u,i) => { const t = ikThumb(u); return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='todo-comment-${itemLocal._id}' data-viewer-src='${u}' alt='comment image ${i+1}' style='max-width:140px;max-height:140px;height:auto;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;object-fit:cover;'/></div>`}).join('');
-					let formattedText;
-					if (window.CommentFormatter && window.CommentFormatter.formatText) {
-						formattedText = window.CommentFormatter.formatText(c.body || '');
-					} else if (RichText && RichText.renderInlineContent) {
-						formattedText = RichText.renderInlineContent(c.body || '', `todo-comment-${itemLocal._id}`, !!markdownEnabled);
-					} else {
-						formattedText = (RichText && RichText.escapeHtml) ? RichText.escapeHtml(c.body).replace(/\n/g, '<br/>') : (c.body || '').replace(/\n/g, '<br/>');
-					}
+					const formattedText = RichText.renderInlineContent(c.body || '', `todo-comment-${itemLocal._id}`, !!markdownEnabled);
 					return `
 				    <div class='todo-comment'>
 				      <div class='body'>
@@ -561,68 +521,8 @@ setupNavigationWarnings();
 			const editContent = editForm.querySelector('[data-todo-detail-edit-description]') || editForm.querySelector('[data-todo-detail-edit-description]');
 			const editFileInput = editForm.querySelector('[data-todo-edit-description-image]');
 			const editTrigger = editForm.querySelector('[data-todo-edit-description-image-trigger]');
-			editTrigger && editTrigger.addEventListener('click', () => editFileInput && editFileInput.click());
-
-			function insertUploadingPlaceholder() {
-				if (!editContent) return null;
-				const id = 'up_' + Math.random().toString(36).slice(2,9);
-				const placeholder = `\n![uploading-${id}]()`;
-				const start = editContent.selectionStart || 0;
-				const end = editContent.selectionEnd || 0;
-				const orig = editContent.value;
-				editContent.value = orig.slice(0, start) + placeholder + orig.slice(end);
-				const cursor = start + placeholder.length;
-				editContent.selectionStart = editContent.selectionEnd = cursor;
-				return id;
-			}
-
-			async function uploadAndReplace(file, idTag) {
-				if (!file) return;
-				if (!file.type.startsWith('image/')) return;
-				if (file.size > 16 * 1024 * 1024) { window.flash && window.flash('Image too large', 'warning'); return; }
-				const reader = new FileReader();
-				reader.onload = async () => {
-					try {
-						const res = await App.utils.fetchJSONUnified('/api/todo-images', {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ image: reader.result })
-						});
-						editContent.value = editContent.value.replace(`![uploading-${idTag}]()`, `![img](${res.url})`);
-					} catch (_) {
-						editContent.value = editContent.value.replace(`![uploading-${idTag}]()`, '(image failed)');
-					}
-				};
-				reader.readAsDataURL(file);
-			}
-
-			function handleFiles(files, label) {
-				if (!files || !files.length) return;
-				for (const f of files) {
-					const id = insertUploadingPlaceholder();
-					uploadAndReplace(f, id);
-				}
-			}
-
-			editFileInput && editFileInput.addEventListener('change', () => { handleFiles(Array.from(editFileInput.files || []), 'selected'); editFileInput.value = ''; });
-
-			editContent && editContent.addEventListener('paste', e => {
-				const items = e.clipboardData?.items || [];
-				const files = [];
-				for (const it of items) {
-					if (it.type?.startsWith('image/')) {
-						const f = it.getAsFile(); if (f) files.push(f);
-					}
-				}
-				if (files.length) { e.preventDefault(); handleFiles(files, 'pasted'); }
-			});
-
-			editContent && editContent.addEventListener('dragover', e => e.preventDefault());
-			editContent && editContent.addEventListener('drop', e => {
-				e.preventDefault();
-				const files = Array.from(e.dataTransfer?.files || []);
-				handleFiles(files, 'dropped');
-			});
+			// Use BlogHelpers for inline image uploads (fail loudly if missing)
+			window.BlogHelpers.attachInlineImageUploader({ contentEl: editContent, fileInput: editFileInput, trigger: editTrigger, uploadEndpoint: '/api/todo-images' });
 		}
 		// Toggle buttons state back to view mode on re-render
 		const btnEdit = detailModalEl.querySelector('[data-todo-detail-edit-btn]');
@@ -634,6 +534,67 @@ setupNavigationWarnings();
 				btnSave.classList.add('d-none');
 				btnCancel.classList.add('d-none');
 			}
+		}
+
+		// Delegate header clicks to avoid double-invocation and ensure controls work after re-render
+		if (!detailModalEl._headerClickBound) {
+			detailModalEl._headerClickBound = true;
+			detailModalEl.addEventListener('click', async (e) => {
+				if (e.target.closest('[data-todo-detail-edit-btn]')) {
+					try { switchToEdit(); } catch (_) {}
+				}
+				if (e.target.closest('[data-todo-detail-cancel-btn]')) {
+					const tid = detailModalEl.querySelector('[data-todo-detail-edit-form]')?.dataset.todoId;
+					if (tid) clearEditStateFromCache(tid);
+					try { switchToView(); } catch (_) {}
+					if (tid) openDetailModal(tid);
+				}
+				if (e.target.closest('[data-todo-detail-save-btn]')) {
+					const matched = e.target.closest('[data-todo-detail-save-btn]');
+					const canonical = detailModalEl.querySelector('[data-todo-detail-save-btn]');
+					if (matched && matched === canonical) return; // let canonical handler run
+					try {
+						const editFormInner = detailModalEl.querySelector('[data-todo-detail-edit-form]');
+						if (editFormInner) {
+							// perform save (reuse existing code path)
+							const todoId = editFormInner.dataset.todoId;
+							if (todoId) {
+								const fd = new FormData(editFormInner);
+								const patch = {};
+								fd.forEach((v,k)=>{ patch[k]=v.toString(); });
+								if (patch.due_date === '') patch.due_date = null;
+								if (patch.category === '') patch.category = null;
+								await App.utils.fetchJSONUnified(`/api/todo/${todoId}`, {
+									method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(patch)
+								});
+								window.flash && window.flash('Updated', 'success');
+								switchToView();
+								openDetailModal(todoId);
+								apiList();
+							}
+						}
+					} catch (_) { window.flash && window.flash('Update failed', 'danger'); }
+				}
+			});
+		}
+
+		// Save edit state when modal hides
+		if (detailModalEl) {
+			detailModalEl.addEventListener('hide.bs.modal', () => {
+				const rootHide = detailModalEl.querySelector('[data-todo-detail-root]');
+				const tid = rootHide?.querySelector('[data-todo-detail-edit-form]')?.dataset.todoId;
+				if (tid) saveEditStateToCache(tid, rootHide);
+			});
+		}
+
+		// Auto-save edit state while editing (debounced)
+		if (editForm) {
+			const debouncedSaveState = debounce(() => {
+				const rootAuto = detailModalEl.querySelector('[data-todo-detail-root]');
+				const tid = rootAuto?.querySelector('[data-todo-detail-edit-form]')?.dataset.todoId;
+				if (tid && !editForm.classList.contains('d-none')) saveEditStateToCache(tid, rootAuto);
+			}, 500);
+			editForm.addEventListener('input', debouncedSaveState);
 		}
 	}
 
@@ -694,7 +655,7 @@ setupNavigationWarnings();
 				const imgs = formC._imageUploader ? formC._imageUploader.getImages() : [];
 				if (!body && !imgs.length) return;
 				try {
-					await App.utils.fetchJSONUnified(`/api/todos/${todoId}/comments`, {
+					await App.utils.fetchJSONUnified(`/api/todo/${todoId}/comments`, {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({ body, images: imgs })
@@ -751,7 +712,7 @@ setupNavigationWarnings();
 			if (patch.due_date === '') patch.due_date = null;
 			if (patch.category === '') patch.category = null;
 			try {
-				await App.utils.fetchJSONUnified(`/api/todos/${todoId}`, {
+				await App.utils.fetchJSONUnified(`/api/todo/${todoId}`, {
 					method: 'PATCH',
 					headers: {
 						'Content-Type': 'application/json'
@@ -769,53 +730,13 @@ setupNavigationWarnings();
 	}
 
 // Inline image paste/drag/file upload for create modal (form.description)
+// Use BlogHelpers.attachInlineImageUploader exclusively. If BlogHelpers is missing,
+// allow the error to surface so the missing abstraction is fixed at source.
 if (form && form.description) {
 	const descInput = form.description;
 	const fileInput = modalEl.querySelector('[data-todo-description-image]');
 	const trigger = modalEl.querySelector('[data-todo-description-image-trigger]');
-	trigger && trigger.addEventListener('click', () => fileInput && fileInput.click());
-	async function uploadDescriptionFiles(files, label) {
-		for (const f of files) {
-			if (!f.type.startsWith('image/')) continue;
-			if (f.size > 16 * 1024 * 1024) { window.flash && window.flash('Image too large', 'warning'); continue; }
-			const placeholder = '\n![uploading]()';
-			const start = descInput.selectionStart, end = descInput.selectionEnd;
-			const orig = descInput.value;
-			descInput.value = orig.slice(0, start) + placeholder + orig.slice(end);
-			descInput.selectionStart = descInput.selectionEnd = start + placeholder.length;
-			const r = new FileReader();
-			r.onload = async () => {
-				try {
-					const res = await App.utils.fetchJSONUnified('/api/todo-images', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ image: r.result })
-					});
-					descInput.value = descInput.value.replace('![uploading]()', `![img](${res.url})`);
-				} catch (_) {
-					descInput.value = descInput.value.replace('![uploading]()', '(image failed)');
-				}
-			};
-			r.readAsDataURL(f);
-		}
-	}
-	fileInput && fileInput.addEventListener('change', () => { uploadDescriptionFiles(Array.from(fileInput.files || []), 'Selected'); fileInput.value = ''; });
-	descInput.addEventListener('paste', e => {
-		const items = e.clipboardData?.items || [];
-		const files = [];
-		for (const it of items) {
-			if (it.type?.startsWith('image/')) {
-				const f = it.getAsFile(); if (f) files.push(f);
-			}
-		}
-		if (files.length) { e.preventDefault(); uploadDescriptionFiles(files, 'Pasted'); }
-	});
-	descInput.addEventListener('dragover', e => e.preventDefault());
-	descInput.addEventListener('drop', e => {
-		e.preventDefault();
-		const files = Array.from(e.dataTransfer?.files || []);
-		if (files.length) uploadDescriptionFiles(files, 'Dropped');
-	});
+	window.BlogHelpers.attachInlineImageUploader({ contentEl: descInput, fileInput, trigger, uploadEndpoint: '/api/todo-images' });
 }
 
 	form.addEventListener('submit', e => {
@@ -850,10 +771,10 @@ if (form && form.description) {
 		});
 	}
 	safeOn(filterToggle, 'click', () => {
-		const box = document.getElementById('inlineFilters');
+		const box = document.getElementById('todoInlineFilters');
 		box.classList.toggle('d-none');
 	});
-	safeOn(btnApplyFilters, 'click', () => {
+	safeOn(btnToDoApplyFilters, 'click', () => {
 		state.q = searchEl.value.trim();
 		state.category = categorySel.value || '';
 		apiList();

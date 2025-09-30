@@ -193,7 +193,8 @@ class PurchaseAdvisor {
                 if (item.advice.recommendation === 'yes') icon = '✅';
                 if (item.advice.recommendation === 'no') icon = '❌';
                 if (item.advice.recommendation === 'maybe') icon = '⚠️';
-                const date = new Date(item.created_at).toLocaleString();
+                const parsed = window.SiteDate ? window.SiteDate.parse(item.created_at) : (new Date(item.created_at));
+                const date = parsed && !isNaN(parsed.getTime()) ? parsed.toLocaleString() : '';
                 const srcAmount = (item?.request?.amount_original ?? item?.request?.amount);
                 const amtNum = Number(srcAmount);
                 const amountSafe = Number.isFinite(amtNum) ? amtNum : 0;

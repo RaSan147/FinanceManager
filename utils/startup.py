@@ -15,6 +15,7 @@ import asyncio
 import threading
 import time
 import traceback
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -96,7 +97,7 @@ def run_local_startup(mongo: Any, pastebin_client: Optional[Any] = None) -> None
     try:
         # Configure currency service to use Mongo backend and block on refresh
         try:
-            currency_service.re_initialize(db=mongo.db, cache_backend='mongo')
+            currency_service.re_initialize(db=mongo.db, cache_backend='mongo', mongo_collection='system_fx_rates', mongo_doc_id='rates_usd_per_unit')
             currency_service.refresh_rates(force=True)
         except Exception as _e:
             print(f"[startup] Warning: currency refresh failed during startup: {_e}")
@@ -127,7 +128,7 @@ def run_local_startup(mongo: Any, pastebin_client: Optional[Any] = None) -> None
         pass
 
 
-def run_master_global_warmup(mongo_uri: Optional[str] = None) -> None:
+def run_master_global_warmup(cache_mongo_uri: Optional[str] = None) -> None:
     """Safe warmup to run once in Gunicorn master before workers fork.
 
     This should avoid using application-level clients. It performs a
@@ -136,12 +137,12 @@ def run_master_global_warmup(mongo_uri: Optional[str] = None) -> None:
     """
     try:
         # Keep file-backed cache for master process (no DB passed)
-        currency_service.re_initialize(db=None, cache_backend='file')
+        currency_service.re_initialize(db=None, cache_backend='file', cache_file=os.path.join(os.path.dirname(__file__), 'fx_rates_cache.json'))
         currency_service.refresh_rates(force=True)
     except Exception as _e:
         print(f"[gunicorn-startup] Warning: currency refresh failed in master: {_e}")
 
-    if not mongo_uri:
+    if not cache_mongo_uri:
         return
 
     if MongoClient is None:
@@ -150,14 +151,31 @@ def run_master_global_warmup(mongo_uri: Optional[str] = None) -> None:
 
     try:
         # Use a short-lived client to avoid shared sockets across forks
-        client = MongoClient(mongo_uri)
+        client = MongoClient(cache_mongo_uri)
         try:
+            # Prefer any DB encoded in the URI, else fall back to a common name
             db = client.get_default_database()
             if db is None:
-                # If no default DB in URI, try common name from environment
-                print("[gunicorn-startup] No default DB found in URI; skipping index ensure")
-            else:
+                # If no default DB in URI, fall back to a known cache DB name
+                db = client['self_finance_tracker_cache']
+
+            # Ensure indexes (best-effort)
+            try:
                 ensure_indexes(db)
+            except Exception as _e:
+                print(f"[gunicorn-startup] Warning: ensure_indexes failed: {_e}")
+
+            # Additionally: perform a short-lived Mongo-backed FX refresh so the
+            # master process can populate the shared cache DB for workers. We
+            # create a local CurrencyService instance bound to this short-lived
+            # DB to avoid mutating the module-level currency_service which the
+            # app may reconfigure after forking.
+            try:
+                from utils.currency import CurrencyService
+                cs = CurrencyService(db=db, cache_backend='mongo')
+                cs.refresh_rates(force=True)
+            except Exception as _e:
+                print(f"[gunicorn-startup] Warning: short-lived mongo FX refresh failed: {_e}")
         finally:
             try:
                 client.close()

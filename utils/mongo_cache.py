@@ -72,8 +72,12 @@ class MongoCache:
         try:
             self.col.insert_one(doc)
         except Exception:
+            # Log full context and re-raise so callers cannot receive a
+            # phantom cache_id when the DB insert actually failed. The
+            # application expects the Mongo cache to be available; hiding
+            # this failure leads to confusing runtime behavior later.
             logger.exception('mongo_cache: failed to create session for user=%s', user_id)
-            # fallback: return id but session may not exist
+            raise
         return cache_id
 
     def get_session(self, cache_id: str) -> Optional[Dict[str, Any]]:

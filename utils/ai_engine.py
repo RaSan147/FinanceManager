@@ -10,9 +10,9 @@ import threading
 
 from google import genai
 from .request_metrics import record_ai_call
+from config import Config
 
 
-# --- Configuration -----------------------------------------------------------
 DEFAULT_MODEL_CANDIDATES: list[str] = [
     "gemini-2.5-flash",       # reasoning-heavy queries
     "gemini-2.5-pro",         # rare deep reasoning
@@ -33,24 +33,30 @@ class _RetryPolicy:
 
 # --- FinancialBrain ----------------------------------------------------------
 class FinancialBrain:
-    """Central wrapper around Gemini client with:
-    - model fallback & retry with loop-back
-    - sync + async helpers
-    - JSON fence stripping
-    - logging & error tracking
+    """Wrapper around a Gemini client.
+
+    Responsibilities:
+    - manage model candidates and per-model cooldowns
+    - perform retries with exponential backoff for transient errors
+    - provide synchronous and asynchronous helpers
+    - parse JSON responses produced inside markdown fences
+    - log attempts, errors and successes to a local log file
     """
 
     def __init__(self, api_key: Optional[str] = None,
                  model_candidates: Optional[Iterable[str]] = None,
                  retry: _RetryPolicy = _RetryPolicy()):
-        api_key = api_key or os.getenv("GEMINI_API_KEY")
+        api_key = api_key or Config.GEMINI_API_KEY
+        # genai client may be None when no API key is available; callers should
+        # handle RuntimeError from generation methods instead of relying on
+        # string fallbacks.
         self.client = genai.Client(api_key=api_key) if api_key else None
 
-        override = os.getenv("GEMINI_MODEL")
+        override = Config.GEMINI_MODEL
         base_candidates = list(model_candidates) if model_candidates else list(DEFAULT_MODEL_CANDIDATES)
         self.model_candidates: list[str] = ([override] if override else []) + base_candidates
 
-        # de-dup while preserving order
+        # de-duplicate while preserving order
         seen = set()
         self.model_candidates = [m for m in self.model_candidates if not (m in seen or seen.add(m))]
 
@@ -58,6 +64,7 @@ class FinancialBrain:
         self._model_cooldown: dict[str, float] = {}
         self.retry = retry
 
+        # dedicated event loop for background async calls from sync codepaths
         self.loop = asyncio.new_event_loop()
         t = threading.Thread(target=self.loop.run_forever, daemon=True)
         t.start()
@@ -65,6 +72,10 @@ class FinancialBrain:
     # ----------------- Utility -----------------
     @staticmethod
     def strip_fences(text: str, md_type: str = "json") -> str:
+        """Remove a markdown code fence of the given type from the start/end.
+
+        If the input is not a string it is returned unchanged.
+        """
         if not isinstance(text, str):
             return text
         start, end = f"```{md_type}\n", "```"
@@ -140,11 +151,31 @@ class FinancialBrain:
 
     # ----------------- Core generation -----------------
     async def _generate_any(self, prompt: str) -> str:
+        """Attempt to generate text with configured model candidates.
+
+        Raises RuntimeError when the client is not configured or no model
+        candidates are available. Transient and quota errors are retried
+        according to the _RetryPolicy.
+        """
+        # If client or models are not configured, return a clear text
+        # message rather than raising. Callers (web routes/services) often
+        # expect a string and will render it directly to users.
         if not self.client:
+            # record metrics so requests without API keys are visible
+            try:
+                record_ai_call("(no-client)", duration_ms=0.0, prompt_chars=len(prompt), response_chars=0,
+                               error="no GEMINI_API_KEY")
+            except Exception:
+                pass
             return "AI unavailable (no GEMINI_API_KEY)"
 
         models = list(self.model_candidates)
         if not models:
+            try:
+                record_ai_call("(no-candidates)", duration_ms=0.0, prompt_chars=len(prompt), response_chars=0,
+                               error="no candidates")
+            except Exception:
+                pass
             return "AI unavailable (no candidates)"
 
         model_attempts = {m: 0 for m in models}
@@ -165,6 +196,7 @@ class FinancialBrain:
                 break
 
             for model in candidates:
+                last_model = model
                 while model_attempts[model] < self.retry.max_retries and overall_attempt < max_total:
                     overall_attempt += 1
                     model_attempts[model] += 1
@@ -177,6 +209,13 @@ class FinancialBrain:
                         elapsed = (time.perf_counter() - t0) * 1000
                         self._log_success(model, overall_attempt, elapsed)
 
+                        # record successful call metrics
+                        try:
+                            record_ai_call(model, duration_ms=elapsed, prompt_chars=len(prompt),
+                                           response_chars=len(text), error=None)
+                        except Exception:
+                            pass
+
                         # dump prompt/response
                         safe_model = model.replace("/", "_")
                         with open(f"LOG/{time.time():.02f}_{safe_model}.txt", "w", encoding="utf-8") as f:
@@ -187,6 +226,13 @@ class FinancialBrain:
                     except Exception as e:
                         last_err = e
                         self._log_error(model, e, overall_attempt, model_attempts[model])
+                        # record failed attempt metrics
+                        try:
+                            attempt_elapsed = (time.perf_counter() - t0) * 1000
+                            record_ai_call(model, duration_ms=attempt_elapsed, prompt_chars=len(prompt),
+                                           response_chars=0, error=str(e)[:1000])
+                        except Exception:
+                            pass
                         retry_delay = self._extract_retry_delay_seconds(e) if self._is_quota_or_rate_limit(e) else None
                         transient = self._is_quota_or_rate_limit(e) or self._is_transient(e)
 
@@ -205,6 +251,14 @@ class FinancialBrain:
                         await asyncio.sleep(wait_s)
                         backoffs[model] *= 2
 
+        # If we reach here all retries failed: record a final metric and
+        # return a clear fallback string containing the last error for easier
+        # debugging in calling code.
+        try:
+            record_ai_call(last_model or "(no-model)", duration_ms=0.0, prompt_chars=len(prompt),
+                           response_chars=0, error=str(last_err)[:1000] if last_err else "unknown")
+        except Exception:
+            pass
         return f"AI unavailable (error: {last_err})" if last_err else "AI unavailable (unknown error)"
 
     # ----------------- Helpers -----------------
@@ -212,12 +266,18 @@ class FinancialBrain:
         self._model_cooldown[model] = time.time() + delay
 
     def _ensure_model(self) -> str:
+        """Return a validated/most-recent model or the first candidate.
+
+        This helper does not attempt to contact the API. If the client is not
+        configured a RuntimeError is raised to make failures explicit.
+        """
         if self._validated_model:
             return self._validated_model
         if not self.client:
-            self._validated_model = "(no-client)"
-            return self._validated_model
-        return self.model_candidates[0] if self.model_candidates else "(no-candidates)"
+            raise RuntimeError("Gemini client not configured")
+        if not self.model_candidates:
+            raise RuntimeError("No model candidates configured")
+        return self.model_candidates[0]
 
     # ----------------- Public API -----------------
     def get_text(self, prompt: str) -> str:
@@ -236,6 +296,8 @@ class FinancialBrain:
                 return data
             raise ValueError("JSON root not an object")
         except Exception:
+            # Log and return a fallback dict so callers in the web app can
+            # continue rendering without dealing with exceptions.
             traceback.print_exc()
             return fallback or {"error": "parse_failure", "raw": clean[:4000]}
 

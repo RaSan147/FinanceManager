@@ -142,16 +142,14 @@ class LoansModule {
                 if (v.$date) return normalize(v.$date);
                 if (v.date) return normalize(v.date);
             }
-            if (typeof v === 'number') {
-                const d = new Date(v);
-                return isNaN(d) ? null : d;
-            }
+                if (typeof v === 'number') {
+                    if (!window.SiteDate) throw new Error('SiteDate is required but missing');
+                    return window.SiteDate.parse(v);
+                }
             if (typeof v === 'string') {
-                const s = v.trim();
-                if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00:00Z');
-                const norm = s.replace(/\+00:00$/, 'Z').replace(' ', 'T');
-                const d = new Date(norm);
-                if (!isNaN(d)) return d;
+                if (!window.SiteDate) throw new Error('SiteDate is required but missing');
+                const parsed = window.SiteDate.parse(v);
+                if (parsed) return parsed;
             }
             return null;
         }
@@ -161,6 +159,11 @@ class LoansModule {
 
         if (inst && typeof inst.formatDate === 'function') {
             return inst.formatDate(d);
+        }
+
+        // Prefer SiteDate formatting for consistency
+        if (window.SiteDate && typeof window.SiteDate.toDateString === 'function') {
+            return window.SiteDate.toDateString(d);
         }
 
         try {

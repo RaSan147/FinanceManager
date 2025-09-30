@@ -1,5 +1,4 @@
 from __future__ import annotations
-import os
 import traceback
 from flask import Blueprint, render_template, request, jsonify
 from bson import ObjectId
@@ -12,7 +11,6 @@ from utils.request_metrics import summary as metrics_summary
 from config import Config
 import logging
 logger = logging.getLogger(__name__)
-AllowLog = os.getenv("IMAGEKIT_DEBUG") == '1'
 
 def init_diary_blueprint(mongo):
     bp = Blueprint('diary_bp', __name__)
@@ -146,7 +144,7 @@ def init_diary_blueprint(mongo):
             return jsonify({'error': 'image required'}), 400
         debug_enabled = (
             request.args.get('debug') is not None
-            or os.getenv('IMAGEKIT_DEBUG', '').lower() in {'1','true','yes','on'}
+            or getattr(Config, 'IMAGEKIT_DEBUG', False)
             or getattr(Config, 'SHOW_DETAILED_ERRORS', False)
         )
         # Fallback simple size heuristic (raw may be base64 or data URL)

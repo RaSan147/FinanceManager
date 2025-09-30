@@ -1,4 +1,4 @@
-/* To-Dos page styles (migrated from css/components/todos.css) */
+/* To-Do page styles (migrated from css/components/todo.css) */
 .todo-stage-badge {
   font-size: 0.7rem;
 }
@@ -46,7 +46,7 @@
   font-size: .85rem;
 }
 
-.todos-grid {
+.todo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: .75rem;
@@ -54,14 +54,14 @@
 }
 
 @media (max-width:575.98px) {
-  .todos-grid {
+  .todo-grid {
     grid-template-columns: 1fr;
   }
 }
 
 .todo-item {
   position: relative;
-  transition: background-color .15s, box-shadow .15s;
+  transition: background-color .15s, box-shadow .15s, box;
   cursor: pointer;
 }
 
@@ -85,17 +85,17 @@
 }
 
 @media (max-width:425px) {
-  .todos-page-header {
+  .todo-page-header {
     flex-wrap: wrap;
     gap: .5rem;
     align-items: center;
   }
 
-  .todos-page-header .heading-responsive {
+  .todo-page-header .heading-responsive {
     font-size: 1.15rem;
   }
 
-  .todos-page-header .heading-responsive .heading-extra {
+  .todo-page-header .heading-responsive .heading-extra {
     display: none;
   }
 
@@ -104,13 +104,13 @@
     padding: .45rem .8rem;
   }
 
-  .todos-toolbar {
+  .todo-toolbar {
     flex-wrap: wrap;
     gap: .55rem !important;
     align-items: center !important;
   }
 
-  .todos-toolbar-right {
+  .todo-toolbar-right {
     flex-wrap: wrap;
     gap: .55rem !important;
   }
@@ -129,15 +129,15 @@
     display: none !important;
   }
 
-  #btnFilterToggle span {
+  #btnTodoFilterToggle span {
     display: none !important;
   }
 
-  #btnFilterToggle {
+  #btnTodoFilterToggle {
     padding: .45rem .65rem;
   }
 
-  .todos-grid {
+  .todo-grid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: .6rem;
   }
@@ -208,7 +208,7 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border {
   overflow: hidden;
 }
 
-/* Enhanced styling for To-Dos detail view */
+/* Enhanced styling for To-Do detail view */
 
 /* Buttons */
 /* #todoDetailModal .btn {
