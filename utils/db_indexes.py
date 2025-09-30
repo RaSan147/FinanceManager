@@ -96,13 +96,13 @@ def ensure_indexes(db: Any) -> None:
 
     # system_fx_rates (optional; accessed by _id only which is auto-indexed). No-op.
 
-    # todos
-    todos = db.todos
-    _safe_create_index(todos, [("user_id", ASCENDING), ("created_at", DESCENDING)], name="todo_user_created_desc")
-    _safe_create_index(todos, [("user_id", ASCENDING), ("updated_at", DESCENDING)], name="todo_user_updated_desc")
-    _safe_create_index(todos, [("user_id", ASCENDING), ("stage", ASCENDING), ("created_at", DESCENDING)], name="todo_user_stage_created_desc")
-    _safe_create_index(todos, [("user_id", ASCENDING), ("category", ASCENDING), ("created_at", DESCENDING)], name="todo_user_category_created_desc")
-    _safe_create_index(todos, [("user_id", ASCENDING), ("due_date", ASCENDING)], name="todo_user_due_date_asc")
+    # todo
+    todo = db.todo
+    _safe_create_index(todo, [("user_id", ASCENDING), ("created_at", DESCENDING)], name="todo_user_created_desc")
+    _safe_create_index(todo, [("user_id", ASCENDING), ("updated_at", DESCENDING)], name="todo_user_updated_desc")
+    _safe_create_index(todo, [("user_id", ASCENDING), ("stage", ASCENDING), ("created_at", DESCENDING)], name="todo_user_stage_created_desc")
+    _safe_create_index(todo, [("user_id", ASCENDING), ("category", ASCENDING), ("created_at", DESCENDING)], name="todo_user_category_created_desc")
+    _safe_create_index(todo, [("user_id", ASCENDING), ("due_date", ASCENDING)], name="todo_user_due_date_asc")
 
     todo_cats = db.todo_categories
     _safe_create_index(todo_cats, [("user_id", ASCENDING), ("name", ASCENDING)], name="todo_cat_user_name", unique=True)

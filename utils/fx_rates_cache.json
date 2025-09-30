@@ -1,0 +1,16 @@
+{
+  "source": "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
+  "fetched_at": 1759192083.605251,
+  "ttl_seconds": 86400,
+  "usd_per_unit": {
+    "USD": 1.0,
+    "BDT": 0.00823977,
+    "EUR": 1.17221273,
+    "GBP": 1.34264672,
+    "JPY": 0.00670737,
+    "AUD": 0.65539988,
+    "CAD": 0.71796961,
+    "INR": 0.01127982
+  },
+  "generated_at": "2025-09-30T00:28:03.866938+00:00"
+}

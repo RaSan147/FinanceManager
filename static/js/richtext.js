@@ -1,7 +1,7 @@
 (() => {
   if (window.RichText) return;
 
-  // Minimal, dependency-free markdown-ish renderer used by diary and todos.
+  // Minimal, dependency-free markdown-ish renderer used by diary and todo.
   const markdownPatterns = {
     blockquote: /^&gt;\s+(.+)$/gm,
     headers: /^#{1,6}\s+(.+)$/gm,

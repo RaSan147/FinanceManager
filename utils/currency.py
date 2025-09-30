@@ -33,11 +33,13 @@ from urllib.error import URLError, HTTPError
 import threading
 from urllib.parse import urlparse
 
-try:
-	# Optional, only needed if using env-style Mongo client; app typically passes db directly
-	from pymongo import MongoClient  # noqa: F401
-except Exception:
-	MongoClient = None  # type: ignore[assignment]
+from pymongo import MongoClient
+from pymongo.database import Database
+
+from config import Config
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class CurrencyService:
@@ -98,16 +100,17 @@ class CurrencyService:
 		self._conv_cache_max = 2000
 
 
-		self._backoff_seconds = int(os.getenv("CURRENCY_RATES_BACKOFF_SECONDS", "600"))
-		self._ttl_seconds = int(os.getenv("CURRENCY_RATES_TTL_SECONDS", "86400"))  # 24h
+		self._backoff_seconds = int(Config.CURRENCY_RATES_BACKOFF_SECONDS)
+		self._ttl_seconds = int(Config.CURRENCY_RATES_TTL_SECONDS)  # 24h
 
 		# Runtime state
 		self._last_load_ts: float | None = None
 		self._last_attempt_ts: float | None = None
 		self._usd_per_unit: Dict[str, float] = dict(self.STATIC_USD_PER_UNIT)
 
-		self._cache_file = os.path.join(os.path.dirname(__file__), "fx_rates_cache.json")
-		self._cache_backend = os.getenv("CURRENCY_CACHE_BACKEND", "file")
+		# default cache file and backend come from centralized Config
+		self._cache_file = cache_file or Config.CURRENCY_RATES_CACHE_FILE or os.path.join(os.path.dirname(__file__), "fx_rates_cache.json")
+		self._cache_backend = (cache_backend or Config.CURRENCY_CACHE_BACKEND or "file").lower()
 
 		self.re_initialize(
 			db=db,
@@ -125,19 +128,77 @@ class CurrencyService:
 		cache_file: str | None = None,
 		mongo_collection: str = "system_fx_rates",
 		mongo_doc_id: str = "rates_usd_per_unit",
+		cache_mongo_uri: str | None = None,
 		supported_currencies: list[str] | None = None,
 	):
-		# Configs (env-overridable)
-		self._cache_backend = (cache_backend or self._cache_backend).strip().lower()
-		self._cache_file = cache_file or self._cache_file
-		self._db = db
-		self._mongo_collection_name = mongo_collection
-		self._mongo_doc_id = mongo_doc_id
+		# Configs (env-overridable). Preference order: explicit args -> app config/env -> existing
+		def _strip_quotes(v: str | None) -> str | None:
+			if v is None:
+				return None
+			v = v.strip()
+			# remove surrounding single/double quotes if present
+			if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+				return v[1:-1]
+			return v
+
+		raw_backend = cache_backend
+		raw_cache_file = cache_file
+		raw_mongo_coll = mongo_collection
+		raw_mongo_doc = mongo_doc_id
+
+		# Only update attributes when an explicit, non-empty value is provided.
+		# This avoids unintentionally clearing values (e.g. env/defaults) when
+		# callers pass None for parameters they don't intend to change.
+		backend_val = _strip_quotes(raw_backend)
+		if backend_val is not None and backend_val.strip() != "":
+			self._cache_backend = backend_val.strip().lower()
+
+		cache_file_val = _strip_quotes(raw_cache_file)
+		if cache_file_val is not None and cache_file_val.strip() != "":
+			self._cache_file = cache_file_val
+
+		# If backend explicitly set to 'file', clear any Mongo wiring to avoid
+		# carrying over collection/doc names from a previous mongo-backed
+		# configuration. Otherwise, assign DB and optionally update names.
+		if self._cache_backend == 'file':
+			self._db = None
+			self._mongo_collection_name = None
+			self._mongo_doc_id = None
+		else:
+			# DB is intentionally assigned even when None so callers can explicitly
+			# remove DB wiring by passing db=None when using the mongo backend.
+			self._db = db
+
+			mongo_coll_val = _strip_quotes(raw_mongo_coll)
+			if mongo_coll_val is not None and mongo_coll_val.strip() != "":
+				self._mongo_collection_name = mongo_coll_val
+
+			mongo_doc_val = _strip_quotes(raw_mongo_doc)
+			if mongo_doc_val is not None and mongo_doc_val.strip() != "":
+				self._mongo_doc_id = mongo_doc_val
 
 		# Supported currency list (fixed); defaults to STATIC_USD_PER_UNIT keys
 		self.supported_currencies: list[str] = supported_currencies or self.supported_currencies
 
-		# Try to initialize from cache without blocking on network
+		print(f'CurrencyService re-initialized with backend={self._cache_backend}, file={self._cache_file}, coll={self._mongo_collection_name}, doc_id={self._mongo_doc_id}')
+
+		# If configured to use the mongo backend but no DB object was passed,
+		# attempt to connect. Preference order for URI:
+		# 1) explicit cache_mongo_uri arg
+		# 2) CURRENCY_MONGO_URI env var
+		# 3) CACHE_MONGO_URI env var
+		if self._cache_backend == 'mongo' and self._db is None:
+			raw_cache_uri = cache_mongo_uri
+			cache_uri = _strip_quotes(raw_cache_uri) if raw_cache_uri is not None else None
+			if cache_uri:
+				try:
+					client = MongoClient(cache_uri)
+					self._db = client['self_finance_tracker_cache']
+					logger.info('CurrencyService: connected to cache Mongo at %s', cache_uri)
+				except Exception:
+					logger.exception('CurrencyService: failed to connect to cache Mongo URI=%s', cache_uri)
+					self._db = None
+
 		try:
 			if not self._load_cache_if_fresh():
 				self._last_load_ts = time.time()
@@ -145,7 +206,7 @@ class CurrencyService:
 			self._last_load_ts = time.time()
 
 	def _get_collection(self):
-		if self._cache_backend != "mongo" or self._db is None:
+		if self._cache_backend != "mongo" or self._db is None or not self._mongo_collection_name:
 			return None
 		try:
 			return self._db[self._mongo_collection_name]
@@ -177,19 +238,26 @@ class CurrencyService:
 		try:
 			if self._cache_backend == "mongo":
 				col = self._get_collection()
-				if col is not None:
-					doc = col.find_one({"_id": self._mongo_doc_id})
-					if doc:
-						fetched_at = float(doc.get("fetched_at", 0))
-						ttl = int(doc.get("ttl_seconds", self._ttl_seconds))
-						if fetched_at > 0 and (time.time() - fetched_at) <= ttl:
-							mapping = doc.get("usd_per_unit") or {}
-							if isinstance(mapping, dict) and mapping:
-								with self._rates_lock:
-									normalized = {str(k).upper(): float(v) for k, v in mapping.items() if self._safe_positive_float(v)}
-									self._usd_per_unit = self._apply_supported_filter(normalized)
-							self._last_load_ts = fetched_at
-							return True
+				# If mongo backend configured but collection unavailable, raise so
+				# the deployment/configuration is fixed instead of silently falling
+				# back to file/static rates which hides misconfiguration.
+				if col is None:
+					raise RuntimeError(
+						"CurrencyService: cache_backend='mongo' configured but Mongo collection is unavailable. "
+						"Ensure Mongo is configured and the collection exists (or switch to file backend)."
+					)
+				doc = col.find_one({"_id": self._mongo_doc_id})
+				if doc:
+					fetched_at = float(doc.get("fetched_at", 0))
+					ttl = int(doc.get("ttl_seconds", self._ttl_seconds))
+					if fetched_at > 0 and (time.time() - fetched_at) <= ttl:
+						mapping = doc.get("usd_per_unit") or {}
+						if isinstance(mapping, dict) and mapping:
+							with self._rates_lock:
+								normalized = {str(k).upper(): float(v) for k, v in mapping.items() if self._safe_positive_float(v)}
+								self._usd_per_unit = self._apply_supported_filter(normalized)
+						self._last_load_ts = fetched_at
+						return True
 				return False
 			else:
 				if not os.path.exists(self._cache_file):
@@ -220,18 +288,28 @@ class CurrencyService:
 				"usd_per_unit": self._usd_per_unit,
 				"generated_at": datetime.now(timezone.utc).isoformat(),
 			}
+			print('CurrencyService: saving cache payload to backend=', self._cache_backend)
 			if self._cache_backend == "mongo":
 				col = self._get_collection()
-				if col is not None:
-					col.update_one({"_id": self._mongo_doc_id}, {"$set": payload, "$setOnInsert": {"_id": self._mongo_doc_id}}, upsert=True)
-					return
-			# file fallback
-			os.makedirs(os.path.dirname(self._cache_file), exist_ok=True)
-			with open(self._cache_file, "w", encoding="utf-8") as f:
+				if col is None:
+					raise RuntimeError(
+						"CurrencyService: cache_backend='mongo' configured but Mongo collection is unavailable. "
+						"Ensure Mongo is configured and the collection exists (or switch to file backend)."
+					)
+				col.update_one({"_id": self._mongo_doc_id}, {"$set": payload, "$setOnInsert": {"_id": self._mongo_doc_id}}, upsert=True)
+				return
+			# file backend or fallback: write to cache file
+			cache_file_path = self._cache_file or "fx_rates_cache.json"
+			cache_dir = os.path.dirname(cache_file_path)
+			if cache_dir:
+				os.makedirs(cache_dir, exist_ok=True)
+			with open(cache_file_path, "w", encoding="utf-8") as f:
 				json.dump(payload, f, ensure_ascii=False, indent=2)
 		except Exception:
-			# Swallow cache write failures; keep in-memory rates.
-			pass
+			# Log failures so startup/runtime issues are visible instead of silently
+			# swallowing them. The service will continue using in-memory rates.
+			logger.exception('CurrencyService: failed to save cache payload (backend=%s, coll=%s, doc_id=%s)',
+				self._cache_backend, self._mongo_collection_name, self._mongo_doc_id)
 
 	def _fetch_rates_from_api(self) -> tuple[str, Dict[str, float] | None]:
 		for api_url in self.API_URLS:
@@ -266,6 +344,7 @@ class CurrencyService:
 
 		Returns True if fresh mapping is available.
 		"""
+		print('CurrencyService: refresh_rates called, force=', force)
 		now = time.time()
 		# If we have a recent load within TTL, do nothing.
 		if not force and self._last_load_ts and (now - self._last_load_ts) < self._ttl_seconds:
@@ -393,8 +472,9 @@ class CurrencyService:
 		try:
 			time.sleep(0.2)
 			self.refresh_rates(force=True)
+			print('CurrencyService: background_initial_refresh completed')
 		except Exception:
-			pass
+			traceback.print_exc()
 
 	# Convenience accessors (read-only snapshots)
 	@property

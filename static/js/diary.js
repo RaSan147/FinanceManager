@@ -17,7 +17,7 @@
   const filterToggle = document.getElementById('btnDiaryFilterToggle');
   const categorySel = document.getElementById('diaryFilterCategory');
   const searchEl = document.getElementById('diarySearch');
-  const btnApplyFilters = document.getElementById('btnDiaryApplyFilters');
+  const btnDiaryApplyFilters = document.getElementById('btnDiaryApplyFilters');
   const btnClearFilters = document.getElementById('btnDiaryClearFilters');
   const activeFiltersBar = document.getElementById('diaryActiveFiltersBar');
   if (!listEl || !tmpl) return;
@@ -30,6 +30,9 @@
     sortExplicit: false,
     items: []
   };
+
+  // Use the global RichText implementation only (no fallbacks). Let it fail loudly if missing.
+  const RichText = window.RichText;
 
   // Edit state cache and navigation warning flag
   const diaryEditStateCache = {};
@@ -200,18 +203,8 @@
     });
   })();
 
-  function openEditModal(data) {
-    form.reset();
-    idInput.value = data._id;
-    form.title.value = data.title || '';
-    form.category.value = data.category || '';
-    form.content.value = data.content || '';
-    titleEl.textContent = 'Edit Entry';
-    submitBtn.textContent = 'Update';
-    if (bsModal) bsModal.show();
-    else modalEl.style.display = 'block';
-    detailModal?.hide();
-  }
+  // openEditModal removed: functionality not used in this module. Inline/detail edit
+  // behavior is handled via the detail modal's edit controls and switchToEdit().
 
   async function persist(fd) {
     const id = idInput.value.trim();
@@ -253,7 +246,7 @@
     const chips = [];
     if (state.category) chips.push(`<span class='badge text-bg-info text-dark'>Cat: ${state.category}</span>`);
     if (state.q) chips.push(`<span class='badge text-bg-dark'>Q: ${state.q}</span>`);
-    // Do not show sort in the active filters bar (consistent with To-Dos)
+    // Do not show sort in the active filters bar (consistent with To-Do)
     activeFiltersBar.innerHTML = chips.join(' ');
     activeFiltersBar.style.display = chips.length ? 'flex' : 'none';
   }
@@ -305,7 +298,7 @@
     const box = document.getElementById('diaryInlineFilters');
     box.classList.toggle('d-none');
   });
-  btnApplyFilters && btnApplyFilters.addEventListener('click', () => {
+  btnDiaryApplyFilters && btnDiaryApplyFilters.addEventListener('click', () => {
     state.q = searchEl.value.trim();
     state.category = categorySel.value || '';
     apiList();
@@ -374,18 +367,11 @@
   }
 
   function safeFormatDate(dateValue) {
+    if (!window.SiteDate) throw new Error('SiteDate is required');
     if (!dateValue) return 'Unknown date';
-
-    try {
-      const date = new Date(dateValue);
-      if (isNaN(date.getTime())) {
-        return 'Invalid date';
-      }
-      return date.toISOString().slice(0, 16).replace('T', ' ');
-    } catch (e) {
-      console.warn('Date formatting error:', e, dateValue);
-      return 'Invalid date';
-    }
+    const dt = window.SiteDate.parse(dateValue);
+    if (!dt) return 'Invalid date';
+    return window.SiteDate.toDateTimeString(dt);
   }
 
   // Ensure detail modal always starts in view mode
@@ -471,25 +457,31 @@
     const commentsWrap = root.querySelector('[data-diary-comments]');
     if (commentsWrap) {
       const comments = data.comments || [];
-      if (!comments.length) {
-        commentsWrap.innerHTML = '<div class="text-muted">No comments</div>';
-      } else {
+      // Store last comments for re-render when markdown toggle changes
+      commentsWrap._lastCommentsData = comments;
+
+      function renderComments(itemLocal, commentsList) {
+        if (!commentsList || !commentsList.length) {
+          commentsWrap.innerHTML = '<div class="text-muted">No comments</div>';
+          return;
+        }
         const ikThumb = (url) => (window.ImageUploader && ImageUploader.thumbTransform) ?
           ImageUploader.thumbTransform(url, 320, 320, false) :
           url;
-        commentsWrap.innerHTML = comments.map(c => {
+        const mt = detailModalEl.querySelector('[data-diary-markdown-toggle]');
+        const markdownEnabled = mt ? !!mt.checked : (localStorage.getItem('diary-markdown-enabled') === 'true');
+        commentsWrap.innerHTML = commentsList.map(c => {
           const images = (c.images || []).map((u, i) => {
             const t = ikThumb(u);
-            return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='diary-comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i + 1}' style='max-width:140px;max-height:140px;cursor:pointer;border:1px solid var(--border-color);border-radius:4px;object-fit:cover;'/></div>`
+            return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='diary-comment-${itemLocal._id}' data-viewer-src='${u}' alt='comment image ${i + 1}' style='max-width:140px;max-height:140px;cursor:pointer;border:1px solid var(--border-color);border-radius:4px;object-fit:cover;'/></div>`
           }).join('');
-          // Use shared comment formatter to preserve whitespace and formatting
-          const formattedText = window.CommentFormatter ?
-            window.CommentFormatter.formatText(c.body) :
-            RichText.escapeHtml(c.body).replace(/\n/g, '<br/>');
+          const formattedText = RichText.renderInlineContent(c.body || '', `diary-comment-${itemLocal._id}`, !!markdownEnabled);
           const timestamp = safeFormatDate(c.created_at["$date"]);
           return `<div class='diary-comment'><div class='body'><div class='content'>${formattedText}</div>${images}<div class='meta d-flex align-items-center'><div class='datetime text-muted small'>${timestamp}</div><div class='ms-auto'><button class='btn btn-sm btn-outline-danger' data-comment-del='${c._id}'><i class='bi bi-trash'></i></button></div></div></div></div>`;
         }).join('');
-        commentsWrap.querySelectorAll('[data-comment-del]').forEach(btn => btn.addEventListener('click', async () => {
+        // delegate delete clicks
+        commentsWrap.querySelectorAll('[data-comment-del]').forEach(btn => btn.addEventListener('click', async (e) => {
+          e.preventDefault();
           const cid = btn.getAttribute('data-comment-del');
           try {
             await App.utils.fetchJSONUnified(`/api/diary-comments/${cid}`, {
@@ -500,6 +492,19 @@
             window.flash && window.flash('Delete failed', 'danger');
           }
         }));
+      }
+
+      // Initial render
+      renderComments(item, comments);
+
+      // When markdown toggle changes, re-render comments to reflect preference
+      if (markdownToggle) {
+        markdownToggle.addEventListener('change', () => {
+          updateContent();
+          if (commentsWrap && commentsWrap._lastCommentsData) {
+            renderComments(item, commentsWrap._lastCommentsData);
+          }
+        });
       }
     }
     const limitEl = root.querySelector('[data-diary-comment-limit]');
@@ -544,6 +549,15 @@
       }
     }
 
+    // Ensure canonical save button runs the centralized save routine
+    if (saveBtn && editForm && !saveBtn._diarySaveBound) {
+      saveBtn._diarySaveBound = true;
+      saveBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        diaryPerformDetailSave(editForm);
+      });
+    }
+
     // Ensure header buttons always trigger behavior even if DOM is re-rendered — delegate clicks from modal
     // NOTE: calling `.click()` here caused the save handler to run twice (native click -> bubbled handler -> programmatic click).
     // To avoid duplicate network requests we call the action functions directly.
@@ -582,6 +596,34 @@
     }
   }
 
+
+  // Perform save for the inline/detail edit form. Centralized so both canonical button
+  // and delegated external save callers use the same logic.
+  async function diaryPerformDetailSave(editForm) {
+    if (!editForm) return;
+    const diaryId = editForm.dataset.diaryId;
+    if (!diaryId) return;
+    const fd = new FormData(editForm);
+    const patch = {};
+    fd.forEach((v, k) => { patch[k] = v.toString(); });
+    // Normalize clears
+    if (patch.due_date === '') patch.due_date = null;
+    if (patch.category === '') patch.category = null;
+    try {
+      await App.utils.fetchJSONUnified(`/api/diary/${diaryId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      window.flash && window.flash('Updated', 'success');
+      try { switchToView(); } catch (_) {}
+      openDetailModal(diaryId);
+      apiList();
+    } catch (e) {
+      console.error('Detail update failed', e);
+      window.flash && window.flash('Update failed', 'danger');
+    }
+  }
   // --- Edit state caching, navigation warnings, debounce helpers ---
   function saveEditStateToCache(diaryId, root) {
     const editForm = root.querySelector('[data-diary-detail-edit-form]');
@@ -637,39 +679,11 @@
     return Object.keys(diaryEditStateCache).filter(id => diaryEditStateCache[id].hasChanges);
   }
 
-  function setupNavigationWarnings() {
-    window.addEventListener('beforeunload', (e) => {
-      if (hasAnyUnsavedChanges()) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
-      }
-    });
-
-    if (window.addEventListener) {
-      window.addEventListener('popstate', (e) => {
-        if (hasAnyUnsavedChanges() && !confirm('You have unsaved changes. Are you sure you want to leave?')) {
-          history.pushState(null, '', window.location.href);
-          e.preventDefault();
-        }
-      });
-    }
+  // Use shared helpers for navigation warnings and debounce to avoid duplicate fallbacks.
+  if (window.BlogHelpers && window.BlogHelpers.setupNavigationWarnings) {
+    window.BlogHelpers.setupNavigationWarnings(() => hasAnyUnsavedChanges());
   }
-
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-
-  // Initialize navigation warnings
-  setupNavigationWarnings();
+  var debounce = (window.BlogHelpers && window.BlogHelpers.debounce) ? window.BlogHelpers.debounce : (fn => fn);
 
   if (detailModalEl) {
     const root = detailModalEl.querySelector('[data-diary-detail-root]');
@@ -799,196 +813,16 @@
         try {
           await App.utils.fetchJSONUnified(`/api/diary/${diaryId}/comments`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              body,
-              images
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body, images })
           });
           formC.reset();
           images = [];
           renderPreviews();
           delete diaryDrafts[diaryId];
           openDetailModal(diaryId);
-        } catch (_) { }
+        } catch (_) {}
       });
-    }
-    // Use header controls for switching to edit/view
-    const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
-    const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
-    const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
-    const editForm = root.querySelector('[data-diary-detail-edit-form]');
-
-    // Bind inline image upload logic for the edit form (detail modal) once
-    if (editForm && !editForm._inlineImgBound) {
-      editForm._inlineImgBound = true;
-      const editContent = editForm.querySelector('[data-diary-detail-edit-content]');
-      const editFileInput = editForm.querySelector('[data-diary-edit-content-image]');
-      const editTrigger = editForm.querySelector('[data-diary-edit-content-image-trigger]');
-      editTrigger && editTrigger.addEventListener('click', () => editFileInput && editFileInput.click());
-
-      function insertUploadingPlaceholder() {
-        if (!editContent) return null;
-        const id = 'up_' + Math.random().toString(36).slice(2, 9);
-        const placeholder = `\n![uploading-${id}]()`;
-        const start = editContent.selectionStart || 0;
-        const end = editContent.selectionEnd || 0;
-        const orig = editContent.value;
-        editContent.value = orig.slice(0, start) + placeholder + orig.slice(end);
-        const cursor = start + placeholder.length;
-        editContent.selectionStart = editContent.selectionEnd = cursor;
-        return id;
-      }
-
-      async function uploadAndReplace(file, idTag) {
-        if (!file) return;
-        if (!file.type.startsWith('image/')) return;
-        if (file.size > 16 * 1024 * 1024) {
-          window.flash && window.flash('Image too large', 'warning');
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = async () => {
-          try {
-            const res = await App.utils.fetchJSONUnified('/api/diary-images', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                image: reader.result
-              })
-            });
-            // Replace specific placeholder
-            editContent.value = editContent.value.replace(`![uploading-${idTag}]()`, `![img](${res.url})`);
-          } catch (_) {
-            editContent.value = editContent.value.replace(`![uploading-${idTag}]()`, '(image failed)');
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-
-      function handleFiles(files, label) {
-        if (!files || !files.length) return;
-        for (const f of files) {
-          // if (!confirm(`Insert ${label} image?`)) return; // one confirm per action batch
-          const id = insertUploadingPlaceholder();
-          uploadAndReplace(f, id);
-        }
-      }
-
-      editFileInput && editFileInput.addEventListener('change', () => {
-        handleFiles(Array.from(editFileInput.files || []), 'selected');
-        editFileInput.value = '';
-      });
-
-      editContent && editContent.addEventListener('paste', e => {
-        const items = e.clipboardData?.items || [];
-        const files = [];
-        for (const it of items) {
-          if (it.type?.startsWith('image/')) {
-            const f = it.getAsFile();
-            if (f) files.push(f);
-          }
-        }
-        if (files.length) {
-          e.preventDefault();
-          handleFiles(files, 'pasted');
-        }
-      });
-
-      editContent && editContent.addEventListener('dragover', e => e.preventDefault());
-      editContent && editContent.addEventListener('drop', e => {
-        e.preventDefault();
-        const files = Array.from(e.dataTransfer?.files || []);
-        handleFiles(files, 'dropped');
-      });
-    }
-
-    function switchToEdit() {
-      if (!editForm) return;
-      editForm.classList.remove('d-none');
-      root.querySelector('[data-diary-detail-content]')?.classList.add('d-none');
-      editBtn.classList.add('d-none');
-      saveBtn.classList.remove('d-none');
-      cancelBtn.classList.remove('d-none');
-    }
-
-    // local switchToView behavior is handled by module-level `switchToView`
-    editBtn && editBtn.addEventListener('click', e => {
-      e.preventDefault();
-      switchToEdit();
-    });
-    cancelBtn && cancelBtn.addEventListener('click', e => {
-      e.preventDefault();
-      const diaryId = root?.dataset.currentDiaryId;
-      if (diaryId) {
-        // Clear cached state when explicitly canceling
-        clearEditStateFromCache(diaryId);
-      }
-      switchToView();
-      // Reload fresh data to discard any changes
-      if (diaryId) openDetailModal(diaryId);
-    });
-
-    // Reusable save function so delegated modal clicks and direct button clicks share behavior
-    async function diaryPerformDetailSave(editFormEl) {
-      if (!editFormEl) return;
-      const diaryId = editFormEl.dataset.diaryId;
-      if (!diaryId) return;
-      const patch = {
-        title: editFormEl.querySelector('[data-diary-detail-edit-title]').value,
-        category: editFormEl.querySelector('[data-diary-detail-edit-category]').value,
-        content: editFormEl.querySelector('[data-diary-detail-edit-content]').value
-      };
-      if (patch.title === '') patch.title = null;
-      if (patch.category === '') patch.category = null;
-      if (patch.content === '') patch.content = null;
-      try {
-        await App.utils.fetchJSONUnified(`/api/diary/${diaryId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(patch)
-        });
-        window.flash && window.flash('Updated', 'success');
-        clearEditStateFromCache(diaryId);
-        switchToView();
-        openDetailModal(diaryId); // Reload to get fresh data
-        apiList();
-      } catch (e) {
-        console.warn('Diary update failed', e);
-        window.flash && window.flash('Update failed', 'danger');
-      }
-    }
-
-    saveBtn && saveBtn.addEventListener('click', async e => {
-      e.preventDefault();
-      if (!editForm) return;
-      // call shared save routine
-      diaryPerformDetailSave(editForm);
-    });
-
-    // Save edit state when modal is hidden
-    detailModalEl.addEventListener('hide.bs.modal', () => {
-      const rootHide = detailModalEl.querySelector('[data-diary-detail-root]');
-      const diaryId = rootHide?.dataset.currentDiaryId;
-      if (diaryId) saveEditStateToCache(diaryId, rootHide);
-    });
-
-    // Auto-save changes while editing (debounced)
-    if (editForm) {
-      const debouncedSaveState = debounce(() => {
-        const rootAuto = detailModalEl.querySelector('[data-diary-detail-root]');
-        const diaryId = rootAuto?.dataset.currentDiaryId;
-        if (diaryId && !editForm.classList.contains('d-none')) {
-          saveEditStateToCache(diaryId, rootAuto);
-        }
-      }, 500);
-      editForm.addEventListener('input', debouncedSaveState);
     }
   }
 

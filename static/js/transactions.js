@@ -97,14 +97,15 @@
   function openEditTransaction(raw) {
     const tx = raw || {};
     formEl.reset();
-    const model = window.TransactionModel ? new TransactionModel(tx) : null;
-    const dateISO = model ? model.dateISO() : (typeof tx.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(tx.date) ? tx.date.slice(0, 10) : (window.__normalizeTxDate ? window.__normalizeTxDate(tx.date) : ''));
+  if (!window.SiteDate) throw new Error('SiteDate is required but missing');
+  const model = window.TransactionModel ? new TransactionModel(tx) : null;
+  const dateISO = model ? model.dateISO() : (window.SiteDate.toDateString(tx.date) || '');
     idInput.value = tx._id || '';
     formEl.amount.value = tx.amount_original || tx.amount || '';
     formEl.currency.value = tx.currency || window.currencyCode || '';
     formEl.type.value = tx.type || 'income';
     formEl.description.value = tx.description || '';
-    formEl.date.value = dateISO || new Date().toISOString().slice(0, 10);
+  formEl.date.value = dateISO || (window.SiteDate ? window.SiteDate.toDateString(new Date()) : (new Date().toISOString().slice(0,10)));
     formEl.related_person.value = tx.related_person || '';
     titleEl.textContent = 'Edit Transaction';
     submitBtn.textContent = 'Update';
@@ -124,7 +125,7 @@
       const fd = new FormData(formEl);
       const id = idInput.value.trim();
       const payload = Object.fromEntries(fd.entries());
-      if (payload.date instanceof Date) payload.date = payload.date.toISOString().slice(0, 10);
+  if (payload.date instanceof Date) payload.date = (window.SiteDate ? window.SiteDate.toDateString(payload.date) : payload.date.toISOString().slice(0,10));
       try {
         const url = id ? `/api/transactions/${id}` : '/api/transactions';
         const method = id ? 'PATCH' : 'POST';
@@ -141,8 +142,9 @@
             if (row) {
               const item = data.item;
               const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-              const d = new Date(item.date || item._date || item.created_at);
-              const dateStr = isNaN(d) ? '' : `${monthNames[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2, '0')}, ${d.getUTCFullYear()}`;
+              // Use SiteDate for consistent parsing/formatting
+              const parsed = window.SiteDate ? window.SiteDate.parse(item.date || item._date || item.created_at) : (new Date(item.date || item._date || item.created_at));
+              const dateStr = parsed && !isNaN(parsed.getTime()) ? `${monthNames[parsed.getUTCMonth()]} ${String(parsed.getUTCDate()).padStart(2, '0')}, ${parsed.getUTCFullYear()}` : '';
               const currencySymbol = qs('[data-transactions-table]')?.getAttribute('data-currency-symbol') || '';
               const sign = item.type === 'income' ? '+' : '-';
               const cls = item.type === 'income' ? 'text-success' : 'text-danger';
@@ -163,7 +165,7 @@
                     type: item.type,
                     category: item.category,
                     description: item.description,
-                    date: (item.date || '').slice ? (item.date || '').slice(0, 10) : item.date,
+                    date: window.SiteDate ? window.SiteDate.toDateString(item.date || item._date || item.created_at) : ((item.date || '').slice ? (item.date || '').slice(0, 10) : item.date),
                     related_person: item.related_person || ''
                   };
                   btn.setAttribute('data-edit-json', JSON.stringify(editPayload));
