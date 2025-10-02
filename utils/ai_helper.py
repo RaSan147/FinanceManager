@@ -75,19 +75,60 @@ def _build_financial_context(user: User) -> dict:
     monthly_summary = calculate_monthly_summary(user.id, db)
 
     cache_id = None
+    # Try to create a cache session for efficiency, but gracefully fall back
+    # to uncached queries if cache isn't available or session creation fails.
     try:
-        # Use cache for multi-query efficiency.
-        cache_id = create_cache_session(user.id, db)
-        lifetime_summary = calculate_lifetime_transaction_summary(user.id, db, cache_id=cache_id)
-        year_summary = calculate_period_summary(user.id, db, 365, cache_id=cache_id)
-        end_now = now_utc()
-        start_30 = end_now - timedelta(days=30)
-        last_30D_details = get_transactions(user.id, db, start_30, end_now, cache_id=cache_id, clean=True)
-        recent_3M_summary = get_N_month_income_expense(user.id, db, n=3, cache_id=cache_id)
+        try:
+            cache_id = create_cache_session(user.id, db)
+        except Exception:
+            # Cache/session not available - continue without cache_id
+            cache_id = None
+
+        # Compute lifetime & period summaries. Prefer using cache_id when we
+        # have one, but if any of these steps fail try individual fallbacks
+        # instead of swallowing all errors and returning a zero balance.
+        try:
+            lifetime_summary = calculate_lifetime_transaction_summary(user.id, db, cache_id=cache_id)
+        except Exception:
+            try:
+                lifetime_summary = calculate_lifetime_transaction_summary(user.id, db)
+            except Exception:
+                lifetime_summary = {"current_balance": 0}
+
+        try:
+            year_summary = calculate_period_summary(user.id, db, 365, cache_id=cache_id)
+        except Exception:
+            try:
+                year_summary = calculate_period_summary(user.id, db, 365)
+            except Exception:
+                year_summary = {}
+
+        try:
+            end_now = now_utc()
+            start_30 = end_now - timedelta(days=30)
+            last_30D_details = get_transactions(user.id, db, start_30, end_30 if False else end_now, cache_id=cache_id, clean=True)
+        except Exception:
+            try:
+                end_now = now_utc()
+                start_30 = end_now - timedelta(days=30)
+                last_30D_details = get_transactions(user.id, db, start_30, end_now, clean=True)
+            except Exception:
+                last_30D_details = []
+
+        try:
+            recent_3M_summary = get_N_month_income_expense(user.id, db, n=3, cache_id=cache_id)
+        except Exception:
+            try:
+                recent_3M_summary = get_N_month_income_expense(user.id, db, n=3)
+            except Exception:
+                recent_3M_summary = []
 
         # Respect user's saved goal sort preference (if present).
-        user_doc = db.users.find_one({'_id': ObjectId(user.id)})
-        user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+        try:
+            user_doc = db.users.find_one({'_id': ObjectId(user.id)})
+            user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+        except Exception:
+            user_goal_sort = None
 
         # Exclude heavy `ai_plan` text to keep tokens low.
         proj = {
@@ -99,21 +140,18 @@ def _build_financial_context(user: User) -> dict:
             'ai_confidence': 1,
             'ai_suggestions': 1,
         }
-        goals = Goal.get_active_goals(user.id, db, sort_mode=user_goal_sort, projection=proj)
-        compact_goals = [_compact_goal_with_local_currency(g, user, lifetime_summary.get("current_balance", 0)) for g in goals]
-
-    except Exception:
-        # If something goes wrong, return safe empty defaults so callers can
-        # still present a useful UI rather than crashing.
-        lifetime_summary = {"current_balance": 0}
-        year_summary = {}
-        last_30D_details = []
-        recent_3M_summary = []
-        compact_goals = []
+        try:
+            goals = Goal.get_active_goals(user.id, db, sort_mode=user_goal_sort, projection=proj)
+            compact_goals = [_compact_goal_with_local_currency(g, user, lifetime_summary.get("current_balance", 0)) for g in goals]
+        except Exception:
+            compact_goals = []
 
     finally:
         if cache_id:
-            drop_cache_session(cache_id)
+            try:
+                drop_cache_session(cache_id)
+            except Exception:
+                pass
 
     return {
         "user": {
@@ -284,8 +322,8 @@ def get_ai_analysis(user: User) -> str:
     """Return HTML analysis for the sidebar (no markdown)."""
     start = time.perf_counter()
     prompt = _analysis_prompt(user)
-    with open("ai_prompt.log", "a", encoding="utf-8") as f:
-        f.write(f"Prompt generated at {datetime.now()}: {prompt}\n")
+    # Prompt logging is centralized in utils.ai_engine -> LOG/ai_prompt.log
+    # to avoid duplicate prompt files and ensure a single authoritative log.
     end = time.perf_counter()
     print(f"Prompt generation took {end - start:.2f} seconds")
 
@@ -299,8 +337,34 @@ def get_ai_analysis(user: User) -> str:
 async def get_goal_plan(goal_dict: dict, user: User) -> str:
     context = _build_financial_context(user)
 
-    compact_goal = _compact_goal_with_local_currency(goal_dict, user, context["lifetime_summary"]["current_balance"], include_ai_analysis=True)
-    compact_goal["months_left"] = max(1, (compact_goal.get("days_left", 0) or 0) // 30)
+    import math
+
+    compact_goal = _compact_goal_with_local_currency(goal_dict, user, context["lifetime_summary"].get("current_balance", 0), include_ai_analysis=True)
+    # compute months left (ceil of days / 30) and ensure at least 1
+    days_left_val = int((compact_goal.get("days_left", 0) or 0))
+    months_left = max(1, math.ceil(days_left_val / 30))
+    compact_goal["months_left"] = months_left
+
+    # Precompute helpful numeric fields to avoid model miscalculations
+    current_pool = float(context.get("lifetime_summary", {}).get("current_balance", 0) or 0.0)
+    target_amount = float(compact_goal.get("target_amount", 0) or 0.0)
+    monthly_income = float(context.get("user", {}).get("monthly_income") or 0.0)
+    required_monthly_savings = max(0.0, round((target_amount - current_pool) / max(1, months_left), 2))
+    # Affordability labels per existing guidance
+    ratio = required_monthly_savings / max(1.0, monthly_income)
+    if ratio <= 0.25:
+        affordability_label = "Affordable"
+    elif ratio <= 0.6:
+        affordability_label = "Stretch"
+    else:
+        affordability_label = "Unrealistic"
+
+    # Expose computed values on the compact goal so they're visible to the
+    # model as structured fields and to avoid linter warnings about unused vars.
+    compact_goal["computed_required_monthly_savings"] = required_monthly_savings
+    compact_goal["computed_months_left"] = months_left
+    compact_goal["computed_current_pool"] = current_pool
+    compact_goal["computed_affordability_label"] = affordability_label
 
     prompt = f"""
 You are an expert financial planner. You will be given two Python `dict` objects named `goal_to_plan_for` and `financial_context` (already parsed from JSON). Your job: produce a single VALID HTML fragment (a top-level `<div> ... </div>`) that renders a concise, step-by-step plan to achieve the goal.
@@ -318,6 +382,15 @@ financial context:
 
 goal to plan for:
 {json.dumps(compact_goal, indent=2, default=default_serializer)}
+
+IMPORTANT NOTE (use these exact numbers; do NOT re-derive):
+- current_pool (user current active balance, from financial_context.lifetime_summary.current_balance): {current_pool:.2f}
+- months_left: {months_left}
+- required_monthly_savings (target - current_pool) / months_left: {required_monthly_savings:.2f}
+- monthly_income: {monthly_income:.2f}
+- affordability_label (precomputed): {affordability_label}
+
+Use the precomputed `current_pool` value above as the source of truth for the user's active balance. Do NOT attempt to recalculate the pool from transactions; rely on these numbers exactly for affordability and savings calculations.
 
 """ + """
 

@@ -157,6 +157,14 @@ class FinancialBrain:
         candidates are available. Transient and quota errors are retried
         according to the _RetryPolicy.
         """
+        # Persist the prompt to a central log file for debugging (staging use).
+        try:
+            os.makedirs("LOG", exist_ok=True)
+            with open("LOG/ai_prompt.log", "a", encoding="utf-8") as pf:
+                pf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] PROMPT:\n{prompt}\n{'='*60}\n")
+        except Exception:
+            pass
+
         # If client or models are not configured, return a clear text
         # message rather than raising. Callers (web routes/services) often
         # expect a string and will render it directly to users.
@@ -216,10 +224,19 @@ class FinancialBrain:
                         except Exception:
                             pass
 
-                        # dump prompt/response
-                        safe_model = model.replace("/", "_")
-                        with open(f"LOG/{time.time():.02f}_{safe_model}.txt", "w", encoding="utf-8") as f:
-                            f.write(f"PROMPT:\n{prompt}\n\n{'*'*50}\n\nRESPONSE:\n{text}\n")
+                        # Append prompt/response to the central AI prompt log only
+                        try:
+                            with open("LOG/ai_prompt.log", "a", encoding="utf-8") as f:
+                                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] MODEL={model} RESPONSE_START\n")
+                                f.write("PROMPT:\n")
+                                f.write(prompt + "\n")
+                                f.write("-"*50 + "\n")
+                                f.write("RESPONSE:\n")
+                                f.write(text + "\n")
+                                f.write("="*80 + "\n")
+                        except Exception:
+                            # best-effort logging; do not fail generation if disk write fails
+                            pass
 
                         return text
 
