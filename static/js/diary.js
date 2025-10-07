@@ -31,6 +31,107 @@
     items: []
   };
 
+  // Category suggestion cache for diary
+  let diaryCategoryHints = [];
+
+  async function loadDiaryCategoryHints() {
+    try {
+      if (document.getElementById('diaryCategoriesGlobal')?.dataset.loaded === '1') return;
+      const data = await App.utils.fetchJSONUnified('/api/diary-categories', { dedupe: true });
+      diaryCategoryHints = (data.items || []).map(c => c.name).filter(Boolean).slice(0, 200);
+      const dl = document.getElementById('diaryCategoriesGlobal');
+      if (dl) {
+        dl.innerHTML = diaryCategoryHints.map(n => `<option value="${n}"></option>`).join('');
+        dl.dataset.loaded = '1';
+      }
+    } catch (_) {}
+  }
+
+  function renderCategoryChips(container, items) {
+    container.innerHTML = '';
+    for (const it of items) {
+      const wrapper = document.createElement('span');
+      wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
+      try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(wrapper, it); } catch (_) {}
+      wrapper.style['font-size'] = '0.9em';
+      const text = document.createElement('span');
+      text.textContent = it;
+      text.style['white-space'] = 'nowrap';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn chip-close btn-sm ms-2';
+  btn.setAttribute('aria-label', 'Remove');
+  btn.style['margin-left'] = '0.4rem';
+  btn.innerHTML = "<i class='fa-solid fa-xmark' aria-hidden='true'></i>";
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = items.indexOf(it);
+        if (idx !== -1) {
+          items.splice(idx, 1);
+          renderCategoryChips(container, items);
+        }
+      });
+      wrapper.appendChild(text);
+      wrapper.appendChild(btn);
+      container.appendChild(wrapper);
+    }
+  }
+
+  function setupCategoryWidget(rootEl, opts) {
+    // opts: {chipsSelector, inputSelector, jsonInputSelector, initial}
+    const chipsWrap = rootEl.querySelector(opts.chipsSelector);
+    const inputEl = rootEl.querySelector(opts.inputSelector);
+    const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
+    const list = opts.initial && Array.isArray(opts.initial) ? [...opts.initial] : [];
+
+    function sync() {
+      renderCategoryChips(chipsWrap, list);
+      if (jsonInput) jsonInput.value = JSON.stringify(list);
+    }
+
+
+    function addFromInput() {
+      const val = (inputEl.value || '').trim();
+      if (!val) return;
+      // support comma separated
+      const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (!list.includes(p)) list.push(p);
+      }
+      inputEl.value = '';
+      sync();
+      // keep focus on input after adding
+      try { inputEl.focus(); } catch (_) {}
+    }
+
+    // If an explicit add button is present, wire it
+  const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-diary-create-add-btn]') || rootEl.querySelector('[data-diary-detail-add-btn]');
+    if (addBtn) {
+      addBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        addFromInput();
+      });
+    }
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        addFromInput();
+      }
+    });
+    // only add on blur if there is content to commit
+    inputEl.addEventListener('blur', () => {
+      if ((inputEl.value || '').trim()) addFromInput();
+    });
+    // support suggestions load on focus
+    inputEl.addEventListener('focus', () => loadDiaryCategoryHints());
+
+    sync();
+    return {
+      getList: () => list
+    };
+  }
+
   // Use the global RichText implementation only (no fallbacks). Let it fail loudly if missing.
   const RichText = window.RichText;
 
@@ -92,6 +193,8 @@
     if (it.category) {
       cat.textContent = it.category;
       cat.classList.remove('d-none');
+      // Apply deterministic color for category
+      try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(cat, it.category); } catch (_) {}
     }
     const cEl = node.querySelector('.diary-content-trunc');
     if (cEl) {
@@ -157,6 +260,16 @@
       } catch (_) { }
     }, 30);
     detailModal?.hide();
+    // setup create modal category widget
+    try {
+      setupCategoryWidget(form, {
+        chipsSelector: '[data-diary-create-categories]',
+        inputSelector: '[data-diary-create-category-input]',
+        jsonInputSelector: '[data-diary-create-categories-json]',
+        initial: []
+      });
+      loadDiaryCategoryHints();
+    } catch (_) {}
   }
 
   // Wire create-modal header controls after DOM available
@@ -210,6 +323,14 @@
     const id = idInput.value.trim();
     const payload = Object.fromEntries(fd.entries());
     if (payload.id) delete payload.id;
+    // Handle categories JSON (hidden input). Convert to backend-friendly category string.
+    if (payload.categories) {
+      try {
+        const arr = JSON.parse(payload.categories || '[]');
+        if (Array.isArray(arr) && arr.length) payload.category = arr.join(', ');
+      } catch (_) { }
+      delete payload.categories;
+    }
     if (!payload.content && !payload.title) return;
     const url = id ? `/api/diary/${id}` : '/api/diary';
     const method = id ? 'PATCH' : 'POST';
@@ -394,6 +515,32 @@
     if (cancelBtn) cancelBtn.classList.add('d-none');
   }
 
+  // Switch the detail modal into edit mode
+  function switchToEdit() {
+    if (!detailModalEl) return;
+    const root = detailModalEl.querySelector('[data-diary-detail-root]');
+    if (!root) return;
+
+    const editForm = root.querySelector('[data-diary-detail-edit-form]');
+    const editBtn = detailModalEl.querySelector('[data-diary-detail-edit-btn]');
+    const saveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+    const cancelBtn = detailModalEl.querySelector('[data-diary-detail-cancel-btn]');
+    const contentEl = root.querySelector('[data-diary-detail-content]');
+
+    if (!editForm) return;
+    editForm.classList.remove('d-none');
+    if (contentEl) contentEl.classList.add('d-none');
+    if (editBtn) editBtn.classList.add('d-none');
+    if (saveBtn) saveBtn.classList.remove('d-none');
+    if (cancelBtn) cancelBtn.classList.remove('d-none');
+
+    // Focus first input if possible
+    try {
+      const t = editForm.querySelector('[data-diary-detail-edit-title]');
+      if (t) t.focus();
+    } catch (_) { }
+  }
+
   // Cache markdown preferences
   let markdownPreference = null;
 
@@ -427,6 +574,7 @@
       if (item.category) {
         catEl.textContent = item.category;
         catEl.classList.remove('d-none');
+        try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(catEl, item.category); } catch (_) {}
       } else catEl.classList.add('d-none');
     }
 
@@ -477,7 +625,7 @@
           }).join('');
           const formattedText = RichText.renderInlineContent(c.body || '', `diary-comment-${itemLocal._id}`, !!markdownEnabled);
           const timestamp = safeFormatDate(c.created_at["$date"]);
-          return `<div class='diary-comment'><div class='body'><div class='content'>${formattedText}</div>${images}<div class='meta d-flex align-items-center'><div class='datetime text-muted small'>${timestamp}</div><div class='ms-auto'><button class='btn btn-sm btn-outline-danger' data-comment-del='${c._id}'><i class='bi bi-trash'></i></button></div></div></div></div>`;
+          return `<div class='diary-comment'><div class='body'><div class='content'>${formattedText}</div>${images}<div class='meta d-flex align-items-center'><div class='datetime text-muted small'>${timestamp}</div><div class='ms-auto'><button class='btn btn-sm btn-outline-danger' data-comment-del='${c._id}' title='Delete'><i class='fa-solid fa-trash' aria-hidden='true'></i></button></div></div></div></div>`;
         }).join('');
         // delegate delete clicks
         commentsWrap.querySelectorAll('[data-comment-del]').forEach(btn => btn.addEventListener('click', async (e) => {
@@ -520,7 +668,14 @@
         // Restore from cache (unsaved changes)
         const cached = diaryEditStateCache[currentDiaryId];
         editForm.querySelector('[data-diary-detail-edit-title]').value = cached.title || '';
-        editForm.querySelector('[data-diary-detail-edit-category]').value = cached.category || '';
+        // restore category widget from cached value (comma-separated string expected)
+        const cachedCats = (cached.category && typeof cached.category === 'string') ? cached.category.split(',').map(s => s.trim()).filter(Boolean) : [];
+        setupCategoryWidget(editForm, {
+          chipsSelector: '[data-diary-detail-categories]',
+          inputSelector: '[data-diary-detail-category-input]',
+          jsonInputSelector: '[data-diary-detail-categories-json]',
+          initial: cachedCats
+        });
         editForm.querySelector('[data-diary-detail-edit-content]').value = cached.content || '';
 
         // Start in edit mode if we have cached unsaved changes
@@ -532,9 +687,35 @@
       } else {
         // Fresh data - no unsaved changes
         editForm.querySelector('[data-diary-detail-edit-title]').value = item.title || '';
-        editForm.querySelector('[data-diary-detail-edit-category]').value = item.category || '';
+        // support item.category being string or array
+        const initialCats = [];
+        if (Array.isArray(item.category)) initialCats.push(...item.category);
+        else if (item.category) initialCats.push(item.category);
+        const catWidget = setupCategoryWidget(editForm, {
+          chipsSelector: '[data-diary-detail-categories]',
+          inputSelector: '[data-diary-detail-category-input]',
+          jsonInputSelector: '[data-diary-detail-categories-json]',
+          initial: initialCats
+        });
         editForm.querySelector('[data-diary-detail-edit-content]').value = item.content || '';
+        // Ensure suggestions datalist present
+        loadDiaryCategoryHints();
         switchToView();
+      }
+    }
+    // Bind inline image upload for detail edit form (insert placeholders and upload)
+    if (editForm && !editForm._inlineImgBound) {
+      editForm._inlineImgBound = true;
+      const editContent = editForm.querySelector('[data-diary-detail-edit-content]');
+      const editFileInput = editForm.querySelector('[data-diary-edit-content-image]');
+      const editTrigger = editForm.querySelector('[data-diary-edit-content-image-trigger]');
+      if (window.BlogHelpers && window.BlogHelpers.attachInlineImageUploader) {
+        window.BlogHelpers.attachInlineImageUploader({
+          contentEl: editContent,
+          fileInput: editFileInput,
+          trigger: editTrigger,
+          uploadEndpoint: '/api/diary-images'
+        });
       }
     }
     // Bind header controls (edit/save/cancel) which were moved to the modal header
@@ -557,6 +738,9 @@
         diaryPerformDetailSave(editForm);
       });
     }
+
+    // wire create-detail category widget in modal body if present (for comments area create modal not needed)
+    // also hook up saving: when compute patch we will read hidden JSON input value as 'categories'
 
     // Ensure header buttons always trigger behavior even if DOM is re-rendered — delegate clicks from modal
     // NOTE: calling `.click()` here caused the save handler to run twice (native click -> bubbled handler -> programmatic click).
@@ -606,16 +790,39 @@
     const fd = new FormData(editForm);
     const patch = {};
     fd.forEach((v, k) => { patch[k] = v.toString(); });
+    // If client used the multi-category widget, convert 'categories' JSON -> 'category' string
+    if (patch.categories) {
+      try {
+        const arr = JSON.parse(patch.categories || '[]');
+        if (Array.isArray(arr) && arr.length) patch.category = arr.join(', ');
+        else patch.category = '';
+      } catch (_) { patch.category = '' }
+      delete patch.categories;
+    }
     // Normalize clears
     if (patch.due_date === '') patch.due_date = null;
     if (patch.category === '') patch.category = null;
+
+    // Build a minimal patch by comparing to the original item so we only send changed fields
+    const originalItem = state.items.find(it => it._id === diaryId) || {};
+    const origCategoryStr = Array.isArray(originalItem.category) ? originalItem.category.join(', ') : (originalItem.category || '');
+    const minimal = {};
+    if ((patch.title || '') !== (originalItem.title || '')) minimal.title = (patch.title === '') ? null : patch.title;
+    if ((patch.content || '') !== (originalItem.content || '')) minimal.content = (patch.content === '') ? null : patch.content;
+    if ((patch.category == null ? '' : patch.category) !== origCategoryStr) minimal.category = (patch.category === '' ? null : patch.category);
+    if (!Object.keys(minimal).length) {
+      window.flash && window.flash('No changes to save', 'warning');
+      return;
+    }
     try {
       await App.utils.fetchJSONUnified(`/api/diary/${diaryId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch)
+        body: JSON.stringify(minimal)
       });
       window.flash && window.flash('Updated', 'success');
+      // Clear any cached edit state now that changes were saved
+      try { clearEditStateFromCache(diaryId); } catch (_) {}
       try { switchToView(); } catch (_) {}
       openDetailModal(diaryId);
       apiList();
@@ -631,15 +838,25 @@
 
     const isEditing = !editForm.classList.contains('d-none');
     const title = editForm.querySelector('[data-diary-detail-edit-title]').value;
-    const category = editForm.querySelector('[data-diary-detail-edit-category]').value;
+    // read multi-category JSON if present
+    let category = '';
+    const jsonInp = editForm.querySelector('[data-diary-detail-categories-json]');
+    if (jsonInp && jsonInp.value) {
+      try {
+        const arr = JSON.parse(jsonInp.value || '[]');
+        if (Array.isArray(arr) && arr.length) category = arr.join(', ');
+      } catch (_) { category = ''; }
+    } else {
+      category = '';
+    }
     const content = editForm.querySelector('[data-diary-detail-edit-content]').value;
 
     const originalItem = state.items.find(item => item._id === diaryId);
 
     const hasChanges = !originalItem ||
-      title !== (originalItem.title || '') ||
-      category !== (originalItem.category || '') ||
-      content !== (originalItem.content || '');
+  title !== (originalItem.title || '') ||
+  category !== (Array.isArray(originalItem.category) ? (originalItem.category.join(', ') || '') : (originalItem.category || '')) ||
+  content !== (originalItem.content || '');
 
     if (hasChanges || isEditing) {
       diaryEditStateCache[diaryId] = {
@@ -704,7 +921,7 @@
           clearBtn?.classList.add('d-none');
           return;
         }
-        previewWrap.innerHTML = images.map((u, i) => `<div class='position-relative' style='width:90px;height:90px;border:1px solid var(--border-color);border-radius:4px;overflow:hidden;'>\n<img src='${u}' style='object-fit:cover;width:100%;height:100%;'/>\n<button type='button' class='btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1' data-remove='${i}'><i class='bi bi-x'></i></button></div>`).join('');
+  previewWrap.innerHTML = images.map((u, i) => `<div class='position-relative' style='width:90px;height:90px;border:1px solid var(--border-color);border-radius:4px;overflow:hidden;'>\n<img src='${u}' style='object-fit:cover;width:100%;height:100%;'/>\n<button type='button' class='btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1' data-remove='${i}' title='Remove'><i class='fa-solid fa-xmark' aria-hidden='true'></i></button></div>`).join('');
         clearBtn?.classList.remove('d-none');
         previewWrap.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => {
           const idx = parseInt(b.getAttribute('data-remove'), 10);
@@ -828,7 +1045,15 @@
 
   // Reset detail modal to view mode when hidden
   if (detailModalEl) {
-    detailModalEl.addEventListener('hide.bs.modal', switchToView);
+    // Save current edit state before switching view when the modal is hidden
+    detailModalEl.addEventListener('hide.bs.modal', () => {
+      try {
+        const root = detailModalEl.querySelector('[data-diary-detail-root]');
+        const did = root?.dataset.currentDiaryId;
+        if (did) saveEditStateToCache(did, root);
+      } catch (_) {}
+      switchToView();
+    });
   }
 
   // Inline image pasting for create modal content input
@@ -902,6 +1127,20 @@
   // Set up modal cleanup
   window.CommentFormatter && window.CommentFormatter.setupModalCleanup(modalEl, ['[data-diary-form]']);
   window.CommentFormatter && window.CommentFormatter.setupModalCleanup(detailModalEl, ['[data-diary-comment-form]']);
+
+  // Auto-save edit state while editing (debounced)
+  if (detailModalEl) {
+    const root = detailModalEl.querySelector('[data-diary-detail-root]');
+    const editForm = root?.querySelector('[data-diary-detail-edit-form]');
+    if (editForm && !editForm._autoSaveBound) {
+      editForm._autoSaveBound = true;
+      const debouncedSave = debounce(() => {
+        const did = root?.dataset.currentDiaryId;
+        if (did && !editForm.classList.contains('d-none')) saveEditStateToCache(did, root);
+      }, 500);
+      editForm.addEventListener('input', debouncedSave);
+    }
+  }
 
   apiList();
 })();

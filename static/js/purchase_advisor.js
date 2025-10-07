@@ -99,34 +99,46 @@ class PurchaseAdvisor {
         if (!container) return;
         container.innerHTML = '';
 
+        // Normalize/adapt incoming advice object to safe defaults
+        const safe = Object.assign({
+            recommendation: 'unknown',
+            reason: 'Unavailable.',
+            impact: 'N/A',
+            alternatives: [],
+            amount_converted: null,
+            base_currency: null,
+            suggested_budget: null
+        }, advice || {});
+
         const adviceBox = document.createElement('div');
-        adviceBox.className = `ai-advice ${advice.recommendation}`;
+        adviceBox.className = `ai-advice ${safe.recommendation}`;
         
-        let icon = '❓';
-        if (advice.recommendation === 'yes') icon = '✅';
-        if (advice.recommendation === 'no') icon = '❌';
-        if (advice.recommendation === 'maybe') icon = '⚠️';
+        // Only show a prominent icon for concrete recommendations (yes/no/maybe).
+        let icon = '';
+        if (safe.recommendation === 'yes') icon = '✅';
+        if (safe.recommendation === 'no') icon = '❌';
+        if (safe.recommendation === 'maybe') icon = '⚠️';
 
         adviceBox.innerHTML = `
             <div class="d-flex align-items-center mb-2">
-                <span class="fs-3 me-2">${icon}</span>
-                <h4 class="mb-0">Recommendation: ${this.capitalize(advice.recommendation)}</h4>
+                ${icon ? `<span class="fs-3 me-2">${icon}</span>` : ''}
+                <h4 class="mb-0">Recommendation: ${this.capitalize(safe.recommendation)}</h4>
             </div>
             <div class="ms-4">
-                <p class="mb-2"><strong>Reason:</strong> ${advice.reason}</p>
-                ${advice.amount_converted != null && advice.base_currency ? `<p class="mb-2"><strong>Amount (base):</strong> ${formatNumber(advice.amount_converted, 2)} ${advice.base_currency}</p>` : ''}
-                ${advice.alternatives?.length ? `
+                <p class="mb-2"><strong>Reason:</strong> ${safe.reason}</p>
+                ${safe.amount_converted != null && safe.base_currency ? `<p class="mb-2"><strong>Amount (base):</strong> ${formatNumber(safe.amount_converted, 2)} ${safe.base_currency}</p>` : ''}
+                ${safe.alternatives?.length ? `
                     <div class="mb-2"><strong>Alternatives:</strong>
                         <ul class="mb-0 ps-4">
-                            ${advice.alternatives.map(alt => `<li>${alt}</li>`).join('')}
+                            ${safe.alternatives.map(alt => `<li>${alt}</li>`).join('')}
                         </ul>
                     </div>
                 ` : ''}
-                <p class="mb-0"><strong>Impact:</strong> ${advice.impact}</p>
-                ${advice.suggested_budget ? `
+                <p class="mb-0"><strong>Impact:</strong> ${safe.impact}</p>
+                ${safe.suggested_budget ? `
                     <div class="mt-3">
                         <p class="mb-1"><strong>Suggested Budget Adjustment:</strong></p>
-                        <p class="mb-0">${advice.suggested_budget}</p>
+                        <p class="mb-0">${safe.suggested_budget}</p>
                     </div>
                 ` : ''}
             </div>
@@ -189,12 +201,15 @@ class PurchaseAdvisor {
             items.forEach(item => {
                 const element = document.createElement('div');
                 element.className = `list-group-item list-group-item-action`;
-                let icon = '❓';
-                if (item.advice.recommendation === 'yes') icon = '✅';
-                if (item.advice.recommendation === 'no') icon = '❌';
-                if (item.advice.recommendation === 'maybe') icon = '⚠️';
-                const parsed = window.SiteDate ? window.SiteDate.parse(item.created_at) : (new Date(item.created_at));
-                const date = parsed && !isNaN(parsed.getTime()) ? parsed.toLocaleString() : '';
+                // Guard against missing/archived advice objects.
+                // Prefer the full inline advice if present, otherwise use the lightweight advice_summary returned by the history API.
+                const summary = item.advice || item.advice_summary || null;
+                let icon = '';
+                const itemRec = summary?.recommendation;
+                if (itemRec === 'yes') icon = '✅';
+                if (itemRec === 'no') icon = '❌';
+                if (itemRec === 'maybe') icon = '⚠️';
+                                                const date = window.SiteDate.toDateTimeString(item.created_at);
                 const srcAmount = (item?.request?.amount_original ?? item?.request?.amount);
                 const amtNum = Number(srcAmount);
                 const amountSafe = Number.isFinite(amtNum) ? amtNum : 0;
@@ -210,14 +225,14 @@ class PurchaseAdvisor {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             ${status}
-                            <span class="me-2">${icon}</span>
+                            ${icon ? `<span class="me-2">${icon}</span>` : ''}
                             <strong>${item.request.description}</strong>
                             <span class="text-muted ms-2">${formatMoney(amountSafe, sym)}</span>
                         </div>
                         <div class="d-flex align-items-center">
                             <small class="text-muted me-2">${date}</small>
-                            <button class="btn btn-sm btn-danger delete-btn" data-id="${item._id}">
-                                <i class="bi bi-trash"></i>
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${item._id}" title="Delete">
+                                <i class="fa-solid fa-trash" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
@@ -262,8 +277,19 @@ class PurchaseAdvisor {
                             if (d !== details) d.classList.add('d-none');
                         });
                         if (isHidden) {
+                            // If full advice missing, but advice_summary exists, show that immediately
+                            if (!item.advice && item.advice_summary) {
+                                this.displayAdvice({
+                                    recommendation: item.advice_summary.recommendation || 'unknown',
+                                    reason: item.advice_summary.reason || 'Unavailable.',
+                                    impact: item.advice_summary.impact || 'N/A',
+                                    amount_converted: item.advice_summary.amount_converted,
+                                    base_currency: item.advice_summary.base_currency
+                                }, details);
+                            }
                             // Lazy load if offloaded (no local advice key but pastebin_url present)
                             if(!item.advice && item.pastebin_url){
+                                // show a loading indicator while fetching full content
                                 details.innerHTML = '<div class="text-muted small">Loading archived advice...</div>';
                                 try {
                                     const resp = await fetch(`/api/ai/advice/${item._id}`);
@@ -271,11 +297,15 @@ class PurchaseAdvisor {
                                         const data = await resp.json();
                                         if(data.advice){
                                             item.advice = data.advice; // cache for this session
+                                            this.displayAdvice(item.advice, details);
                                         }
                                     }
                                 } catch(e){ console.error('Failed to load archived advice', e); }
                             }
-                            this.displayAdvice(item.advice || { recommendation: 'unknown', reasoning: 'Unavailable.' }, details);
+                            // If no advice at all, show fallback
+                            if(!item.advice && !item.advice_summary){
+                                this.displayAdvice({ recommendation: 'unknown', reason: 'Unavailable.' }, details);
+                            }
                             details.classList.remove('d-none');
                         } else {
                             details.classList.add('d-none');

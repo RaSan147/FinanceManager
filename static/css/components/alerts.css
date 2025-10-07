@@ -60,3 +60,9 @@ body.dark-mode .alert a:hover,
 [data-theme="dark"] .alert a:hover {
 	color: #fff;
 }
+
+/* Chip close icon variants (when used on badges in various themes) */
+.chip-close { color: inherit; }
+.chip-close.chip-close-light { color: #fff; }
+.chip-close.chip-close-light i { opacity: .9; }
+.chip-close.chip-close-light:hover i { opacity: 1; }

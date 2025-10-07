@@ -1,6 +1,7 @@
 (() => {
 	if (window.__todoModuleLoaded) return;
 	window.__todoModuleLoaded = true;
+	const TODO_DEBUG = true; // set true to enable debug logging for edit-state cache
 	const modalEl = document.getElementById('todoModal');
 	if (!modalEl) return;
 	const form = modalEl.querySelector('[data-todo-form]');
@@ -41,6 +42,87 @@
 		items: []
 	};
 
+	// Todo category hints & widget helpers
+	let todoCategoryHints = [];
+	async function loadTodoCategoryHints() {
+		try {
+			if (document.getElementById('todoCategoriesGlobal')?.dataset.loaded === '1') return;
+			const data = await App.utils.fetchJSONUnified('/api/todo-categories', { dedupe: true });
+			todoCategoryHints = (data.items || []).map(c => c.name).filter(Boolean).slice(0, 200);
+			const dl = document.getElementById('todoCategoriesGlobal');
+			if (dl) {
+				dl.innerHTML = todoCategoryHints.map(n => `<option value="${n}"></option>`).join('');
+				dl.dataset.loaded = '1';
+			}
+		} catch (_) {}
+	}
+
+	function renderCategoryChips(container, items) {
+		container.innerHTML = '';
+		for (const it of items) {
+			const wrapper = document.createElement('span');
+			wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
+			try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(wrapper, it); } catch (_) {}
+			wrapper.style['font-size'] = '0.9em';
+			const text = document.createElement('span');
+			text.textContent = it;
+			text.style['white-space'] = 'nowrap';
+			const btn = document.createElement('button');
+			btn.type = 'button';
+			btn.className = 'btn chip-close btn-sm ms-2';
+			btn.setAttribute('aria-label', 'Remove');
+			btn.style['margin-left'] = '0.4rem';
+			btn.innerHTML = "<i class='fa-solid fa-xmark' aria-hidden='true'></i>";
+			btn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const idx = items.indexOf(it);
+				if (idx !== -1) {
+					items.splice(idx, 1);
+					renderCategoryChips(container, items);
+				}
+			});
+			wrapper.appendChild(text);
+			wrapper.appendChild(btn);
+			container.appendChild(wrapper);
+		}
+	}
+
+	function setupCategoryWidget(rootEl, opts) {
+		const chipsWrap = rootEl.querySelector(opts.chipsSelector);
+		const inputEl = rootEl.querySelector(opts.inputSelector);
+		const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
+		const list = opts.initial && Array.isArray(opts.initial) ? [...opts.initial] : [];
+		function sync() {
+			renderCategoryChips(chipsWrap, list);
+			if (jsonInput) jsonInput.value = JSON.stringify(list);
+		}
+		function addFromInput() {
+			const val = (inputEl.value || '').trim();
+			if (!val) return;
+			const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+			for (const p of parts) if (!list.includes(p)) list.push(p);
+			inputEl.value = '';
+			sync();
+		}
+		// support explicit add button
+		const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-todo-create-add-btn]') || rootEl.querySelector('[data-todo-detail-add-btn]');
+		if (addBtn) {
+			addBtn.addEventListener('click', (e) => {
+				e.preventDefault();
+				addFromInput();
+			});
+		}
+		inputEl.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); }
+		});
+		inputEl.addEventListener('blur', () => { if ((inputEl.value||'').trim()) addFromInput(); });
+		inputEl.addEventListener('focus', () => loadTodoCategoryHints());
+		sync();
+		return { getList: () => list };
+	}
+
+// Intentionally call shared helper directly where needed (will throw if BlogHelpers missing).
+
 // Use the global RichText implementation only (no fallbacks). Let it fail loudly if missing.
 const RichText = window.RichText;
 // --- Edit-state caching + navigation warnings (for inline detail edit) ---
@@ -52,7 +134,16 @@ function saveEditStateToCache(todoId, root) {
 	if (!editForm) return;
 	const isEditing = !editForm.classList.contains('d-none');
 	const title = editForm.querySelector('[data-todo-detail-edit-title]').value;
-	const category = editForm.querySelector('[data-todo-detail-edit-category]').value;
+	let category = '';
+	const jsonInp = editForm.querySelector('[data-todo-detail-categories-json]');
+	if (jsonInp && jsonInp.value) {
+		try {
+			const arr = JSON.parse(jsonInp.value || '[]');
+			if (Array.isArray(arr) && arr.length) category = arr.join(', ');
+		} catch (_) { category = ''; }
+	} else {
+		category = '';
+	}
 	const stage = editForm.querySelector('[data-todo-detail-edit-stage]')?.value || '';
 	const due = editForm.querySelector('[data-todo-detail-edit-due]').value;
 	const description = editForm.querySelector('[data-todo-detail-edit-description]').value;
@@ -60,14 +151,17 @@ function saveEditStateToCache(todoId, root) {
 	const hasChanges = !originalItem || title !== (originalItem.title || '') || category !== (originalItem.category || '') || stage !== (originalItem.stage || '') || due !== (originalItem.due_date ? (originalItem.due_date.slice ? originalItem.due_date.slice(0,10) : originalItem.due_date) : '') || description !== (originalItem.description || '');
 	if (hasChanges || isEditing) {
 		todoEditStateCache[todoId] = { isEditing, title, category, stage, due, description, hasChanges };
+		if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: saveEditStateToCache', todoId, todoEditStateCache[todoId]);
 	} else {
 		delete todoEditStateCache[todoId];
+		if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: cleared cache for', todoId);
 	}
 	updateUnsavedChangesFlag();
 }
 
 function clearEditStateFromCache(todoId) {
 	delete todoEditStateCache[todoId];
+	if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: clearEditStateFromCache', todoId);
 	updateUnsavedChangesFlag();
 }
 
@@ -77,13 +171,9 @@ function updateUnsavedChangesFlag() {
 	document.title = hasUnsavedChanges ? `◌ ${originalTitle}` : originalTitle;
 }
 
-function hasAnyUnsavedChanges() { return hasUnsavedChanges; }
-
-// Wire navigation warnings and debounce from BlogHelpers
-// Use BlogHelpers (guaranteed). Let it throw if missing so we don't keep duplicate fallbacks.
-window.BlogHelpers.setupNavigationWarnings(() => hasAnyUnsavedChanges());
-var debounce = window.BlogHelpers.debounce;
-
+function hasAnyUnsavedChanges() {
+	return hasUnsavedChanges;
+}
 	async function apiList(forceFresh = false) {
 		// Add lightweight cache-buster when we know data changed (stage update/delete)
 		let url = `/api/todo?per_page=100` + (forceFresh ? `&__ts=${Date.now()}` : '');
@@ -146,18 +236,27 @@ var debounce = window.BlogHelpers.debounce;
 		const cat = node.querySelector('.todo-category');
 		if (it.category) {
 			cat.textContent = it.category;
-			cat.classList.remove('d-none');
+				cat.classList.remove('d-none');
+				try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(cat, it.category); } catch (_) {}
 		}
 		const due = node.querySelector('.todo-due');
 		if (it.due_date) {
 			const dStr = date10(it.due_date);
 			if (dStr) {
 				due.textContent = dStr;
-				due.classList.remove('d-none');
+					due.classList.remove('d-none');
 			}
 		}
 		const desc = node.querySelector('.todo-desc');
 		if (desc) desc.textContent = truncateDesc(it.description || '');
+		// Stage badge in list
+		const stageChip = node.querySelector('.todo-stage');
+		if (stageChip) {
+				const btn = document.querySelector(`#stageViewMenu [data-stage="${it.stage}"]`);
+				stageChip.textContent = btn ? (btn.textContent || '').trim() : (String(it.stage || '').replace(/_/g, ' '));
+			try { window.BlogHelpers && window.BlogHelpers.applyStageBadge(stageChip, it.stage); } catch (_) {}
+			stageChip.classList.toggle('d-none', !it.stage);
+		}
 		const sel = node.querySelector('.todo-stage-select-inline');
 		if (sel) {
 			sel.value = it.stage;
@@ -236,6 +335,14 @@ var debounce = window.BlogHelpers.debounce;
 	async function persistTodo(fd) {
 		const id = idInput.value.trim();
 		const payload = Object.fromEntries(fd.entries());
+			// convert categories JSON to category string
+			if (payload.categories) {
+				try {
+					const arr = JSON.parse(payload.categories || '[]');
+					if (Array.isArray(arr) && arr.length) payload.category = arr.join(', ');
+				} catch (_) {}
+				delete payload.categories;
+			}
 		if (!payload.title) return;
 		const url = id ? `/api/todo/${id}` : '/api/todo';
 		const method = id ? 'PATCH' : 'POST';
@@ -309,6 +416,17 @@ var debounce = window.BlogHelpers.debounce;
 			} catch (_) {}
 		}, 30);
 		detailModal?.hide();
+
+    // setup create modal category widget
+    try {
+      setupCategoryWidget(form, {
+        chipsSelector: '[data-todo-create-categories]',
+        inputSelector: '[data-todo-create-category-input]',
+        jsonInputSelector: '[data-todo-create-categories-json]',
+        initial: []
+      });
+      loadTodoCategoryHints();
+    } catch (_) {}
 	}
 	async function populateCategoryHints() {
 		try {
@@ -393,13 +511,18 @@ var debounce = window.BlogHelpers.debounce;
 		if (catEl) {
 			if (item.category) {
 				catEl.textContent = item.category;
-				catEl.classList.remove('d-none');
+					catEl.classList.remove('d-none');
+					try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(catEl, item.category); } catch (_) {}
 			} else {
 				catEl.classList.add('d-none');
 			}
 		}
-		const stageEl = detailModalEl.querySelector('[data-todo-detail-stage]');
-		if (stageEl) stageEl.textContent = item.stage || '';
+					const stageEl = detailModalEl.querySelector('[data-todo-detail-stage]');
+					if (stageEl) {
+						const btn = document.querySelector(`#stageViewMenu [data-stage="${item.stage}"]`);
+						stageEl.textContent = btn ? (btn.textContent || '').trim() : (String(item.stage || '').replace(/_/g, ' '));
+						try { window.BlogHelpers && window.BlogHelpers.applyStageBadge(stageEl, item.stage); } catch (_) {}
+					}
 		const dueEl = detailModalEl.querySelector('[data-todo-detail-due]');
 		if (dueEl) {
 			const dStr = date10(item.due_date);
@@ -472,12 +595,12 @@ var debounce = window.BlogHelpers.debounce;
 				      <div class='body'>
 				        <div class='content' data-markdown-container>${formattedText}</div>
 				        ${images}
-				        <div class='meta d-flex align-items-center'>
-				          <div class='datetime text-muted'>${fmtDateTime(c.created_at)}</div>
-				          <div class='ms-auto'>
-				            <button class='btn btn-sm btn-outline-danger action-btn' data-comment-del='${c._id}' title='Delete'><i class='bi bi-trash'></i><span class='d-none d-sm-inline ms-1'>Delete</span></button>
-				          </div>
-				        </div>
+										    <div class='meta d-flex align-items-center'>
+										      <div class='datetime text-muted'>${fmtDateTime(c.created_at)}</div>
+										      <div class='ms-auto'>
+										        <button class='btn btn-sm btn-outline-danger action-btn' data-comment-del='${c._id}' title='Delete'><i class='fa-solid fa-trash' aria-hidden='true'></i><span class='d-none d-sm-inline ms-1'>Delete</span></button>
+										      </div>
+										    </div>
 				      </div>
 				    </div>
 				  `;
@@ -506,12 +629,63 @@ var debounce = window.BlogHelpers.debounce;
 		// Populate edit form (kept hidden until user clicks Edit)
 		const editForm = detailModalEl.querySelector('[data-todo-detail-edit-form]');
 		if (editForm) {
-			editForm.querySelector('[data-todo-detail-edit-title]').value = item.title || '';
-			editForm.querySelector('[data-todo-detail-edit-category]').value = item.category || '';
-			const stSel = editForm.querySelector('[data-todo-detail-edit-stage]');
-			if (stSel) stSel.value = item.stage || 'wondering';
-			editForm.querySelector('[data-todo-detail-edit-due]').value = item.due_date ? date10(item.due_date) : '';
-			editForm.querySelector('[data-todo-detail-edit-description]').value = item.description || '';
+			// If we have a cached unsaved edit state for this item, restore it.
+			const cached = item._id && todoEditStateCache[item._id] ? todoEditStateCache[item._id] : null;
+			if (cached) {
+				if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: restoring cache for', item._id, cached);
+				// Title
+				editForm.querySelector('[data-todo-detail-edit-title]').value = cached.title || '';
+				// Categories (cached may be comma-separated string)
+				const cachedCats = (cached.category && typeof cached.category === 'string') ? cached.category.split(',').map(s => s.trim()).filter(Boolean) : [];
+				try {
+					setupCategoryWidget(editForm, {
+						chipsSelector: '[data-todo-detail-categories]',
+						inputSelector: '[data-todo-detail-category-input]',
+						jsonInputSelector: '[data-todo-detail-categories-json]',
+						initial: cachedCats
+					});
+					loadTodoCategoryHints();
+				} catch (_) {}
+				// Stage, due, description
+				const stSel = editForm.querySelector('[data-todo-detail-edit-stage]');
+				if (stSel) stSel.value = cached.stage || 'wondering';
+				editForm.querySelector('[data-todo-detail-edit-due]').value = cached.due || '';
+				editForm.querySelector('[data-todo-detail-edit-description]').value = cached.description || '';
+
+				// If the cached state indicates the user was editing when the modal closed,
+				// restore the UI to edit mode immediately so they can continue.
+				if (cached.isEditing) {
+					editForm.classList.remove('d-none');
+					const descView = detailModalEl.querySelector('[data-todo-detail-description]');
+					descView && descView.classList.add('d-none');
+					const btnEdit = detailModalEl.querySelector('[data-todo-detail-edit-btn]');
+					const btnSave = detailModalEl.querySelector('[data-todo-detail-save-btn]');
+					const btnCancel = detailModalEl.querySelector('[data-todo-detail-cancel-btn]');
+					btnEdit && btnEdit.classList.add('d-none');
+					btnSave && btnSave.classList.remove('d-none');
+					btnCancel && btnCancel.classList.remove('d-none');
+				}
+			} else {
+				if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: no cache for', item._id, '— populating from server');
+				// No cached state — populate from server-provided item
+				editForm.querySelector('[data-todo-detail-edit-title]').value = item.title || '';
+				const initialCats = [];
+				if (Array.isArray(item.category)) initialCats.push(...item.category);
+				else if (item.category) initialCats.push(item.category);
+				try {
+					setupCategoryWidget(editForm, {
+						chipsSelector: '[data-todo-detail-categories]',
+						inputSelector: '[data-todo-detail-category-input]',
+						jsonInputSelector: '[data-todo-detail-categories-json]',
+						initial: initialCats
+					});
+					loadTodoCategoryHints();
+				} catch (_) {}
+				const stSel = editForm.querySelector('[data-todo-detail-edit-stage]');
+				if (stSel) stSel.value = item.stage || 'wondering';
+				editForm.querySelector('[data-todo-detail-edit-due]').value = item.due_date ? date10(item.due_date) : '';
+				editForm.querySelector('[data-todo-detail-edit-description]').value = item.description || '';
+			}
 			editForm.dataset.todoId = item._id || '';
 		}
 
@@ -562,12 +736,22 @@ var debounce = window.BlogHelpers.debounce;
 								const fd = new FormData(editFormInner);
 								const patch = {};
 								fd.forEach((v,k)=>{ patch[k]=v.toString(); });
+								// convert categories JSON to category string if present
+								if (patch.categories) {
+									try {
+										const arr = JSON.parse(patch.categories || '[]');
+										if (Array.isArray(arr) && arr.length) patch.category = arr.join(', ');
+									} catch (_) {}
+									delete patch.categories;
+								}
 								if (patch.due_date === '') patch.due_date = null;
 								if (patch.category === '') patch.category = null;
 								await App.utils.fetchJSONUnified(`/api/todo/${todoId}`, {
 									method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(patch)
 								});
 								window.flash && window.flash('Updated', 'success');
+								// Clear any cached edit state now that the item is saved
+								clearEditStateFromCache(todoId);
 								switchToView();
 								openDetailModal(todoId);
 								apiList();
@@ -578,18 +762,22 @@ var debounce = window.BlogHelpers.debounce;
 			});
 		}
 
-		// Save edit state when modal hides
-		if (detailModalEl) {
+		// Save edit state when modal hides — bind once and locate the edit form robustly
+		if (detailModalEl && !detailModalEl._hideBound) {
+			detailModalEl._hideBound = true;
 			detailModalEl.addEventListener('hide.bs.modal', () => {
-				const rootHide = detailModalEl.querySelector('[data-todo-detail-root]');
-				const tid = rootHide?.querySelector('[data-todo-detail-edit-form]')?.dataset.todoId;
+				// Prefer a dedicated root if present, otherwise use the modal element
+				const rootHide = detailModalEl.querySelector('[data-todo-detail-root]') || detailModalEl;
+				const editFormEl = rootHide.querySelector('[data-todo-detail-edit-form]');
+				const tid = editFormEl?.dataset.todoId;
 				if (tid) saveEditStateToCache(tid, rootHide);
 			});
 		}
 
-		// Auto-save edit state while editing (debounced)
-		if (editForm) {
-			const debouncedSaveState = debounce(() => {
+		// Auto-save edit state while editing (debounced). Bind once per form instance.
+		if (editForm && !editForm._autoSaveBound) {
+			editForm._autoSaveBound = true;
+			const debouncedSaveState = window.BlogHelpers.debounce(() => {
 				const rootAuto = detailModalEl.querySelector('[data-todo-detail-root]');
 				const tid = rootAuto?.querySelector('[data-todo-detail-edit-form]')?.dataset.todoId;
 				if (tid && !editForm.classList.contains('d-none')) saveEditStateToCache(tid, rootAuto);
@@ -709,6 +897,13 @@ var debounce = window.BlogHelpers.debounce;
 			fd.forEach((v, k) => {
 				patch[k] = v.toString();
 			});
+			if (patch.categories) {
+				try {
+					const arr = JSON.parse(patch.categories || '[]');
+					if (Array.isArray(arr) && arr.length) patch.category = arr.join(', ');
+				} catch (_) {}
+				delete patch.categories;
+			}
 			if (patch.due_date === '') patch.due_date = null;
 			if (patch.category === '') patch.category = null;
 			try {
@@ -720,6 +915,8 @@ var debounce = window.BlogHelpers.debounce;
 					body: JSON.stringify(patch)
 				});
 				window.flash && window.flash('Updated', 'success');
+				// Clear any cached edit state now that the item is saved
+				clearEditStateFromCache(todoId);
 				switchToView();
 				openDetailModal(todoId);
 				apiList();
@@ -737,6 +934,11 @@ if (form && form.description) {
 	const fileInput = modalEl.querySelector('[data-todo-description-image]');
 	const trigger = modalEl.querySelector('[data-todo-description-image-trigger]');
 	window.BlogHelpers.attachInlineImageUploader({ contentEl: descInput, fileInput, trigger, uploadEndpoint: '/api/todo-images' });
+}
+
+// Install navigation warnings while there are unsaved inline edits
+if (window.BlogHelpers && window.BlogHelpers.setupNavigationWarnings) {
+	window.BlogHelpers.setupNavigationWarnings(() => hasAnyUnsavedChanges());
 }
 
 	form.addEventListener('submit', e => {

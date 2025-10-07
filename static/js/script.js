@@ -56,7 +56,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Set today's date as default for date inputs
-    var today = (window.SiteDate && typeof window.SiteDate.toDateString === 'function') ? window.SiteDate.toDateString(new Date()) : new Date().toISOString().split('T')[0];
+    if (!window.SiteDate) throw new Error('SiteDate must be loaded before script.js');
+    var today = window.SiteDate.toDateString(new Date());
     document.getElementById('date')?.setAttribute('value', today);
     document.getElementById('target_date')?.setAttribute('min', today);
     

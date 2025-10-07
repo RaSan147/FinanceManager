@@ -1,27 +1,46 @@
+{# Error page template.
+   Expects:
+     - status_code: numeric HTTP status
+     - error_title: short title for the error
+     - error_message: optional descriptive message
+     - show_details: boolean to display traceback and hints
+     - traceback_str: full traceback text when show_details is true
+#}
 {% extends 'base.html' %}
+
 {% block title %}Error {{ status_code }}{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='error.css') }}">
 {% endblock %}
+
 {% block content %}
 <div class="error-hero mb-4">
   <div class="row align-items-center">
     <div class="col-lg-8">
       <h1 class="display-5 fw-bold mb-3">{{ status_code }} - {{ error_title }}</h1>
       <p class="lead mb-0">{{ error_message or 'Something went wrong while processing your request.' }}</p>
+      {# Informational badge shown only when detailed mode is enabled #}
       {% if show_details %}
       <span class="badge badge-env mt-3">Detailed mode enabled</span>
       {% endif %}
     </div>
+
     <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
-  <a href="{{ url_for('dashboard.index') }}" class="btn btn-light btn-lg fw-semibold shadow-sm"><i class="bi bi-house"></i> Dashboard</a>
+      <a href="{{ url_for('dashboard.index') }}" class="btn btn-light btn-lg fw-semibold shadow-sm">
+        <i class="fa-solid fa-house" aria-hidden="true"></i> Dashboard
+      </a>
     </div>
   </div>
 </div>
 
+{# Traceback block: visible only in detailed/debug mode #}
 {% if show_details and traceback_str %}
 <div class="position-relative mb-4">
-  <button class="btn btn-sm btn-outline-light copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('tbtxt').innerText);this.innerText='Copied!';setTimeout(()=>this.innerText='Copy',1800);">Copy</button>
+  <button class="btn btn-sm btn-outline-light copy-btn"
+          onclick="navigator.clipboard.writeText(document.getElementById('tbtxt').innerText); this.innerText='Copied!'; setTimeout(()=>this.innerText='Copy',1800);">
+    Copy
+  </button>
   <pre id="tbtxt" class="traceback">{{ traceback_str }}</pre>
 </div>
 {% endif %}
@@ -32,7 +51,9 @@
     <ul class="mb-0">
       <li>If this keeps happening, contact support or check server logs.</li>
       <li>Return to the previous page and try again.</li>
-      {% if show_details %}<li>Provide the above stack trace when reporting the issue.</li>{% endif %}
+      {% if show_details %}
+      <li>Provide the above stack trace when reporting the issue.</li>
+      {% endif %}
     </ul>
   </div>
 </div>

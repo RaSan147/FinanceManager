@@ -1,0 +1,100 @@
+/* Diary list item hover affordance to mirror To-Do */
+.diary-item {
+  position: relative;
+  transition: background-color .2s, box-shadow .2s, transform .06s;
+  cursor: pointer;
+}
+.diary-item.card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+.diary-item.card:hover {
+  background-color: var(--hover-bg);
+  box-shadow: var(--shadow-sm);
+  /* transform: translateY(-1px); */
+  border-color: rgba(var(--accent-primary-rgb), .25);
+}
+body.dark-mode .diary-item.card:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  box-shadow: var(--shadow-md);
+}
+
+/* Title hover cue */
+.diary-item:hover .diary-title {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Category badge subtle hover */
+.diary-item .diary-category {
+  transition: box-shadow .2s, filter .2s, opacity .2s;
+}
+.diary-item .diary-category:hover {
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .28);
+  filter: saturate(1.05);
+  opacity: .95;
+}
+
+/* Reuse tag badge styles from To-Do for consistent look */
+.diary-item .badge.tag-badge { margin-right: .1rem; }
+.tag-badge {
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+/* Tag colors rely on CSS variables defined globally or in other CSS; ensure compatibility here too */
+/* Tag colors are defined in todo.css :root and dark-mode blocks as CSS classes .tag-color-0..9 */
+
+/* Deterministic tag colors (10-color palette) — duplicated here so diary page works standalone */
+:root {
+  --tag-0: #6ea8fe;
+  --tag-1: #f5b971;
+  --tag-2: #9ad0f5;
+  --tag-3: #b69df7;
+  --tag-4: #6edff6;
+  --tag-5: #ffb3c7;
+  --tag-6: #95e0a8;
+  --tag-7: #ffd778;
+  --tag-8: #e5a6ff;
+  --tag-9: #9ad5b3;
+  --tag-ink: #0b1324;
+}
+body.dark-mode {
+  --tag-0: #3a78ff;
+  --tag-1: #d3944c;
+  --tag-2: #5fb2e3;
+  --tag-3: #8a70ea;
+  --tag-4: #3fcfe6;
+  --tag-5: #e982a0;
+  --tag-6: #4cc57a;
+  --tag-7: #e2b341;
+  --tag-8: #c078ee;
+  --tag-9: #63c192;
+  --tag-ink: #0e1726;
+}
+
+.tag-color-0 { background: color-mix(in srgb, var(--tag-0), transparent 10%); color: #0b0f14; border-color: color-mix(in srgb, var(--tag-0), black 75%); }
+.tag-color-1 { background: color-mix(in srgb, var(--tag-1), transparent 10%); color: #23160a; border-color: color-mix(in srgb, var(--tag-1), black 75%); }
+.tag-color-2 { background: color-mix(in srgb, var(--tag-2), transparent 10%); color: #08151c; border-color: color-mix(in srgb, var(--tag-2), black 75%); }
+.tag-color-3 { background: color-mix(in srgb, var(--tag-3), transparent 10%); color: #130f1b; border-color: color-mix(in srgb, var(--tag-3), black 75%); }
+.tag-color-4 { background: color-mix(in srgb, var(--tag-4), transparent 10%); color: #051617; border-color: color-mix(in srgb, var(--tag-4), black 75%); }
+.tag-color-5 { background: color-mix(in srgb, var(--tag-5), transparent 10%); color: #1e0d12; border-color: color-mix(in srgb, var(--tag-5), black 75%); }
+.tag-color-6 { background: color-mix(in srgb, var(--tag-6), transparent 10%); color: #0d1710; border-color: color-mix(in srgb, var(--tag-6), black 75%); }
+.tag-color-7 { background: color-mix(in srgb, var(--tag-7), transparent 10%); color: #211a0a; border-color: color-mix(in srgb, var(--tag-7), black 75%); }
+.tag-color-8 { background: color-mix(in srgb, var(--tag-8), transparent 10%); color: #1b0f21; border-color: color-mix(in srgb, var(--tag-8), black 75%); }
+.tag-color-9 { background: color-mix(in srgb, var(--tag-9), transparent 10%); color: #0f1b14; border-color: color-mix(in srgb, var(--tag-9), black 75%); }
+
+body.dark-mode .tag-color-0,
+body.dark-mode .tag-color-1,
+body.dark-mode .tag-color-2,
+body.dark-mode .tag-color-3,
+body.dark-mode .tag-color-4,
+body.dark-mode .tag-color-5,
+body.dark-mode .tag-color-6,
+body.dark-mode .tag-color-7,
+body.dark-mode .tag-color-8,
+body.dark-mode .tag-color-9 {
+  color: #e9eef8;
+  border-color: color-mix(in srgb, currentColor, transparent 80%);
+}

@@ -81,6 +81,93 @@ body.dark-mode .modal-content {
 	font-size: .725rem;
 }
 
+/* Category chips and compact close button */
+.category-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .25rem;
+}
+.category-chips .badge {
+	display: inline-flex;
+	align-items: center;
+	gap: .25rem;
+	padding: .2rem .45rem;
+	border-radius: .5rem;
+	font-weight: 500;
+}
+.category-chips .badge .btn-close {
+	width: .68rem;
+	height: .68rem;
+	padding: 0;
+	margin-left: .3rem !important;
+	opacity: .85;
+	border-radius: 999px;
+	background-color: transparent;
+	background-size: 9px 9px;
+	transition: background-color .15s ease, opacity .15s ease, transform .12s ease;
+}
+.category-chips .badge .chip-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: .9rem;
+	height: .9rem;
+	padding: 0;
+	margin-left: .3rem !important;
+	border-radius: 999px;
+	background: transparent;
+	color: inherit;
+	line-height: 1;
+}
+.category-chips .badge .chip-close i {
+	font-size: .65rem;
+}
+.category-chips .badge .chip-close:hover {
+	opacity: 1;
+	background-color: rgba(var(--text-primary-rgb, 31,41,55), .08);
+	box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .25);
+}
+[data-theme="dark"] .category-chips .badge .chip-close:hover,
+body.dark-mode .category-chips .badge .chip-close:hover {
+	background-color: rgba(255,255,255,.08);
+}
+.category-chips .badge .chip-close:active { transform: scale(0.9); }
+.category-chips .badge .chip-close:focus { outline: none; box-shadow: none; }
+.category-chips .badge .chip-close:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .35), var(--focus-ring);
+}
+.category-chips .badge .btn-close:hover {
+	opacity: 1;
+	background-color: rgba(var(--text-primary-rgb, 31,41,55), .08);
+	box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .25);
+}
+[data-theme="dark"] .category-chips .badge .btn-close:hover,
+body.dark-mode .category-chips .badge .btn-close:hover {
+	background-color: rgba(255,255,255,.08);
+}
+.category-chips .badge .btn-close:active {
+	transform: scale(0.9);
+}
+.category-chips .badge .btn-close:focus { outline: none; box-shadow: none; }
+.category-chips .badge .btn-close:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .35), var(--focus-ring);
+}
+
+/* Slight hover feedback for whole chip */
+.category-chips .badge:hover {
+	filter: saturate(1.03);
+}
+
+/* Smaller input-group for category adders */
+.modal .input-group.input-group-sm > .form-control {
+	min-height: 32px;
+}
+.modal .input-group.input-group-sm > .btn {
+	min-height: 32px;
+}
+
 /* Comment and text formatting styles */
 [data-markdown-container] {
 	white-space: pre-wrap; /* Preserve whitespace and wrap lines */

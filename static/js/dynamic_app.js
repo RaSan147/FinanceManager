@@ -12,11 +12,11 @@ class ActiveGoalPreview {
     this.displaySymbol = window.currencySymbols?.[goal.currency] || userCurrencySymbol || '';
   }
   build() {
-    const { createEl, escapeHtml, safeDateString, money } = this.h;
+  const { createEl, safeDateString, money } = this.h;
     const percentRaw = Number(this.goal.progress?.progress_percent ?? 0);
     const percent = Math.min(100, Math.max(0, percentRaw));
     const container = createEl('div', { class: 'mb-3 goal-item' });
-    container.appendChild(createEl('h6', {}, escapeHtml(this.goal.description || '')));
+  container.appendChild(createEl('h6', {}, this.goal.description || ''));
     const meta = createEl('div', { class: 'd-flex justify-content-between mb-1' });
     meta.appendChild(createEl('small', {}, 'Target: ' + money(this.goal.target_amount, this.displaySymbol)));
     meta.appendChild(createEl('small', {}, safeDateString(this.goal.target_date)));

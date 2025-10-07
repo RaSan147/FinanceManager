@@ -1,103 +1,7 @@
 // app_core.js - Shared utility core & lightweight module system
 (function() {
-    class DateTimeManager {
-        constructor() {
-            this.timeZone = this.detectTimeZone();
-        }
-
-        detectTimeZone() {
-            try {
-                return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-            } catch (_) {
-                return 'UTC';
-            }
-        }
-
-        parse(val) {
-            if (!val) return null;
-            if (val instanceof Date) return isNaN(val) ? null : val;
-
-            if (typeof val === 'object') {
-                if (val.$date) return this.parse(val.$date);
-                const maybeDate = val.date || val._date;
-                if (maybeDate) return this.parse(maybeDate);
-            }
-
-            if (typeof val === 'string') {
-                const s = val.trim();
-                if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00:00Z');
-                const norm = s.replace(/\+00:00$/, 'Z').replace(' ', 'T');
-                const d = new Date(norm);
-                if (!isNaN(d)) return d;
-            }
-
-            if (typeof val === 'number') {
-                const d = new Date(val);
-                return isNaN(d) ? null : d;
-            }
-
-            return null;
-        }
-
-        format(val, opts) {
-            const d = this.parse(val);
-            if (!d) return '';
-
-            try {
-                return new Intl.DateTimeFormat(undefined, Object.assign({ timeZone: this.timeZone }, opts)).format(d);
-            } catch (_) {
-                return d.toLocaleDateString();
-            }
-        }
-
-        formatDate(val) {
-            return this.format(val, { year: 'numeric', month: 'short', day: '2-digit' });
-        }
-
-        formatDateTime(val) {
-            return this.format(val, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-        }
-
-        formatShort(val) {
-            return this.format(val, { month: 'short', day: '2-digit' });
-        }
-
-        relative(val) {
-            const d = this.parse(val);
-            if (!d) return '';
-
-            const now = new Date();
-            const diffMs = now - d;
-            const sec = Math.floor(diffMs / 1000);
-
-            if (sec < 60) return sec + 's ago';
-            const min = Math.floor(sec / 60);
-            if (min < 60) return min + 'm ago';
-            const hr = Math.floor(min / 60);
-            if (hr < 24) return hr + 'h ago';
-            const day = Math.floor(hr / 24);
-            if (day < 7) return day + 'd ago';
-            const wk = Math.floor(day / 7);
-            if (wk < 5) return wk + 'w ago';
-            const mo = Math.floor(day / 30);
-            if (mo < 12) return mo + 'mo ago';
-            const yr = Math.floor(day / 365);
-            return yr + 'y ago';
-        }
-
-        toUTCISOStringFromLocalDate(dateStr) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return null;
-            const parts = dateStr.split('-');
-            const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
-            return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
-        }
-    }
-
-    const DateTime = new DateTimeManager();
-
-    // Expose instance globally
-    window.DateTimeManager = DateTime;
-    window.DateTime = DateTime;
+    // Require SiteDate to be loaded before this script. Intentionally crash if missing to avoid silent divergence.
+    if (!window.SiteDate) throw new Error('SiteDate must be loaded before app_core.js');
 
     function safeNumber(n) {
         const v = Number(n);
@@ -135,8 +39,11 @@
     }
 
     function safeDateString(val, opts) {
-        const o = opts || { year: 'numeric', month: 'short', day: '2-digit' };
-        return DateTime.format(val, o);
+        // Strict: rely on SiteDate; opts ignored to ensure consistent formatting
+        if (opts) {
+            // If options are needed in the future, we can extend SiteDate; for now enforce a single date format
+        }
+        return window.SiteDate.toDateString(val);
     }
 
     function createEl(tag, props = {}, children) {
@@ -161,7 +68,8 @@
     }
 
     async function fetchJSON(url, opts) {
-        const headers = Object.assign({ 'Accept': 'application/json', 'X-Client-TZ': DateTime.timeZone }, (opts && opts.headers) || {});
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const headers = Object.assign({ 'Accept': 'application/json', 'X-Client-TZ': tz }, (opts && opts.headers) || {});
         const finalOpts = Object.assign({}, opts, { headers });
         const res = await fetch(url, finalOpts);
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -223,7 +131,8 @@
         // Enhanced fetchJSON that leverages RequestCoordinator and supports options: { dedupe: true, noCache: true }
         async function fetchJSONUnified(url, opts) {
             const method = (opts?.method || 'GET').toUpperCase();
-            const headers = Object.assign({ 'Accept': 'application/json', 'X-Client-TZ': DateTime.timeZone }, (opts && opts.headers) || {});
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            const headers = Object.assign({ 'Accept': 'application/json', 'X-Client-TZ': tz }, (opts && opts.headers) || {});
             const final = Object.assign({}, opts, { headers });
             if(final.dedupe) {
                 return RequestCoordinator.run(method, url, final);
@@ -341,7 +250,7 @@
         const refreshRel = () => {
             document.querySelectorAll('[data-rel-time]').forEach(el => {
                 const v = el.getAttribute('data-rel-time');
-                el.textContent = DateTime.relative(v);
+                el.textContent = window.SiteDate.relative(v);
             });
         };
         refreshRel();

@@ -10,8 +10,10 @@
                 <h4 class="card-title mb-0">Add Transaction</h4>
             </div>
             <div class="card-body">
+                <!-- Transaction form -->
                 <form method="POST">
                     <div class="row">
+                        <!-- Amount input with currency prefix -->
                         <div class="col-md-6 mb-3">
                             <label for="amount" class="form-label">Amount</label>
                             <div class="input-group">
@@ -19,6 +21,8 @@
                                 <input type="number" step="0.01" class="form-control" id="amount" name="amount" required>
                             </div>
                         </div>
+
+                        <!-- Currency selector -->
                         <div class="col-md-3 mb-3">
                             <label for="currency" class="form-label">Currency</label>
                             <select class="form-select" id="currency" name="currency">
@@ -27,6 +31,8 @@
                                 {% endfor %}
                             </select>
                         </div>
+
+                        <!-- Transaction type -->
                         <div class="col-md-3 mb-3">
                             <label for="type" class="form-label">Type</label>
                             <select class="form-select" id="type" name="type" required>
@@ -36,6 +42,7 @@
                         </div>
                     </div>
 
+                    <!-- Category selector (populated by type) -->
                     <div class="mb-3">
                         <label for="category" class="form-label">Category</label>
                         <select class="form-select" id="category" name="category" required data-categories='{{ tx_categories | tojson }}'>
@@ -61,22 +68,23 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="date" class="form-label">Date</label>
-                            <input type="date" class="form-control" id="date" name="date" 
-                                   value="{{ now.strftime('%Y-%m-%d') }}" required>
+                            <input type="date" class="form-control" id="date" name="date" value="{{ now.strftime('%Y-%m-%d') }}" required>
                         </div>
-                                                <div class="col-md-6 mb-3">
-                                                        <label for="related_person" class="form-label">Related Person (Optional)</label>
-                                                        <input list="person_options" class="form-control" id="related_person" name="related_person" placeholder="Type or select a name">
-                                                        <datalist id="person_options"></datalist>
-                                                        <div class="form-text">Tip: For loan-related categories, you can select a counterparty from your open loans.</div>
-                                                </div>
+
+                        <!-- Optional related person input with datalist; helper text hints loan use -->
+                        <div class="col-md-6 mb-3">
+                            <label for="related_person" class="form-label">Related Person (Optional)</label>
+                            <input list="person_options" class="form-control" id="related_person" name="related_person" placeholder="Type or select a name">
+                            <datalist id="person_options"></datalist>
+                            <div class="form-text">Tip: For loan-related categories, you can select a counterparty from your open loans.</div>
+                        </div>
                     </div>
 
                     <div class="d-grid">
-                                                <div class="d-flex gap-2">
-                                                    <button type="submit" class="btn btn-glassy">Add Transaction</button>
-                                                    <a class="btn btn-outline-secondary" href="{{ url_for('loans') }}">View Loans</a>
-                                                </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-glassy">Add Transaction</button>
+                            <a class="btn btn-outline-secondary" href="{{ url_for('loans') }}">View Loans</a>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -86,61 +94,89 @@
 
 {% block extra_js %}
 <script>
-const TX_CATEGORIES = JSON.parse(document.getElementById('category').dataset.categories || '{}');
-document.getElementById('category').dataset.initialized = '1';
-document.getElementById('type').addEventListener('change', function() {
-    const catSel = document.getElementById('category');
-    const kind = this.value === 'income' ? 'income' : 'expense';
-    const groups = [];
-    const catObj = TX_CATEGORIES[kind] || {};
-    const opts = Object.entries(catObj).map(([val, labels]) => `<option value="${val}">${(labels && labels.en) || val}</option>`).join('');
-    groups.push(`<optgroup label="${kind.charAt(0).toUpperCase()+kind.slice(1)}">${opts}</optgroup>`);
-    catSel.innerHTML = '<option value="">Select a category</option>' + groups.join('');
-});
-
-// Update currency symbol prefix when currency selection changes
-document.addEventListener('DOMContentLoaded', function() {
-    const sel = document.getElementById('currency');
-    const prefix = document.getElementById('tx-amount-prefix');
-    if (sel && prefix) {
-        const update = () => { const sym = sel.options[sel.selectedIndex]?.dataset?.symbol || '{{ currency_symbol }}'; prefix.textContent = sym; };
-        sel.addEventListener('change', update);
-        update();
-    }
-});
-
-// Populate datalist with counterparties for selected loan categories
-const categoryEl = document.getElementById('category');
-const personList = document.getElementById('person_options');
-function kindForCategory(cat) {
-    const v = (cat || '').toLowerCase();
-    if (v === 'repaid by me') return 'repaid_by_me';
-    if (v === 'repaid to me') return 'repaid_to_me';
-    // For initiating loans, we don't restrict; show all open counterparties
-    if (v === 'borrowed' || v === 'lent out') return null;
-    return undefined; // not a loan category
-}
-
-async function refreshCounterparties() {
-    const cat = categoryEl?.value;
-    const kind = kindForCategory(cat);
-    if (typeof kind === 'undefined') { personList.innerHTML=''; return; }
+/* Parse category definitions provided by the server; used to rebuild category options when type changes */
+const TX_CATEGORIES = (function() {
     try {
-        const url = new URL("{{ url_for('api_loan_counterparties') }}", window.location.origin);
-        if (kind) url.searchParams.set('kind', kind);
-        const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' }});
-        const data = await res.json();
-        personList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
-    } catch(e) {
-        personList.innerHTML = '';
+        return JSON.parse(document.getElementById('category').dataset.categories || '{}');
+    } catch (e) {
+        return {};
     }
-}
+})();
 
-if (categoryEl) {
+/* Update category <select> when transaction type changes (income vs expense) */
+(function() {
+    const typeEl = document.getElementById('type');
+    const catSel = document.getElementById('category');
+    if (!typeEl || !catSel) return;
+
+    function rebuildCategories(kind) {
+        const catObj = TX_CATEGORIES[kind] || {};
+        const opts = Object.entries(catObj)
+            .map(([val, labels]) => `<option value="${val}">${(labels && labels.en) || val}</option>`)
+            .join('');
+        catSel.innerHTML = '<option value="">Select a category</option>' +
+            `<optgroup label="${kind.charAt(0).toUpperCase() + kind.slice(1)}">${opts}</optgroup>`;
+    }
+
+    typeEl.addEventListener('change', () => {
+        const kind = typeEl.value === 'income' ? 'income' : 'expense';
+        rebuildCategories(kind);
+    });
+})();
+
+/* Keep the amount prefix in sync with the selected currency */
+(function() {
+    document.addEventListener('DOMContentLoaded', () => {
+        const sel = document.getElementById('currency');
+        const prefix = document.getElementById('tx-amount-prefix');
+        if (!sel || !prefix) return;
+        const updatePrefix = () => {
+            const sym = sel.options[sel.selectedIndex]?.dataset?.symbol || '{{ currency_symbol }}';
+            prefix.textContent = sym;
+        };
+        sel.addEventListener('change', updatePrefix);
+        updatePrefix();
+    });
+})();
+
+/* Populate datalist for counterparties depending on selected category.
+   Loan categories map to specific 'kind' values that the API recognizes.
+*/
+(function() {
+    const categoryEl = document.getElementById('category');
+    const personList = document.getElementById('person_options');
+    if (!categoryEl || !personList) return;
+
+    function kindForCategory(cat) {
+        const v = (cat || '').toString().toLowerCase();
+        if (v === 'repaid by me') return 'repaid_by_me';
+        if (v === 'repaid to me') return 'repaid_to_me';
+        if (v === 'borrowed' || v === 'lent out') return null; // show all open counterparties
+        return undefined; // not a loan category
+    }
+
+    async function refreshCounterparties() {
+        const cat = categoryEl.value;
+        const kind = kindForCategory(cat);
+        if (typeof kind === 'undefined') {
+            personList.innerHTML = '';
+            return;
+        }
+        try {
+            const url = new URL("{{ url_for('api_loan_counterparties') }}", window.location.origin);
+            if (kind) url.searchParams.set('kind', kind);
+            const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' }});
+            if (!res.ok) throw new Error('Failed to fetch counterparties');
+            const data = await res.json();
+            personList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
+        } catch (e) {
+            personList.innerHTML = '';
+        }
+    }
+
     categoryEl.addEventListener('change', refreshCounterparties);
-    // initial
-    refreshCounterparties();
-}
+    refreshCounterparties(); // initial population
+})();
 </script>
 {% endblock %}
 {% endblock %}

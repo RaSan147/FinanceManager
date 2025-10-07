@@ -1,5 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Diary{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/diary.css') }}">
+{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0 heading-responsive"><i class="fa-solid fa-book-open"></i> <span class="heading-text">Diary</span></h2>

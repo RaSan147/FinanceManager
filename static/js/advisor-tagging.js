@@ -50,8 +50,9 @@ class TagManager {
 
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'btn-close btn-close-white ms-1';
+            btn.className = 'btn chip-close chip-close-light ms-1';
             btn.setAttribute('aria-label', 'Remove');
+            btn.innerHTML = "<i class='fa-solid fa-xmark' aria-hidden='true'></i>";
             btn.addEventListener('click', () => this.removeTag(tag));
 
             element.appendChild(btn);

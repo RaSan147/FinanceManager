@@ -15,14 +15,14 @@
                 <span class="d-none d-md-inline">Markdown</span>
               </label>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary action-btn" data-todo-detail-edit-btn title="Edit"><i class="bi bi-pencil"></i><span class="d-none d-sm-inline ms-1">Edit</span></button>
-            <button type="button" class="btn btn-sm btn-success d-none action-btn" data-todo-detail-save-btn title="Save"><i class="bi bi-check-lg"></i><span class="d-none d-sm-inline ms-1">Save</span></button>
-            <button type="button" class="btn btn-sm btn-outline-secondary d-none action-btn" data-todo-detail-cancel-btn title="Cancel"><i class="bi bi-x-lg"></i><span class="d-none d-sm-inline ms-1">Cancel</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary action-btn" data-todo-detail-edit-btn title="Edit"><i class="fa-solid fa-pen" aria-hidden="true"></i><span class="d-none d-sm-inline ms-1">Edit</span></button>
+            <button type="button" class="btn btn-sm btn-success d-none action-btn" data-todo-detail-save-btn title="Save"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="d-none d-sm-inline ms-1">Save</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary d-none action-btn" data-todo-detail-cancel-btn title="Cancel"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span class="d-none d-sm-inline ms-1">Cancel</span></button>
             <button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
         </div>
       </div>
-      <div class="modal-body" data-todo-detail-body>
+  <div class="modal-body" data-todo-detail-body data-todo-detail-root>
         <div class="card mb-3">
           <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between">
             <div class="todo-detail-card-title">
@@ -42,13 +42,18 @@
   <div class="mb-3" data-markdown-container data-todo-detail-description></div>
         <!-- Inline edit form (hidden until Edit clicked) -->
         <form class="row g-3 d-none" data-todo-detail-edit-form autocomplete="off">
-          <div class="col-md-6">
-            <label class="form-label">Title</label>
-            <input type="text" class="form-control" name="title" required maxlength="200" data-todo-detail-edit-title>
+          <div class="col-12">
+            <label class="form-label" for="todoEditTitle">Title</label>
+            <input id="todoEditTitle" type="text" class="form-control" name="title" required maxlength="200" data-todo-detail-edit-title>
           </div>
-          <div class="col-md-3">
-            <label class="form-label">Category</label>
-            <input list="todoCategoriesGlobal" type="text" class="form-control" name="category" maxlength="60" data-todo-detail-edit-category>
+          <div class="col-12">
+            <label class="form-label" for="todoEditCategoryInput">Categories</label>
+            <div class="input-group input-group-sm mb-2" role="group" aria-label="Add category">
+              <input id="todoEditCategoryInput" type="text" class="form-control form-control-sm" list="todoCategoriesGlobal" placeholder="Add category" data-todo-detail-category-input />
+              <button type="button" class="btn btn-outline-secondary" data-todo-detail-add-btn title="Add category"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            </div>
+            <div class="d-flex flex-wrap gap-1 category-chips" data-todo-detail-categories></div>
+            <input type="hidden" name="categories" data-todo-detail-categories-json />
           </div>
           <div class="col-md-3">
             <label class="form-label">Stage</label>
@@ -61,8 +66,8 @@
             <input type="date" class="form-control" name="due_date" data-todo-detail-edit-due>
           </div>
           <div class="col-12">
-            <label class="form-label">Description</label>
-            <textarea class="form-control" name="description" rows="4" maxlength="5000" data-todo-detail-edit-description></textarea>
+            <label class="form-label" for="todoEditDescription">Description</label>
+            <textarea id="todoEditDescription" class="form-control" name="description" rows="4" maxlength="5000" data-todo-detail-edit-description></textarea>
           </div>
         </form>
         <hr>
@@ -78,7 +83,7 @@
           <div class="d-flex gap-2 align-items-center mb-2">
             <div class="file-input-wrapper">
               <button type="button" class="btn btn-sm btn-outline-secondary" data-todo-comment-image-trigger title="Add images">
-                <i class="bi bi-images"></i>
+                <i class="fa-solid fa-images" aria-hidden="true"></i>
               </button>
               <input type="file" accept="image/*" data-todo-comment-image multiple>
             </div>
@@ -87,7 +92,7 @@
           </div>
           <div class="mt-2">
             <div class="d-flex flex-wrap gap-2" data-todo-comment-images-preview aria-label="Selected images preview"></div>
-            <button type="button" class="btn btn-sm btn-outline-danger mt-2 d-none" data-todo-comment-images-clear><i class="bi bi-x-circle"></i><span class="d-none d-sm-inline ms-1">Clear Images</span></button>
+            <button type="button" class="btn btn-sm btn-outline-danger mt-2 d-none" data-todo-comment-images-clear><i class="fa-regular fa-circle-xmark" aria-hidden="true"></i><span class="d-none d-sm-inline ms-1">Clear Images</span></button>
           </div>
           <button type="submit" class="btn btn-sm btn-primary mt-3">Post Comment</button>
         </form>

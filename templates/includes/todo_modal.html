@@ -8,14 +8,19 @@
       <form data-todo-form autocomplete="off">
         <div class="modal-body row g-3">
           <input type="hidden" name="_id" data-todo-id>
-          <div class="col-md-6">
-            <label class="form-label">Title</label>
-            <input type="text" class="form-control" name="title" required maxlength="200">
+          <div class="col-12">
+            <label class="form-label" for="todoCreateTitle">Title</label>
+            <input id="todoCreateTitle" type="text" class="form-control" name="title" required maxlength="200">
           </div>
-          <div class="col-md-3">
-            <label class="form-label">Category</label>
-            <input list="todoCategoriesGlobal" type="text" class="form-control" name="category" maxlength="60" placeholder="Category (or create new)">
+          <div class="col-12">
+            <label class="form-label" for="todoCreateCategoryInput">Categories</label>
+            <div class="input-group input-group-sm mb-2" role="group" aria-label="Add category">
+              <input id="todoCreateCategoryInput" type="text" class="form-control form-control-sm" list="todoCategoriesGlobal" placeholder="Add category" data-todo-create-category-input />
+              <button type="button" class="btn btn-outline-secondary" data-todo-create-add-btn title="Add category"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            </div>
+            <div class="d-flex flex-wrap gap-1 category-chips" data-todo-create-categories></div>
             <datalist id="todoCategoriesGlobal"></datalist>
+            <input type="hidden" name="categories" data-todo-create-categories-json />
           </div>
             <div class="col-md-3">
               <label class="form-label">Stage</label>
@@ -28,8 +33,8 @@
             <input type="date" class="form-control" name="due_date">
           </div>
           <div class="col-12">
-            <label class="form-label">Description</label>
-            <textarea class="form-control" name="description" rows="4" maxlength="5000"></textarea>
+            <label class="form-label" for="todoCreateDescription">Description</label>
+            <textarea id="todoCreateDescription" class="form-control" name="description" rows="4" maxlength="5000"></textarea>
           </div>
           <div class="col-12 small text-muted" data-todo-meta></div>
         </div>

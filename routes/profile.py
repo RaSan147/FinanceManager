@@ -144,4 +144,56 @@ def init_profile_blueprint(mongo):
             user.update(update_data)
         return jsonify({'user': _sanitize_user(user)})
 
+    @bp.route('/api/profile/export', methods=['POST'], endpoint='api_profile_export')
+    @login_required
+    def api_profile_export():
+        """Return up to `limit` items for the requested export_type.
+        Supported types: transactions, goals, diary, todos, loans, advice
+        """
+        data = request.get_json(silent=True) or {}
+        export_type = (data.get('export_type') or '').strip().lower()
+        try:
+            limit = int(data.get('limit', 1000))
+        except Exception:
+            limit = 1000
+        limit = max(1, min(1000, limit))
+
+        collection_map = {
+            'transactions': ('transactions', {'user_id': current_user.id}),
+            'goals': ('goals', {'user_id': current_user.id}),
+            'diary': ('diary', {'user_id': current_user.id}),
+            'todos': ('todos', {'user_id': current_user.id}),
+            'loans': ('loans', {'user_id': current_user.id}),
+            'advice': ('purchase_advice', {'user_id': current_user.id}),
+        }
+
+        if export_type not in collection_map:
+            return jsonify({'error': 'Unsupported export type'}), 400
+
+        coll_name, query = collection_map[export_type]
+        try:
+            cursor = mongo.db[coll_name].find(query).sort('created_at', -1).limit(limit)
+            items = []
+            for doc in cursor:
+                # sanitize document: convert _id and any ObjectId fields to str
+                flat = {}
+                for k, v in doc.items():
+                    if k == '_id':
+                        flat[k] = str(v)
+                    else:
+                        try:
+                            # try to convert ObjectId-like values
+                            from bson import ObjectId as _OID
+                            if isinstance(v, _OID):
+                                flat[k] = str(v)
+                            else:
+                                flat[k] = v
+                        except Exception:
+                            flat[k] = v
+                items.append(flat)
+            return jsonify({'items': items})
+        except Exception as e:
+            return jsonify({'error': 'Failed to fetch export data', 'message': str(e)}), 500
+
     return bp
+

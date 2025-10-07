@@ -59,10 +59,13 @@
   const escapeHtml = h.escapeHtml || (s => (s||'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[c])));
   const money = h.money || ((amt,sym)=> (sym||'') + Number(amt||0).toFixed(2));
       const row = createEl('tr');
-      const dateDisp = (h.safeDateString ? h.safeDateString(this.data.date,{ month:'short', day:'2-digit', year: context==='recent'?'numeric':'numeric' }) : this.dateISO()) || '';
-      row.appendChild(createEl('td', { 'data-label':'Date' }, dateDisp));
-      row.appendChild(createEl('td', { 'data-label':'Description' }, escapeHtml(this.description())));
-  row.appendChild(createEl('td', { 'data-label':'Category' }, escapeHtml(this.categoryLabel())));
+  // Always display ISO date YYYY-MM-DD for consistency
+  const dateDisp = (h.safeDateString ? h.safeDateString(this.data.date) : this.dateISO()) || '';
+    row.appendChild(createEl('td', { 'data-label':'Date' }, dateDisp));
+    // createEl appends text nodes for string children, which is safe and will not interpret HTML
+    // Avoid pre-escaping here to prevent entities (e.g. "&#39;") appearing in the UI
+    row.appendChild(createEl('td', { 'data-label':'Description' }, this.description()));
+  row.appendChild(createEl('td', { 'data-label':'Category' }, this.categoryLabel()));
       const amtMetaCls = this.amountClass();
       const amtTxt = this.amountSign() + money(this.amount(), this.currencySymbol);
       row.appendChild(createEl('td', { 'data-label':'Amount', class: amtMetaCls }, amtTxt));
@@ -71,9 +74,9 @@
         const actions = createEl('td', { 'data-label':'Actions', class:'d-flex gap-1' });
         const editBtn = createEl('button', { class:'btn btn-sm btn-outline-secondary', 'data-edit-id': this.id() });
         try { editBtn.setAttribute('data-edit-json', JSON.stringify(this.toEditPayload())); } catch(_){ }
-        editBtn.appendChild(createEl('i', { class:'bi bi-pencil' }));
-        const delBtn = createEl('button', { class:'btn btn-sm btn-danger', 'data-delete-id': this.id() });
-        delBtn.appendChild(createEl('i', { class:'bi bi-trash' }));
+  editBtn.appendChild(createEl('i', { class:'fa-solid fa-pen', 'aria-hidden':'true' }));
+  const delBtn = createEl('button', { class:'btn btn-sm btn-danger', 'data-delete-id': this.id() });
+  delBtn.appendChild(createEl('i', { class:'fa-solid fa-trash', 'aria-hidden':'true' }));
         actions.appendChild(editBtn); actions.appendChild(delBtn);
         row.appendChild(actions);
       }
