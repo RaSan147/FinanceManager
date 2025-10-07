@@ -162,8 +162,25 @@ def init_ai_blueprint(mongo, spending_advisor: SpendingAdvisor, pastebin_client)
         skip = (page - 1) * page_size
         user_id = current_user.id
         total = mongo.db.purchase_advice.count_documents({'user_id': user_id, 'is_archived': False})
+        # Use an inclusion projection to avoid mixing inclusion/exclusion in MongoDB.
+        # Explicitly include the lightweight 'advice_summary' and the fields the frontend expects.
+        projection = {
+            'advice_summary': 1,
+            'request': 1,
+            'created_at': 1,
+            'category': 1,
+            'amount': 1,
+            'tags': 1,
+            'user_action': 1,
+            'pastebin_url': 1,
+            'is_archived': 1,
+            'user_id': 1
+        }
         advices = list(
-            mongo.db.purchase_advice.find({'user_id': user_id, 'is_archived': False}, {'advice': 0})
+            mongo.db.purchase_advice.find(
+                {'user_id': user_id, 'is_archived': False},
+                projection
+            )
             .sort('created_at', -1)
             .skip(skip)
             .limit(page_size)

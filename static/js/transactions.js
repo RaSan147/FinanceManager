@@ -105,7 +105,7 @@
     formEl.currency.value = tx.currency || window.currencyCode || '';
     formEl.type.value = tx.type || 'income';
     formEl.description.value = tx.description || '';
-  formEl.date.value = dateISO || (window.SiteDate ? window.SiteDate.toDateString(new Date()) : (new Date().toISOString().slice(0,10)));
+  formEl.date.value = dateISO || window.SiteDate.toDateString(new Date());
     formEl.related_person.value = tx.related_person || '';
     titleEl.textContent = 'Edit Transaction';
     submitBtn.textContent = 'Update';
@@ -125,7 +125,7 @@
       const fd = new FormData(formEl);
       const id = idInput.value.trim();
       const payload = Object.fromEntries(fd.entries());
-  if (payload.date instanceof Date) payload.date = (window.SiteDate ? window.SiteDate.toDateString(payload.date) : payload.date.toISOString().slice(0,10));
+  if (payload.date instanceof Date) payload.date = window.SiteDate.toDateString(payload.date);
       try {
         const url = id ? `/api/transactions/${id}` : '/api/transactions';
         const method = id ? 'PATCH' : 'POST';
@@ -141,10 +141,8 @@
             const row = btn?.closest('tr');
             if (row) {
               const item = data.item;
-              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-              // Use SiteDate for consistent parsing/formatting
-              const parsed = window.SiteDate ? window.SiteDate.parse(item.date || item._date || item.created_at) : (new Date(item.date || item._date || item.created_at));
-              const dateStr = parsed && !isNaN(parsed.getTime()) ? `${monthNames[parsed.getUTCMonth()]} ${String(parsed.getUTCDate()).padStart(2, '0')}, ${parsed.getUTCFullYear()}` : '';
+              // Use SiteDate for consistent ISO date formatting (YYYY-MM-DD)
+              const dateStr = window.SiteDate.toDateString(item.date || item._date || item.created_at);
               const currencySymbol = qs('[data-transactions-table]')?.getAttribute('data-currency-symbol') || '';
               const sign = item.type === 'income' ? '+' : '-';
               const cls = item.type === 'income' ? 'text-success' : 'text-danger';
@@ -165,7 +163,7 @@
                     type: item.type,
                     category: item.category,
                     description: item.description,
-                    date: window.SiteDate ? window.SiteDate.toDateString(item.date || item._date || item.created_at) : ((item.date || '').slice ? (item.date || '').slice(0, 10) : item.date),
+                    date: window.SiteDate.toDateString(item.date || item._date || item.created_at),
                     related_person: item.related_person || ''
                   };
                   btn.setAttribute('data-edit-json', JSON.stringify(editPayload));

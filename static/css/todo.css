@@ -1,4 +1,79 @@
 /* To-Do page styles (migrated from css/components/todo.css) */
+.category-chips .badge.tag-badge { margin-right: .25rem; margin-bottom: .25rem; }
+.tag-badge {
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+/* Deterministic tag colors (10-color palette) */
+:root {
+  --tag-0: #6ea8fe;
+  --tag-1: #f5b971;
+  --tag-2: #9ad0f5;
+  --tag-3: #b69df7;
+  --tag-4: #6edff6;
+  --tag-5: #ffb3c7;
+  --tag-6: #95e0a8;
+  --tag-7: #ffd778;
+  --tag-8: #e5a6ff;
+  --tag-9: #9ad5b3;
+  --tag-ink: #0b1324;
+}
+body.dark-mode {
+  --tag-0: #3a78ff;
+  --tag-1: #d3944c;
+  --tag-2: #5fb2e3;
+  --tag-3: #8a70ea;
+  --tag-4: #3fcfe6;
+  --tag-5: #e982a0;
+  --tag-6: #4cc57a;
+  --tag-7: #e2b341;
+  --tag-8: #c078ee;
+  --tag-9: #63c192;
+  --tag-ink: #0e1726;
+}
+
+.tag-color-0 { background: color-mix(in srgb, var(--tag-0), transparent 10%); color: #0b0f14; border-color: color-mix(in srgb, var(--tag-0), black 75%); }
+.tag-color-1 { background: color-mix(in srgb, var(--tag-1), transparent 10%); color: #23160a; border-color: color-mix(in srgb, var(--tag-1), black 75%); }
+.tag-color-2 { background: color-mix(in srgb, var(--tag-2), transparent 10%); color: #08151c; border-color: color-mix(in srgb, var(--tag-2), black 75%); }
+.tag-color-3 { background: color-mix(in srgb, var(--tag-3), transparent 10%); color: #130f1b; border-color: color-mix(in srgb, var(--tag-3), black 75%); }
+.tag-color-4 { background: color-mix(in srgb, var(--tag-4), transparent 10%); color: #051617; border-color: color-mix(in srgb, var(--tag-4), black 75%); }
+.tag-color-5 { background: color-mix(in srgb, var(--tag-5), transparent 10%); color: #1e0d12; border-color: color-mix(in srgb, var(--tag-5), black 75%); }
+.tag-color-6 { background: color-mix(in srgb, var(--tag-6), transparent 10%); color: #0d1710; border-color: color-mix(in srgb, var(--tag-6), black 75%); }
+.tag-color-7 { background: color-mix(in srgb, var(--tag-7), transparent 10%); color: #211a0a; border-color: color-mix(in srgb, var(--tag-7), black 75%); }
+.tag-color-8 { background: color-mix(in srgb, var(--tag-8), transparent 10%); color: #1b0f21; border-color: color-mix(in srgb, var(--tag-8), black 75%); }
+.tag-color-9 { background: color-mix(in srgb, var(--tag-9), transparent 10%); color: #0f1b14; border-color: color-mix(in srgb, var(--tag-9), black 75%); }
+
+body.dark-mode .tag-color-0,
+body.dark-mode .tag-color-1,
+body.dark-mode .tag-color-2,
+body.dark-mode .tag-color-3,
+body.dark-mode .tag-color-4,
+body.dark-mode .tag-color-5,
+body.dark-mode .tag-color-6,
+body.dark-mode .tag-color-7,
+body.dark-mode .tag-color-8,
+body.dark-mode .tag-color-9 {
+  color: #e9eef8;
+  border-color: color-mix(in srgb, currentColor, transparent 80%);
+}
+
+/* Stage badges (consistent look across views) */
+.stage-badge { font-weight: 600; border: 1px solid var(--border-color); }
+.stage-wondering { background: rgba(108, 117, 125, .12); color: var(--bs-secondary-text, #495057); }
+.stage-planning { background: rgba(13, 202, 240, .14); color: #055160; }
+.stage-in_progress { background: rgba(13, 110, 253, .12); color: #084298; }
+.stage-paused { background: rgba(255, 193, 7, .16); color: #664d03; }
+.stage-gave_up { background: rgba(220, 53, 69, .12); color: #842029; }
+.stage-done { background: rgba(25, 135, 84, .14); color: #0f5132; }
+body.dark-mode .stage-wondering { background: rgba(108, 117, 125, .22); color: #ced4da; }
+body.dark-mode .stage-planning { background: rgba(13, 202, 240, .18); color: #b6effb; }
+body.dark-mode .stage-in_progress { background: rgba(13, 110, 253, .18); color: #9ec5fe; }
+body.dark-mode .stage-paused { background: rgba(255, 193, 7, .22); color: #ffe69c; }
+body.dark-mode .stage-gave_up { background: rgba(220, 53, 69, .18); color: #f1aeb5; }
+body.dark-mode .stage-done { background: rgba(25, 135, 84, .18); color: #a3cfbb; }
+
 .todo-stage-badge {
   font-size: 0.7rem;
 }
@@ -61,8 +136,86 @@
 
 .todo-item {
   position: relative;
-  transition: background-color .15s, box-shadow .15s, box;
+  transition: background-color .2s, box-shadow .2s, transform .06s;
   cursor: pointer;
+}
+
+/* Card-like styling and hover affordance */
+.todo-item.card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+.todo-item.card:hover {
+  background-color: var(--hover-bg);
+  box-shadow: var(--shadow-sm);
+  /* transform: translateY(-1px); */
+  border-color: rgba(var(--accent-primary-rgb), .25);
+}
+body.dark-mode .todo-item.card:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  box-shadow: var(--shadow-md);
+}
+
+/* Stage color variables (used for borders and dots) */
+:root {
+  --stage-color-wondering: #6c757d; /* secondary */
+  --stage-color-planning: #0dcaf0;  /* info */
+  --stage-color-in_progress: #0d6efd; /* primary */
+  --stage-color-paused: #ffc107;    /* warning */
+  --stage-color-gave_up: #dc3545;   /* danger */
+  --stage-color-done: #198754;      /* success */
+}
+body.dark-mode {
+  /* Keep strong, readable colors in dark mode */
+  --stage-color-wondering: #8b96a0;
+  --stage-color-planning: #39d6f3;
+  --stage-color-in_progress: #3c8bff;
+  --stage-color-paused: #ffd058;
+  --stage-color-gave_up: #f06b7a;
+  --stage-color-done: #34c787;
+}
+
+/* Reinstate left accent border AFTER card border so it's not overridden */
+.todo-item.wondering { border-left: 4px solid var(--stage-color-wondering) !important; }
+.todo-item.planning { border-left: 4px solid var(--stage-color-planning) !important; }
+.todo-item.in_progress { border-left: 4px solid var(--stage-color-in_progress) !important; }
+.todo-item.paused { border-left: 4px solid var(--stage-color-paused) !important; }
+.todo-item.gave_up { border-left: 4px solid var(--stage-color-gave_up) !important; }
+.todo-item.done { border-left: 4px solid var(--stage-color-done) !important; }
+
+/* Small colored dots for stage menu */
+.stage-dot {
+  display: inline-block;
+  width: .66em;
+  height: .66em;
+  border-radius: 50%;
+  margin-right: .4rem;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.08) inset;
+}
+.stage-dot-all { background: linear-gradient(135deg, #adb5bd 0%, #6c757d 100%); }
+.stage-dot-wondering { background: var(--stage-color-wondering); }
+.stage-dot-planning { background: var(--stage-color-planning); }
+.stage-dot-in_progress { background: var(--stage-color-in_progress); }
+.stage-dot-paused { background: var(--stage-color-paused); }
+.stage-dot-gave_up { background: var(--stage-color-gave_up); }
+.stage-dot-done { background: var(--stage-color-done); }
+
+/* Title hover cue */
+.todo-item:hover .todo-title {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Category and due badges subtle hover */
+.todo-item .todo-category,
+.todo-item .todo-due {
+  transition: box-shadow .2s, filter .2s, opacity .2s;
+}
+.todo-item .todo-category:hover,
+.todo-item .todo-due:hover {
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .28);
+  filter: saturate(1.05);
+  opacity: .95;
 }
 
 .view-selector {
@@ -271,6 +424,15 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border {
 #todoDetailModal .todo-detail-actions .btn {
   padding: .45rem .75rem;
   font-size: .88rem;
+}
+
+/* Ensure high-contrast hover for outline secondary action buttons in modal (light mode) */
+:root:not([data-theme="dark"]) body:not(.dark-mode) #todoDetailModal .todo-detail-actions .btn-outline-secondary:hover,
+:root:not([data-theme="dark"]) body:not(.dark-mode) #todoDetailModal .todo-detail-actions .btn-outline-secondary:focus,
+:root:not([data-theme="dark"]) body:not(.dark-mode) #todoDetailModal .todo-detail-actions .btn-outline-secondary:active {
+  background-color: var(--bs-secondary, #6c757d);
+  color: #fff;
+  border-color: var(--bs-secondary, #6c757d);
 }
 
 /* Description area: allow long content but keep modal tidy */

@@ -26,8 +26,27 @@
 }
 
 .toggle-icon {
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
 	font-size: 14px;
-	z-index: 1;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1; /* default under the ball */
+	pointer-events: none; /* allow clicking anywhere on the label */
+	color: var(--text-secondary);
+	opacity: .8;
+	transition: opacity .2s ease, color .2s ease, z-index .2s ease, text-shadow .2s ease;
+}
+
+/* Place icons at the exact centers of the two positions of the ball */
+.toggle-icon.moon { left: 16px; }
+.toggle-icon.sun { left: 44px; }
+
+.toggle-icon i {
+	font-size: 14px;
 }
 
 .toggle-ball {
@@ -38,8 +57,35 @@
 	border-radius: 50%;
 	transition: transform .3s ease;
 	left: 5px;
+	z-index: 2; /* ball overlays inactive icon */
 }
 
 .toggle-checkbox:checked+.toggle-label .toggle-ball {
-	transform: translateX(30px);
+	/* move the ball by inner width (60 - 10 padding) minus ball width: 50 - 22 = 28 */
+	transform: translateX(28px);
+}
+
+/* State-based emphasis: icon under the ball gets highlighted (white, above ball); the other uses theme text color */
+.toggle-checkbox:not(:checked)+.toggle-label .moon {
+	opacity: 1;
+	color: #fff; /* ball sits on left in unchecked state */
+	text-shadow: 0 0 2px rgba(0,0,0,.2);
+	z-index: 3;
+}
+.toggle-checkbox:not(:checked)+.toggle-label .sun {
+	opacity: .75;
+	color: var(--text-secondary);
+	z-index: 1;
+}
+
+.toggle-checkbox:checked+.toggle-label .sun {
+	opacity: 1;
+	color: #fff; /* ball sits on right in checked state */
+	text-shadow: 0 0 2px rgba(0,0,0,.2);
+	z-index: 3;
+}
+.toggle-checkbox:checked+.toggle-label .moon {
+	opacity: .75;
+	color: var(--text-secondary);
+	z-index: 1;
 }

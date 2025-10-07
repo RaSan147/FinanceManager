@@ -5,25 +5,26 @@
 {% block content %}
 <div class="row" data-dynamic-dashboard>
     <div class="col-md-8">
-<div class="card mb-4" data-monthly-summary>
+        <!-- Monthly summary: totals for the selected month -->
+        <div class="card mb-4" data-monthly-summary>
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0" data-ms-title>Monthly Summary - {{ summary.month }} ({{ currency_code }})</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Income</h6>
                             <h4 class="mb-0 text-success" data-ms-income>{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h4>
                         </div>
                     </div>
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Expenses</h6>
                             <h4 class="mb-0 text-danger" data-ms-expenses>{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h4>
                         </div>
                     </div>
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Savings</h6>
                             <h4 class="mb-0 text-info" data-ms-savings>{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h4>
@@ -33,25 +34,26 @@
             </div>
         </div>
 
+        <!-- Lifetime summary: aggregated totals across all data -->
         <div class="card mb-4" data-lifetime-summary>
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0">Complete Financial Picture</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Total Income</h6>
                             <h4 class="mb-0 text-success" data-lt-income>{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_income) }}</h4>
                         </div>
                     </div>
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Total Expenses</h6>
                             <h4 class="mb-0 text-danger" data-lt-expenses>{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_expenses) }}</h4>
                         </div>
                     </div>
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Current Balance</h6>
                             <h4 class="mb-0 text-info" data-lt-balance>{{ currency_symbol }}{{ "{:,.2f}".format(balance.current_balance) }}</h4>
@@ -63,16 +65,18 @@
                 </div>
             </div>
         </div>
-		
+
+        <!-- Recent transactions with quick Add button -->
         <div class="card mb-4" data-recent-transactions>
-                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0">Recent Transactions</h5>
-                                <div class="header-actions d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-light" data-open-transaction-modal aria-label="Add Transaction" title="Add Transaction">
-                                        <i class="fa-solid fa-plus"></i><span class="d-none d-md-inline ms-1">Add</span>
-                                    </button>
-                                </div>
-                        </div>
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Recent Transactions</h5>
+                <div class="header-actions d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-light" data-open-transaction-modal aria-label="Add Transaction" title="Add Transaction">
+                        <i class="fa-solid fa-plus"></i>
+                        <span class="d-none d-md-inline ms-1">Add</span>
+                    </button>
+                </div>
+            </div>
             <div class="card-body">
                 {% if transactions %}
                 <div class="table-responsive">
@@ -85,10 +89,10 @@
                                 <th>Amount</th>
                             </tr>
                         </thead>
-            <tbody data-recent-transactions-body>
+                        <tbody data-recent-transactions-body>
                             {% for t in transactions %}
                             <tr>
-                                <td data-label="Date">{{ t.date.strftime('%b %d') }}</td>
+                                <td data-label="Date">{{ t.date.strftime('%Y-%m-%d') }}</td>
                                 <td data-label="Description">{{ t.description }}</td>
                                 {% if tx_categories is mapping %}
                                     {% set labels = tx_categories.get(t.type, {}).get(t.category, {}) %}
@@ -118,77 +122,85 @@
     </div>
 
     <div class="col-md-4">
-                <div class="card mb-4" data-active-goals-wrapper>
-                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0">Active Goals</h5>
-                                <div class="header-actions d-flex gap-2">
-                                <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-sm btn-light" aria-label="Add Goal" title="Add Goal">
-                                        <i class="fa-solid fa-plus"></i><span class="d-none d-md-inline ms-1">Add</span>
-                                    </a>
-                                </div>
-                        </div>
+        <!-- Active goals list -->
+        <div class="card mb-4" data-active-goals-wrapper>
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Active Goals</h5>
+                <div class="header-actions d-flex gap-2">
+                    <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-sm btn-light" aria-label="Add Goal" title="Add Goal">
+                        <i class="fa-solid fa-plus"></i>
+                        <span class="d-none d-md-inline ms-1">Add</span>
+                    </a>
+                </div>
+            </div>
             <div class="card-body">
                 <div data-active-goals>
                     {% if goals %}
-                    {% for goal in goals %}
-                    <div class="mb-3 goal-item">
-                        <h6>{{ goal.description }}</h6>
-                        <div class="d-flex justify-content-between mb-1">
-                            {% set gsym = currency_symbols.get(goal.currency|default(currency_code), currency_symbol) %}
-                            <small>Target: {{ gsym }}{{ "{:,.2f}".format(goal.target_amount) }}</small>
-                            <small>{{ goal.target_date.strftime('%b %d, %Y') }}</small>
+                        {% for goal in goals %}
+                        <div class="mb-3 goal-item">
+                            <h6>{{ goal.description }}</h6>
+                            <div class="d-flex justify-content-between mb-1">
+                                {% set gsym = currency_symbols.get(goal.currency|default(currency_code), currency_symbol) %}
+                                <small>Target: {{ gsym }}{{ "{:,.2f}".format(goal.target_amount) }}</small>
+                                <small>{{ goal.target_date.strftime('%Y-%m-%d') }}</small>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: {{ goal.progress.progress_percent }}%">{{ goal.progress.progress_percent }}%</div>
+                            </div>
                         </div>
-                        <div class="progress">
-                            <div class="progress-bar" role="progressbar" style="width: {{ goal.progress.progress_percent }}%">{{ goal.progress.progress_percent }}%</div>
-                        </div>
-                    </div>
-                    {% endfor %}
+                        {% endfor %}
                     {% else %}
                     <div class="text-center py-4">
                         <p class="text-muted">No active goals.</p>
-                            <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-primary">Set a Goal</a>
+                        <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-primary">Set a Goal</a>
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-    <div class="card quick-actions-card">
+        <!-- Quick actions -->
+        <div class="card quick-actions-card">
             <div class="card-header bg-primary text-white">
                 <h5 class="card-title mb-0">Quick Actions</h5>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-            <button type="button" class="btn btn-outline-primary quick-action" data-open-transaction-modal>
-                        <i class="bi bi-plus-circle"></i> Add Transaction
+                    <button type="button" class="btn btn-outline-primary quick-action" data-open-transaction-modal>
+                        <i class="fa-regular fa-circle-plus" aria-hidden="true"></i> Add Transaction
                     </button>
-                        <a href="{{ url_for('analysis_bp.analysis') }}" class="btn btn-outline-primary quick-action">
-                        <i class="bi bi-graph-up"></i> View Analysis
+                    <a href="{{ url_for('analysis_bp.analysis') }}" class="btn btn-outline-primary quick-action">
+                        <i class="fa-solid fa-chart-line" aria-hidden="true"></i> View Analysis
                     </a>
-                        <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-outline-primary quick-action">
-                        <i class="bi bi-bullseye"></i> Manage Goals
+                    <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-outline-primary quick-action">
+                        <i class="fa-solid fa-bullseye" aria-hidden="true"></i> Manage Goals
                     </a>
                 </div>
             </div>
         </div>
-        
+
         <div class="alert alert-info {% if days_until_income is none %}d-none{% endif %}" data-income-countdown>
             {% if days_until_income is not none %}Next income in {{ days_until_income }} day{{ 's' if days_until_income != 1 else '' }}.{% endif %}
         </div>
-
     </div>
 </div>
-
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
+/* Expose category labels and a simple accessor for client-side UI updates.
+   tx_categories: mapping injected from server
+   user_language: preferred language code (falls back to 'en') */
 window.txCategoryLabels = {{ tx_categories|tojson|safe }};
 window.txCategoryLang = {{ user_language|default('en')|tojson|safe }};
-window.getTxCategoryLabel = function(type, code){
-    try { return (window.txCategoryLabels?.[type]?.[code]?.[window.txCategoryLang]) || (window.txCategoryLabels?.[type]?.[code]?.en) || code; } catch(_){ return code; }
+window.getTxCategoryLabel = function(type, code) {
+    try {
+        return (window.txCategoryLabels?.[type]?.[code]?.[window.txCategoryLang])
+            || (window.txCategoryLabels?.[type]?.[code]?.en)
+            || code;
+    } catch (_) {
+        return code;
+    }
 };
-// Global modal system handles [data-open-transaction-modal]; no extra JS needed here.
 </script>
 {% endblock %}

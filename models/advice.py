@@ -6,6 +6,7 @@ from collections import defaultdict
 class PurchaseAdvice:
     @staticmethod
     def save_advice(user_id, request_data, advice, db):
+        # Build base document
         doc = {
             'user_id': user_id,
             'request': request_data,
@@ -17,6 +18,24 @@ class PurchaseAdvice:
             'tags': request_data.get('tags', []),
             'user_action': 'unknown'  # can be 'followed', 'ignored', or 'unknown'
         }
+
+        # safe-build summary to avoid errors if advice is not a dict
+        summary = None
+        if isinstance(advice, dict):
+            reason_raw = advice.get('reason')
+            if isinstance(reason_raw, str):
+                reason_short = (reason_raw[:240] + '...') if len(reason_raw) > 240 else reason_raw
+            else:
+                reason_short = None
+            summary = {
+                'recommendation': advice.get('recommendation'),
+                'reason': reason_short,
+                'impact': advice.get('impact'),
+                'amount_converted': advice.get('amount_converted'),
+                'base_currency': advice.get('base_currency')
+            }
+        doc['advice_summary'] = summary
+
         return db.purchase_advice.insert_one(doc).inserted_id
 
     @staticmethod

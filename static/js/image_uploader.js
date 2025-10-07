@@ -52,7 +52,7 @@
       previewWrap.innerHTML = pending.map((u, i) => `
         <div class="position-relative" style="width:90px;height:90px;overflow:hidden;border:1px solid var(--border-color,#ccc);border-radius:4px;">
           <img src="${thumbTransform(u)}" alt="img" style="object-fit:cover;width:100%;height:100%;"/>
-          <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1" data-remove-img="${i}" title="Remove"><i class="bi bi-x"></i></button>
+          <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1" data-remove-img="${i}" title="Remove"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>`).join('');
       clearBtn && clearBtn.classList.remove('d-none');
       previewWrap.querySelectorAll('[data-remove-img]').forEach(btn => btn.addEventListener('click', () => {

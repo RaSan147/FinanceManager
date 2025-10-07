@@ -10,25 +10,30 @@
         <div class="modal-body">
           <input type="hidden" data-diary-id name="id" />
           <div class="mb-2">
-            <label class="form-label">Title</label>
-            <input type="text" class="form-control" name="title" maxlength="300" placeholder="Optional title">
+            <label class="form-label" for="diaryCreateTitle">Title</label>
+            <input id="diaryCreateTitle" type="text" class="form-control" name="title" maxlength="300" placeholder="Optional title">
           </div>
           <div class="mb-2">
-            <label class="form-label">Category</label>
-            <input type="text" class="form-control" name="category" list="diaryCategoriesGlobal" placeholder="Tag (optional)" maxlength="64">
+            <label class="form-label" for="diaryCreateCategoryInput">Categories</label>
+            <div class="input-group input-group-sm mb-2" role="group" aria-label="Add category">
+              <input id="diaryCreateCategoryInput" type="text" class="form-control form-control-sm" list="diaryCategoriesGlobal" placeholder="Add category" data-diary-create-category-input />
+              <button type="button" class="btn btn-outline-secondary" data-diary-create-add-btn title="Add category"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            </div>
+            <div class="d-flex flex-wrap gap-1 category-chips" data-diary-create-categories></div>
+            <datalist id="diaryCategoriesGlobal"></datalist>
+            <input type="hidden" name="categories" data-diary-create-categories-json />
           </div>
           <div class="mb-2">
-            <label class="form-label d-flex justify-content-between">Content <small class="text-muted">Paste images directly (they will appear inline)</small></label>
-            <textarea class="form-control" name="content" rows="10" data-diary-content-input placeholder="Write something..."></textarea>
+            <label class="form-label d-flex justify-content-between" for="diaryCreateContent">Content <small class="text-muted">Paste images directly (they will appear inline)</small></label>
+            <textarea id="diaryCreateContent" class="form-control" name="content" rows="10" data-diary-content-input placeholder="Write something..."></textarea>
             <div class="form-text">Images become small thumbnails; click to enlarge.</div>
             <div class="mt-2" data-diary-create-preview style="display:none"></div>
             <div class="d-flex gap-2 mt-2 flex-wrap align-items-center">
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-content-image-trigger><i class="bi bi-image"></i> Image</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-content-image-trigger><i class="fa-solid fa-image" aria-hidden="true"></i> Image</button>
               <small class="text-muted">Or drag & drop images here</small>
             </div>
             <input type="file" accept="image/*" multiple data-diary-content-image style="display:none" />
           </div>
-          <datalist id="diaryCategoriesGlobal"></datalist>
         </div>
         <div class="modal-footer">
           <div class="me-auto small text-muted" data-diary-meta></div>
@@ -54,15 +59,15 @@
             </label>
           </div>
           <button class="btn btn-sm btn-outline-secondary" data-diary-detail-edit-btn>
-            <i class="bi bi-pencil"></i>
+            <i class="fa-solid fa-pen" aria-hidden="true"></i>
             <span class="d-none d-md-inline ms-1">Edit</span>
           </button>
           <button class="btn btn-sm btn-primary d-none" data-diary-detail-save-btn>
-            <i class="bi bi-check2"></i>
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
             <span class="d-none d-md-inline ms-1">Save</span>
           </button>
           <button class="btn btn-sm btn-outline-secondary d-none" data-diary-detail-cancel-btn>
-            <i class="bi bi-x-lg"></i>
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
             <span class="d-none d-md-inline ms-1">Cancel</span>
           </button>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -78,16 +83,24 @@
         <div class="mb-3" data-markdown-container data-diary-detail-content></div>
         <form class="d-none" data-diary-detail-edit-form>
           <div class="mb-2">
-            <input type="text" class="form-control" placeholder="Title" data-diary-detail-edit-title maxlength="300" />
+            <label class="form-label" for="diaryEditTitle">Title</label>
+            <input id="diaryEditTitle" type="text" name="title" class="form-control" placeholder="Title" data-diary-detail-edit-title maxlength="300" />
           </div>
           <div class="mb-2">
-            <input type="text" class="form-control" placeholder="Category" data-diary-detail-edit-category list="diaryCategoriesGlobal" maxlength="64" />
+            <label class="form-label" for="diaryEditCategoryInput">Categories</label>
+            <div class="input-group input-group-sm mb-2" role="group" aria-label="Add category">
+              <input id="diaryEditCategoryInput" type="text" class="form-control form-control-sm" list="diaryCategoriesGlobal" placeholder="Add category" data-diary-detail-category-input />
+              <button type="button" class="btn btn-outline-secondary" data-diary-detail-add-btn title="Add category"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+            </div>
+            <div class="d-flex flex-wrap gap-1 category-chips" data-diary-detail-categories></div>
+            <input type="hidden" name="categories" data-diary-detail-categories-json />
           </div>
           <div class="mb-2">
-            <textarea class="form-control" rows="10" data-diary-detail-edit-content></textarea>
+            <label class="form-label" for="diaryEditContent">Content</label>
+            <textarea id="diaryEditContent" name="content" class="form-control" rows="10" data-diary-detail-edit-content></textarea>
             <div class="form-text">Paste images while editing to upload automatically.</div>
             <div class="d-flex gap-2 mt-2 flex-wrap align-items-center">
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-edit-content-image-trigger><i class="bi bi-image"></i> Image</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-edit-content-image-trigger><i class="fa-solid fa-image" aria-hidden="true"></i> Image</button>
               <small class="text-muted">Drag & drop images here too</small>
             </div>
             <input type="file" accept="image/*" multiple data-diary-edit-content-image style="display:none" />
@@ -102,7 +115,7 @@
               <textarea class="form-control form-control-sm" rows="3" name="body" placeholder="Add a comment..."></textarea>
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-comment-image-trigger><i class="bi bi-image"></i> Image</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-diary-comment-image-trigger><i class="fa-solid fa-image" aria-hidden="true"></i> Image</button>
               <button type="button" class="btn btn-sm btn-outline-warning d-none" data-diary-comment-images-clear>Clear Images</button>
               <div class="small text-muted">Paste images directly</div>
             </div>

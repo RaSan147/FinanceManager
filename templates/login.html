@@ -1,3 +1,5 @@
+{# Login template: renders the sign-in form.
+   If using Flask-WTF, include CSRF token here: {{ form.hidden_tag() }} #}
 {% extends "base.html" %}
 
 {% block title %}Login{% endblock %}
@@ -10,19 +12,51 @@
                 <h4 class="card-title mb-0">Login</h4>
             </div>
             <div class="card-body">
+                {# Display flashed messages (category-aware) #}
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="mb-3">
+                            {% for category, msg in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                    {{ msg }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
                 <form method="POST" action="{{ url_for('login') }}">
+                    {# Insert CSRF token here if using Flask-WTF: {{ form.hidden_tag() }} #}
                     <div class="mb-3">
                         <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" required>
+                        <input
+                            type="email"
+                            class="form-control"
+                            id="email"
+                            name="email"
+                            autocomplete="email"
+                            required
+                        >
                     </div>
+
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="password"
+                            name="password"
+                            autocomplete="current-password"
+                            required
+                        >
                     </div>
+
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary">Login</button>
                     </div>
                 </form>
+
                 <div class="mt-3 text-center">
                     <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
                 </div>

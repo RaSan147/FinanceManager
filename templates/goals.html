@@ -4,36 +4,59 @@
 
 {% block content %}
 <div class="row" data-goals-root>
-        <div class="col-12 order-2 order-lg-1">
+    <div class="col-12 order-2 order-lg-1">
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h4 class="card-title mb-0">Your Goals</h4>
                     <div class="d-flex align-items-center gap-2 header-actions ms-auto">
                         <div class="dropdown">
-                            <button class="btn btn-sm btn-light d-flex align-items-center" data-bs-toggle="dropdown" aria-label="Sort goals" title="Sort goals">
+                            <button class="btn btn-sm btn-light d-flex align-items-center"
+                                    data-bs-toggle="dropdown"
+                                    aria-label="Sort goals"
+                                    title="Sort goals">
                                 <i class="fa-solid fa-arrow-down-wide-short"></i>
                                 <span class="d-none d-md-inline ms-1">Sort</span>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end small" data-goals-sort-menu>
-                                <li><a class="dropdown-item" href="#" data-sort="priority"><i class="fa-solid fa-sparkles me-1"></i> AI Priority</a></li>
-                                <li><a class="dropdown-item" href="#" data-sort="created_desc"><i class="fa-solid fa-clock-rotate-left me-1"></i> Newest</a></li>
-                                <li><a class="dropdown-item" href="#" data-sort="created_asc"><i class="fa-solid fa-hourglass-start me-1"></i> Oldest</a></li>
-                                <li><a class="dropdown-item" href="#" data-sort="target_date"><i class="fa-solid fa-calendar-day me-1"></i> Soonest Target</a></li>
-                                <li><a class="dropdown-item" href="#" data-sort="target_date_desc"><i class="fa-solid fa-calendar-plus me-1"></i> Farthest Target</a></li>
+                                <li><a class="dropdown-item" href="#" data-sort="priority">
+                                    <i class="fa-solid fa-sparkles me-1"></i> AI Priority
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" data-sort="created_desc">
+                                    <i class="fa-solid fa-clock-rotate-left me-1"></i> Newest
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" data-sort="created_asc">
+                                    <i class="fa-solid fa-hourglass-start me-1"></i> Oldest
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" data-sort="target_date">
+                                    <i class="fa-solid fa-calendar-day me-1"></i> Soonest Target
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" data-sort="target_date_desc">
+                                    <i class="fa-solid fa-calendar-plus me-1"></i> Farthest Target
+                                </a></li>
                             </ul>
                         </div>
-                        <button type="button" class="btn btn-sm btn-light d-flex align-items-center" data-open-goal-modal aria-label="Add Goal" title="Add Goal">
+
+                        <button type="button"
+                                class="btn btn-sm btn-light d-flex align-items-center"
+                                data-open-goal-modal
+                                aria-label="Add Goal"
+                                title="Add Goal">
                             <i class="fa-solid fa-plus"></i>
                             <span class="d-none d-md-inline ms-1">Add</span>
                         </button>
                     </div>
                 </div>
             </div>
+
             <div class="card-body">
-                <div class="list-group goals-list" data-goals-list data-per-page="5">
-                    <!-- Goals injected dynamically -->
-                </div>
+                <!--
+                  data-goals-list: container where frontend JS injects paginated goal items.
+                  data-per-page: default items per page (consumed by the goals script).
+                -->
+                <div class="list-group goals-list" data-goals-list data-per-page="5"></div>
+
+                <!-- data-goals-pagination: pagination controls are rendered here by JS -->
                 <div data-goals-pagination></div>
             </div>
         </div>
@@ -41,4 +64,6 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{% endblock %}
+{% block extra_js %}
+<!-- Page-specific scripts: attach your goals list UI behavior (sorting, pagination, modal) to the data-* hooks above. -->
+{% endblock %}

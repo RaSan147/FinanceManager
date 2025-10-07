@@ -133,7 +133,7 @@ class LoansModule {
     }
 
     static _formatDate(val) {
-        const inst = (window.DateTime || window.DateTimeManager);
+    const inst = null; // DateTimeManager removed; rely on SiteDate
 
         function normalize(v) {
             if (!v) return null;
@@ -143,11 +143,9 @@ class LoansModule {
                 if (v.date) return normalize(v.date);
             }
                 if (typeof v === 'number') {
-                    if (!window.SiteDate) throw new Error('SiteDate is required but missing');
                     return window.SiteDate.parse(v);
                 }
             if (typeof v === 'string') {
-                if (!window.SiteDate) throw new Error('SiteDate is required but missing');
                 const parsed = window.SiteDate.parse(v);
                 if (parsed) return parsed;
             }
@@ -157,24 +155,8 @@ class LoansModule {
         const d = normalize(val);
         if (!d) return '';
 
-        if (inst && typeof inst.formatDate === 'function') {
-            return inst.formatDate(d);
-        }
-
-        // Prefer SiteDate formatting for consistency
-        if (window.SiteDate && typeof window.SiteDate.toDateString === 'function') {
-            return window.SiteDate.toDateString(d);
-        }
-
-        try {
-            return d.toLocaleDateString(undefined, {
-                month: 'short',
-                day: '2-digit',
-                year: 'numeric'
-            });
-        } catch (_) {
-            return d.toISOString().slice(0, 10);
-        }
+        // Consistent: rely on SiteDate formatting
+        return window.SiteDate.toDateString(d);
     }
 
     static async onAction(event) {

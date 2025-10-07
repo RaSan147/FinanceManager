@@ -4,6 +4,7 @@
 <div class="container mt-4">
   <h2>Profile Settings</h2>
 
+  <!-- Profile settings form -->
   <form method="POST" class="needs-validation" novalidate data-profile-form>
     <div class="mb-3">
       <label class="form-label">Email</label>
@@ -49,22 +50,78 @@
       </select>
     </div>
 
-  <button type="submit" class="btn btn-glassy">Update</button>
+    <button type="submit" class="btn btn-glassy">Update</button>
   </form>
+</div>
+
+<!-- Data export card: choose what to export and format -->
+<div class="container mt-4" data-profile-export-root>
+  <div class="card">
+    <div class="card-header"><h4 class="card-title">Export</h4></div>
+    <div class="card-body">
+      <p>Select what to export and the format. Up to the last 1000 items will be included.</p>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-4">
+          <label class="form-label">What to export</label>
+          <select id="export-type" class="form-select">
+            <option value="transactions">Transactions</option>
+            <option value="goals">Goals</option>
+            <option value="diary">Diary</option>
+            <option value="todos">Todos</option>
+            <option value="loans">Loans</option>
+            <option value="advice">Purchase Advice</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Format</label>
+          <select id="export-format" class="form-select">
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Limit</label>
+          <input id="export-limit" type="number" class="form-control" value="1000" min="1" max="1000">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button id="do-export" class="btn btn-glassy">Export</button>
+        </div>
+      </div>
+      <div id="export-feedback" class="mt-3"></div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+/*
+  Update the currency prefix displayed next to the monthly income field
+  when the currency select changes. Uses the data-symbol attribute on options.
+*/
+document.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('monthly_income_currency');
   const prefix = document.getElementById('income-prefix');
-  if (sel && prefix) {
-    const update = () => { const sym = sel.options[sel.selectedIndex]?.dataset?.symbol || '{{ currency_symbol }}'; prefix.textContent = sym; };
-    sel.addEventListener('change', update);
-    update();
-  }
+
+  if (!sel || !prefix) return;
+
+  const updatePrefix = () => {
+    const opt = sel.options[sel.selectedIndex];
+    // Use data-symbol if present, otherwise fall back to server-provided symbol
+    prefix.textContent = (opt && opt.dataset && opt.dataset.symbol) || '{{ currency_symbol }}';
+  };
+
+  sel.addEventListener('change', updatePrefix);
+  updatePrefix();
 });
 </script>
+
+<!-- Libraries used by the export scripts.
+     Note: PDF libraries removed — this page exports JSON and CSV only. -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<!-- Application export helpers -->
+<script src="{{ url_for('static', filename='js/data-exporter.js') }}"></script>
+<script src="{{ url_for('static', filename='js/profile-exporter.js') }}"></script>
 {% endblock %}

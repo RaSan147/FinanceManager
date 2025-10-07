@@ -2,28 +2,36 @@
 
 {% block title %}Monthly Analysis{% endblock %}
 
+{# Template context:
+   summary: { month, total_income, total_expenses, savings, income_categories, expense_categories }
+   goals: list of goal objects with progress, created_at, target_date
+   ai_analysis: string (optional)
+   currency_symbol, currency_code
+#}
+
 {% block content %}
 <div class="row">
     <div class="col-md-8">
+        <!-- Summary cards: income / expenses / savings -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h4 class="card-title mb-0">Monthly Analysis - {{ summary.month }} ({{ currency_code }})</h4>
             </div>
             <div class="card-body">
                 <div class="row mb-4 text-center">
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Income</h6>
                             <h3 class="mb-0 text-success">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h3>
                         </div>
                     </div>
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Expenses</h6>
                             <h3 class="mb-0 text-danger">{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h3>
                         </div>
                     </div>
-                    <div class="col-sm-6 col-md-4  mx-auto">
+                    <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Savings</h6>
                             <h3 class="mb-0 text-info">{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h3>
@@ -31,17 +39,14 @@
                     </div>
                 </div>
 
+                <!-- Income & Expense breakdown tables -->
                 <div class="row">
                     <div class="col-md-6">
                         <h5>Income Breakdown</h5>
                         <div class="table-responsive">
                             <table class="table table-sm">
                                 <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th>Amount</th>
-                                        <th>%</th>
-                                    </tr>
+                                    <tr><th>Category</th><th>Amount</th><th>%</th></tr>
                                 </thead>
                                 <tbody>
                                     {% for category, amount in summary.income_categories.items() %}
@@ -55,16 +60,13 @@
                             </table>
                         </div>
                     </div>
+
                     <div class="col-md-6">
                         <h5>Expense Breakdown</h5>
                         <div class="table-responsive">
                             <table class="table table-sm">
                                 <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th>Amount</th>
-                                        <th>%</th>
-                                    </tr>
+                                    <tr><th>Category</th><th>Amount</th><th>%</th></tr>
                                 </thead>
                                 <tbody>
                                     {% for category, amount in summary.expense_categories.items() %}
@@ -82,6 +84,7 @@
             </div>
         </div>
 
+        <!-- Goal progress section -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h4 class="card-title mb-0">Goal Progress</h4>
@@ -98,14 +101,13 @@
                             <span>{{ goal.progress.progress_percent }}%</span>
                         </div>
                         <div class="progress mb-2">
-                            <div class="progress-bar" role="progressbar" 
-                                 style="width: {{ goal.progress.progress_percent }}%">
+                            <div class="progress-bar" role="progressbar" style="width: {{ goal.progress.progress_percent }}%">
                                 {{ goal.progress.progress_percent }}%
                             </div>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <small>Started: {{ goal.created_at.strftime('%b %d, %Y') }}</small>
-                            <small>Target: {{ goal.target_date.strftime('%b %d, %Y') }}</small>
+                            <small>Started: {{ goal.created_at.strftime('%Y-%m-%d') }}</small>
+                            <small>Target: {{ goal.target_date.strftime('%Y-%m-%d') }}</small>
                         </div>
                     </div>
                     {% endfor %}
@@ -118,7 +120,8 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- AI Financial Advisor panel -->
     <div class="col-md-4">
         <div class="card">
             <div class="card-header bg-primary text-white py-3">
@@ -127,7 +130,7 @@
                     <form action="{{ url_for('analysis_bp.run_ai_analysis') }}" method="post" onsubmit="return startAiGeneration(this);" class="m-0">
                         <button id="aiGenBtn" type="submit" class="ai-gen-btn btn btn-glassy btn-sm fw-semibold position-relative px-3 d-inline-flex align-items-center gap-1 w-100 w-sm-auto">
                             <span id="aiGenSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                            <i class="bi bi-cpu"></i>
+                            <i class="fa-solid fa-microchip" aria-hidden="true"></i>
                             <span class="btn-text">Generate</span>
                         </button>
                     </form>

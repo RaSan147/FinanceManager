@@ -13,6 +13,52 @@
     };
   }
 
+  // Simple deterministic hash for strings (djb2 variant)
+  function stringHash(str) {
+    str = String(str || '');
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+      hash = hash | 0; // force 32-bit
+    }
+    return Math.abs(hash);
+  }
+
+  // Choose a palette index in [0, paletteSize)
+  function tagIndexFor(name, paletteSize) {
+    const n = Math.max(1, paletteSize | 0);
+    return stringHash(name) % n;
+  }
+
+  // Apply deterministic category color classes to a badge-like element
+  // Adds classes: 'badge tag-badge tag-color-N' and removes common bg-* classes
+  function applyCategoryBadge(el, name, paletteSize = 10) {
+    if (!el) return;
+    const idx = tagIndexFor(name, paletteSize);
+    // Clean existing Bootstrap bg-* classes that might conflict
+    const cl = el.classList;
+    Array.from(cl).forEach(cn => {
+      if (/^bg-/.test(cn) || /^text-bg-/.test(cn) || /^text-/.test(cn)) cl.remove(cn);
+    });
+    cl.add('badge', 'tag-badge', `tag-color-${idx}`);
+    // Ensure readable text color via tag-badge styles; optionally set title
+    if (!el.getAttribute('title')) el.setAttribute('title', String(name || ''));
+  }
+
+  // Apply stage-specific badge classes to an element
+  // Adds classes: 'badge stage-badge stage-<stage>' and removes conflicting bg-* classes
+  function applyStageBadge(el, stage) {
+    if (!el) return;
+    const s = String(stage || '').trim().toLowerCase();
+    const cl = el.classList;
+    Array.from(cl).forEach(cn => {
+      if (/^bg-/.test(cn) || /^text-bg-/.test(cn)) cl.remove(cn);
+      if (/^stage-/.test(cn)) cl.remove(cn);
+    });
+    cl.add('badge', 'stage-badge', `stage-${s || 'unknown'}`);
+    if (!el.getAttribute('title')) el.setAttribute('title', s.replace(/_/g, ' '));
+  }
+
   // Insert an uploading placeholder into a textarea/input and place the cursor after it.
   // Returns the placeholder id (without brackets) or null on failure.
   function insertUploadingPlaceholder(contentEl) {
@@ -184,9 +230,9 @@
             <div class='content' data-markdown-container>${formattedText}</div>
             ${images}
             <div class='meta d-flex align-items-center'>
-              <div class='datetime text-muted'>${(c.created_at ? (c.created_at.$date || c.created_at) : '')}</div>
+              <div class='datetime text-muted'>${window.SiteDate.toDateTimeString(c.created_at)}</div>
               <div class='ms-auto'>
-                <button class='btn btn-sm btn-outline-danger action-btn' data-comment-del='${c._id}' title='Delete'><i class='bi bi-trash'></i><span class='d-none d-sm-inline ms-1'>Delete</span></button>
+                <button class='btn btn-sm btn-outline-danger action-btn' data-comment-del='${c._id}' title='Delete'><i class='fa-solid fa-trash' aria-hidden='true'></i><span class='d-none d-sm-inline ms-1'>Delete</span></button>
               </div>
             </div>
           </div>
@@ -210,6 +256,11 @@
   // no RichTextFallback exported; consumers should provide window.RichText
     attachInlineImageUploader,
     insertUploadingPlaceholder,
-    renderComments
+    renderComments,
+    // tag/stage helpers
+    stringHash,
+    tagIndexFor,
+    applyCategoryBadge,
+    applyStageBadge
   };
 })();
