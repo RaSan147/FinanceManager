@@ -47,7 +47,7 @@
         modalElement.querySelectorAll(selector).forEach(form => {
           form.reset();
           const preview = form.querySelector('[data-comment-images-preview], [data-diary-comment-images-preview], [data-todo-comment-images-preview]');
-          if (preview) preview.innerHTML = '';
+          if (preview) App.utils.tools.del_child(preview);
           form.querySelectorAll('input[type="hidden"]').forEach(i => i.value = '');
         });
       });
@@ -111,13 +111,13 @@
 
     const refreshCounterparties = async () => {
       const kind = loanKind(categorySelect.value);
-      if (typeof kind === 'undefined') { if (dataList) dataList.innerHTML = ''; return; }
+  if (typeof kind === 'undefined') { if (dataList) App.utils.tools.del_child(dataList); return; }
       try {
         const url = new URL(window.location.origin + '/api/loans/counterparties');
         if (kind) url.searchParams.set('kind', kind);
         const data = await fetchJSON(url.toString(), { headers: { 'Accept': 'application/json' } });
         if (dataList) dataList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
-      } catch { if (dataList) dataList.innerHTML = ''; }
+  } catch { if (dataList) App.utils.tools.del_child(dataList); }
     };
 
     const openCreate = () => {

@@ -54,7 +54,7 @@
     function truncateText(txt, lim = 300) { return (!txt) ? '' : (txt.length > lim ? txt.slice(0, lim) + '…' : txt); }
 
     function renderCategoryChips(container, items) {
-      container.innerHTML = '';
+      if (container) App.utils.tools.del_child(container);
       for (const name of items) {
         const wrapper = document.createElement('span');
         wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
@@ -139,9 +139,12 @@
     }
 
     function renderList() {
-      listEl.innerHTML = '';
+      if (listEl) App.utils.tools.del_child(listEl);
       if (!state.items.length) {
-        listEl.innerHTML = '<div class="text-muted small fst-italic">No entries.</div>';
+        if (listEl) {
+          App.utils.tools.del_child(listEl);
+          listEl.innerHTML = '<div class="text-muted small fst-italic">No entries.</div>';
+        }
         updateActiveFilterChips(); updateFilterBtnActive(); return;
       }
       for (const it of state.items) {
@@ -236,7 +239,7 @@
         const enabled = createMarkdownToggle.checked;
         if (!previewWrap) return;
         if (enabled) previewWrap.style.display = '', previewWrap.innerHTML = RichText.renderInlineContent(contentInput.value || '', 'create', true);
-        else previewWrap.style.display = 'none', previewWrap.innerHTML = '';
+  else if (previewWrap) { previewWrap.style.display = 'none'; App.utils.tools.del_child(previewWrap); }
       };
 
       if (createMarkdownToggle) createMarkdownToggle.addEventListener('change', updateCreatePreview);
@@ -578,8 +581,8 @@
 
         function renderPreviews() {
           if (!previewWrap) return;
-          if (!images.length) {
-            previewWrap.innerHTML = '';
+      if (!images.length) {
+        if (previewWrap) App.utils.tools.del_child(previewWrap);
             if (clearBtn) clearBtn.classList.add('d-none');
             return;
           }

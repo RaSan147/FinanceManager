@@ -97,8 +97,8 @@ class TagManager {
      * Rebuild the tag-list DOM. Keeps markup simple and accessible.
      */
     static renderTags() {
-        const tagList = this.tagList;
-        tagList.innerHTML = '';
+    const tagList = this.tagList;
+    App.utils.tools.del_child(tagList);
 
         this.tags.forEach(tag => {
             const el = document.createElement('span');

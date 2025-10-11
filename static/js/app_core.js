@@ -281,6 +281,25 @@
             Guard,
             EventBus,
             enableSPALinkInterception,
+            // lightweight tools inspired by script_global.js
+            tools: {
+                del_child(elm) {
+                    if (!elm) return;
+                    if (typeof elm === 'string') elm = document.getElementById(elm);
+                    if (!elm) return;
+                    while (elm.firstChild) elm.removeChild(elm.lastChild);
+                },
+                replaceChildren(el) {
+                    if (!el) return;
+                    if (typeof el.replaceChildren === 'function') el.replaceChildren();
+                    else {
+                        while (el.firstChild) el.removeChild(el.lastChild);
+                    }
+                },
+                exists(name) {
+                    return typeof window[name] !== 'undefined';
+                }
+            }
         },
         init() {
             this.modules.forEach((m) => {

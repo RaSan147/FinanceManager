@@ -466,7 +466,7 @@ class GoalsModule {
         const root = qs('[data-goals-list]');
         if (!root) return;
 
-        root.innerHTML = '';
+    App.utils.tools.del_child(root);
 
     // Rebuild goals map for edit usage
     this.state.goalsMap = {};
@@ -500,7 +500,7 @@ class GoalsModule {
         if (!wrap) return;
 
         const totalPages = Math.ceil(this.state.total / this.state.perPage);
-        wrap.innerHTML = '';
+    App.utils.tools.del_child(wrap);
         if (totalPages <= 1) return;
 
         const ul = createEl('ul', {

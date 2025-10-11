@@ -200,12 +200,13 @@ class FinanceVisualizer {
 
         if (meaningful.length === 0) {
             container.style.display = 'none';
-            container.innerHTML = '';
+            App.utils.tools.del_child(container);
             return;
         }
 
-        container.style.display = '';
-        container.innerHTML = meaningful.map(goal => {
+    container.style.display = '';
+    App.utils.tools.del_child(container);
+    container.innerHTML = meaningful.map(goal => {
             const raw = Number(goal.potential_progress);
             const progress = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 0;
             const title = goal.description || (goal.type ? goal.type.charAt(0).toUpperCase() + goal.type.slice(1) + ' goal' : 'Goal');
