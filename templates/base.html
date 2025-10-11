@@ -246,10 +246,13 @@
 
 	<!-- Vendor + app scripts (deferred where appropriate) -->
 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-	<script src="{{ url_for('static', filename='js/currency.js') }}" defer></script>
+	<!-- Important: date_parser defines `globalThis.SiteDate` which is required by app_core.
+	     Load date_parser first, then core utilities, then other app scripts. -->
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 	<script src="{{ url_for('static', filename='js/date_parser.js') }}" defer></script>
-	<script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/app_core.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/currency.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/transaction_model.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/global_modals.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/image_viewer.js') }}" defer></script>

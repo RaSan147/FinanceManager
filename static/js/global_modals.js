@@ -2,14 +2,8 @@
 (function(){
   'use strict';
 
-  // Utility helpers (lightweight fallback if App.utils not yet loaded)
-  const U = window.App?.utils || {
-    qs: (s, r=document)=>r.querySelector(s),
-    qsa: (s, r=document)=>Array.from(r.querySelectorAll(s)),
-    fetchJSON: async (url, opts={}) => {
-      const res = await fetch(url, opts); if(!res.ok) throw new Error('HTTP '+res.status); return res.json();
-    }
-  };
+  // Assume App.utils is registered by app_core.js and available.
+  const { qs, qsa, fetchJSON, fetchJSONUnified, withSingleFlight } = App.utils;
 
   // -------------- Shared Comment & Text Formatting Functions --------------
   
@@ -18,29 +12,17 @@
    * @param {string} text - The raw comment text
    * @returns {string} HTML formatted text with preserved formatting
    */
+  // Format comment text preserving indentation and newlines (safe-escapes)
   function formatCommentText(text) {
     if (!text) return '';
-    
-    // Escape HTML for security
-    const escaped = text.replace(/[&<>"']/g, c => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      '\'': '&#39;'
-    }[c]));
-    
-    // Preserve leading whitespace and convert newlines properly
+    const escaped = text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     return escaped
       .split('\n')
       .map(line => {
-        // Convert leading spaces/tabs to non-breaking spaces to preserve indentation
-        const leadingSpaces = line.match(/^(\s*)/)[1];
-        const restOfLine = line.slice(leadingSpaces.length);
-        const preservedSpaces = leadingSpaces
-          .replace(/ /g, '&nbsp;')
-          .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
-        return preservedSpaces + restOfLine;
+        const leading = line.match(/^(\s*)/)[1];
+        const rest = line.slice(leading.length);
+        const preserved = leading.replace(/ /g, '&nbsp;').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        return preserved + rest;
       })
       .join('<br/>');
   }
@@ -50,39 +32,25 @@
    * @param {HTMLElement} modalElement - The modal element
    * @param {string[]} formSelectors - Array of form selectors within the modal
    */
+  // Reset forms and minor aria/focus fixes when bootstrap hides modals
   function setupModalCleanup(modalElement, formSelectors = ['form']) {
     if (!modalElement) return;
-    
-    // Fix aria-hidden accessibility issue by removing focus before hiding
     modalElement.addEventListener('hide.bs.modal', () => {
-      // Remove focus from any focused elements inside the modal
-      const focusedElement = modalElement.querySelector(':focus');
-      if (focusedElement && modalElement.contains(focusedElement)) {
-        focusedElement.blur();
-      }
-      
-      // Also ensure aria-hidden is handled properly
-      setTimeout(() => {
-        modalElement.removeAttribute('aria-hidden');
-      }, 10);
+      const focused = modalElement.querySelector(':focus');
+      if (focused && modalElement.contains(focused)) focused.blur();
+      // Small delay to mirror Bootstrap's internal timing
+      setTimeout(() => modalElement.removeAttribute('aria-hidden'), 10);
     });
-    
+
     modalElement.addEventListener('hidden.bs.modal', () => {
       formSelectors.forEach(selector => {
-        const forms = modalElement.querySelectorAll(selector);
-        forms.forEach(form => {
+        modalElement.querySelectorAll(selector).forEach(form => {
           form.reset();
-          // Clear any dynamically added content
-          const imagePreview = form.querySelector('[data-comment-images-preview], [data-diary-comment-images-preview], [data-todo-comment-images-preview]');
-          if (imagePreview) imagePreview.innerHTML = '';
-          
-          // Clear hidden inputs
-          const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
-          hiddenInputs.forEach(input => input.value = '');
+          const preview = form.querySelector('[data-comment-images-preview], [data-diary-comment-images-preview], [data-todo-comment-images-preview]');
+          if (preview) preview.innerHTML = '';
+          form.querySelectorAll('input[type="hidden"]').forEach(i => i.value = '');
         });
       });
-      
-      // Ensure proper cleanup of any remaining focus issues
       modalElement.removeAttribute('aria-hidden');
     });
   }
@@ -94,14 +62,14 @@
   };
 
   // ---------------- Transaction Modal Lazy Wrapper -----------------
-  function ensureTransactionModal(){
-    if (window.TransactionModal && typeof window.TransactionModal.openCreate === 'function') return true; // transactions.js already loaded
-    // If modal element exists but logic not loaded (transactions.js only loads on transactions page)
-    // Provide minimal on-demand logic (create only) for global use.
-  const modalEl = U.qs('#transactionModal');
-    if(!modalEl) return false;
-  // Ensure appended to body for consistent stacking
-  if(modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+  // Ensure a minimal transaction modal API exists when transactions.js isn't loaded.
+  // If full `window.TransactionModal.openCreate` exists, prefer that implementation.
+  function ensureTransactionModal() {
+    if (typeof window.TransactionModal?.openCreate === 'function') return true;
+    const modalEl = qs('#transactionModal');
+    if (!modalEl) return false;
+    if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+
     const formEl = modalEl.querySelector('[data-transaction-form]');
     const titleEl = modalEl.querySelector('[data-tx-modal-title]');
     const submitBtn = modalEl.querySelector('[data-submit-btn]');
@@ -110,93 +78,79 @@
     const symbolPrefix = modalEl.querySelector('[data-symbol-prefix]');
     const categorySelect = modalEl.querySelector('[data-category-select]');
     const typeSelect = formEl.querySelector('[name="type"]');
-    const dataList = U.qs('#tx_person_options');
+    const dataList = qs('#tx_person_options');
     const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
-    function updateSymbol(){
+    const updateSymbol = () => {
       const opt = currencySelect.options[currencySelect.selectedIndex];
       symbolPrefix.textContent = opt?.dataset?.symbol || window.currencySymbol || '';
-    }
-    function filterCategories(typeVal){
+    };
+
+    const filterCategories = (typeVal) => {
       const inc = categorySelect.querySelector('[data-group-income]');
       const exp = categorySelect.querySelector('[data-group-expense]');
-      if(!inc||!exp) return;
-      
-      // Store current value to restore it after showing/hiding optgroups
-      const currentValue = categorySelect.value;
-      
-      if(typeVal==='income'){ 
-        inc.style.display=''; 
-        exp.style.display='none'; 
-      } else { 
-        exp.style.display=''; 
-        inc.style.display='none'; 
-      }
-      
-      // Restore the previous value if it's still visible in the current type
-      if (currentValue) {
-        const isValidForType = Array.from(categorySelect.options).some(opt => 
-          opt.value === currentValue && opt.offsetParent !== null
-        );
-        if (isValidForType) {
-          categorySelect.value = currentValue;
-        } else {
-          // Category not valid for this type, reset to placeholder
-          categorySelect.value = '';
-        }
+      if (!inc || !exp) return;
+      const current = categorySelect.value;
+      if (typeVal === 'income') { inc.style.display = ''; exp.style.display = 'none'; }
+      else { exp.style.display = ''; inc.style.display = 'none'; }
+      if (current) {
+        const isVisible = Array.from(categorySelect.options).some(opt => opt.value === current && opt.offsetParent !== null);
+        categorySelect.value = isVisible ? current : '';
       } else {
-        // Ensure placeholder is selected when no previous value
         categorySelect.value = '';
       }
-    }
-    function loanKind(category){
-      const v=(category||'').toLowerCase();
-      if(v==='repaid by me') return 'repaid_by_me';
-      if(v==='repaid to me') return 'repaid_to_me';
-      if(v==='borrowed'||v==='lent out') return null;
+    };
+
+    const loanKind = (category) => {
+      const v = (category || '').toLowerCase();
+      if (v === 'repaid by me') return 'repaid_by_me';
+      if (v === 'repaid to me') return 'repaid_to_me';
+      if (v === 'borrowed' || v === 'lent out') return null;
       return undefined;
-    }
-    async function refreshCounterparties(){
+    };
+
+    const refreshCounterparties = async () => {
       const kind = loanKind(categorySelect.value);
-      if(typeof kind === 'undefined'){ dataList && (dataList.innerHTML=''); return; }
+      if (typeof kind === 'undefined') { if (dataList) dataList.innerHTML = ''; return; }
       try {
         const url = new URL(window.location.origin + '/api/loans/counterparties');
-        if(kind) url.searchParams.set('kind', kind);
-        const data = await U.fetchJSON(url.toString(), { headers: { 'Accept':'application/json' }});
-        if(dataList) dataList.innerHTML = (data.items||[]).map(n=>`<option value="${n}"></option>`).join('');
-      } catch { if(dataList) dataList.innerHTML=''; }
-    }
+        if (kind) url.searchParams.set('kind', kind);
+        const data = await fetchJSON(url.toString(), { headers: { 'Accept': 'application/json' } });
+        if (dataList) dataList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
+      } catch { if (dataList) dataList.innerHTML = ''; }
+    };
 
-    function openCreate(){
+    const openCreate = () => {
       formEl.reset();
-      idInput.value='';
-      titleEl.textContent='Add Transaction';
-      submitBtn.textContent='Save';
-      typeSelect.value='income';
+      idInput.value = '';
+      titleEl.textContent = 'Add Transaction';
+      submitBtn.textContent = 'Save';
+      typeSelect.value = 'income';
       filterCategories('income');
       updateSymbol();
       bsModal.show();
       refreshCounterparties();
-    }
+    };
 
-    formEl.addEventListener('submit', (e)=>{
+    formEl.addEventListener('submit', (e) => {
       e.preventDefault();
-      (window.App?.utils?.withSingleFlight || ((el,fn)=>fn()))(formEl, async () => {
+      withSingleFlight(formEl, async () => {
         submitBtn.disabled = true;
         try {
           const fd = new FormData(formEl);
           const payload = Object.fromEntries(fd.entries());
-          await (window.App?.utils?.fetchJSONUnified || U.fetchJSON)('/api/transactions', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
-          window.flash && window.flash('Transaction saved','success');
+          await fetchJSONUnified('/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(payload) });
+          window.flash?.('Transaction saved', 'success');
           bsModal.hide();
           window.DashboardTransactionsModule?.refreshDashboardData?.();
-        } catch(err){ window.flash && window.flash('Save failed','danger'); }
-        finally { submitBtn.disabled=false; }
+            try { window.dispatchEvent(new CustomEvent('transaction:created')); } catch(_) {}
+        } catch (err) { window.flash?.('Save failed', 'danger'); }
+        finally { submitBtn.disabled = false; }
       });
     });
 
     currencySelect.addEventListener('change', updateSymbol);
-    typeSelect.addEventListener('change', ()=>{ filterCategories(typeSelect.value); refreshCounterparties(); });
+    typeSelect.addEventListener('change', () => { filterCategories(typeSelect.value); refreshCounterparties(); });
     categorySelect.addEventListener('change', refreshCounterparties);
 
     updateSymbol(); filterCategories(typeSelect.value); refreshCounterparties();
@@ -206,11 +160,13 @@
   }
 
   // ---------------- Goal Modal Lazy Wrapper -----------------
-  function ensureGoalModal(){
-    if(window.GoalModal && typeof window.GoalModal.openCreate==='function') return true;
-  const modalEl = U.qs('#goalModal');
-    if(!modalEl) return false;
-  if(modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+  // Minimal Goal modal fallback when goals.js isn't present
+  function ensureGoalModal() {
+    if (typeof window.GoalModal?.openCreate === 'function') return true;
+    const modalEl = qs('#goalModal');
+    if (!modalEl) return false;
+    if (modalEl.parentElement !== document.body) document.body.appendChild(modalEl);
+
     const form = modalEl.querySelector('[data-goal-form]');
     const titleEl = modalEl.querySelector('[data-goal-modal-title]');
     const idInput = modalEl.querySelector('[data-goal-id]');
@@ -219,44 +175,43 @@
     const submitBtn = modalEl.querySelector('[data-goal-submit-btn]');
     const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
-    function updateSymbol(){
+    const updateSymbol = () => {
       const opt = currencySel.options[currencySel.selectedIndex];
       symbolPrefix.textContent = opt?.dataset?.symbol || window.currencySymbol || '';
-    }
+    };
 
-    function openCreate(){
+    const openCreate = () => {
       form.reset();
-      idInput.value='';
-      titleEl.textContent='Add Goal';
-      submitBtn.textContent='Save';
-  // Sanitize any stale aria-hidden left if previously force-closed
-  modalEl.removeAttribute('aria-hidden');
-  modalEl.setAttribute('aria-modal','true');
-  modalEl.setAttribute('role','dialog');
+      idInput.value = '';
+      titleEl.textContent = 'Add Goal';
+      submitBtn.textContent = 'Save';
+      modalEl.removeAttribute('aria-hidden');
+      modalEl.setAttribute('aria-modal', 'true');
+      modalEl.setAttribute('role', 'dialog');
       updateSymbol();
       bsModal.show();
-    }
+    };
 
-    form.addEventListener('submit', (e)=>{
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
-      (window.App?.utils?.withSingleFlight || ((el,fn)=>fn()))(form, async () => {
+      withSingleFlight(form, async () => {
         submitBtn.disabled = true;
         try {
           const fd = new FormData(form);
           const payload = Object.fromEntries(fd.entries());
-          await (window.App?.utils?.fetchJSONUnified || U.fetchJSON)('/api/goals', { method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(payload)});
-          window.flash && window.flash('Goal saved','success');
+          await fetchJSONUnified('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(payload) });
+          window.flash?.('Goal saved', 'success');
           bsModal.hide();
-          if(window.GoalsModule?.loadGoals) {
+          if (window.GoalsModule?.loadGoals) {
             window.GoalsModule.loadGoals(1);
           } else {
-            setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 300);
-            setTimeout(()=>{ try { window.GoalsModule?.loadGoals?.(1); } catch(_){} }, 1200);
+            setTimeout(() => { try { window.GoalsModule?.loadGoals?.(1); } catch (_) {} }, 300);
+            setTimeout(() => { try { window.GoalsModule?.loadGoals?.(1); } catch (_) {} }, 1200);
           }
-          try { window.dispatchEvent(new CustomEvent('goal:created')); } catch(_) {}
+          try { window.dispatchEvent(new CustomEvent('goal:created')); } catch (_) {}
           window.DashboardTransactionsModule?.refreshDashboardData?.();
-        } catch(err){ window.flash && window.flash('Save failed','danger'); }
-        finally { submitBtn.disabled=false; }
+        } catch (err) { window.flash?.('Save failed', 'danger'); }
+        finally { submitBtn.disabled = false; }
       });
     });
 
@@ -268,46 +223,44 @@
   }
 
   // ---------------- Global Triggers -----------------
-  function bindGlobalTriggers(){
-    document.addEventListener('click', (e)=>{
-      const txBtn = e.target.closest('[data-open-transaction-modal]');
-      if(txBtn){ e.preventDefault(); if(ensureTransactionModal()) window.TransactionModal.openCreate(); }
+  function bindGlobalTriggers() {
+    document.addEventListener('click', (e) => {
+      const txBtn = e.target.closest('[data-open-transaction-modal], [data-open-tx-modal]');
+      if (txBtn) { e.preventDefault(); if (ensureTransactionModal()) window.TransactionModal.openCreate(); }
       const goalBtn = e.target.closest('[data-open-goal-modal]');
-      if(goalBtn){ e.preventDefault(); if(ensureGoalModal()) window.GoalModal.openCreate(); }
+      if (goalBtn) { e.preventDefault(); if (ensureGoalModal()) window.GoalModal.openCreate(); }
     });
   }
 
   // ---------------- Auto Refresh Dashboard Recent -----------------
-  function setupDashboardAutoRefresh(){
+  function setupDashboardAutoRefresh() {
     const DASH_INTERVAL_MS = 60_000; // 1m
-    if(!document.querySelector('[data-dynamic-dashboard]')) return;
-    if(window.__dashAutoRefreshAttached) return; // idempotent
+    if (!document.querySelector('[data-dynamic-dashboard]')) return;
+    if (window.__dashAutoRefreshAttached) return;
     window.__dashAutoRefreshAttached = true;
-    setInterval(()=>{
-      try { window.DashboardTransactionsModule?.refreshDashboardData?.(); } catch(_){ }
-    }, DASH_INTERVAL_MS);
+    setInterval(() => { try { window.DashboardTransactionsModule?.refreshDashboardData?.(); } catch (_) {} }, DASH_INTERVAL_MS);
   }
 
-  document.addEventListener('DOMContentLoaded', function(){
+  document.addEventListener('DOMContentLoaded', function () {
     bindGlobalTriggers();
     setupDashboardAutoRefresh();
-    // Enforce single Bootstrap modal open at a time globally (handles diary + others)
-    if(!window.__singleModalEnforced){
+    // Ensure only one bootstrap modal visible at once
+    if (!window.__singleModalEnforced) {
       window.__singleModalEnforced = true;
-      document.addEventListener('show.bs.modal', (ev)=>{
+      document.addEventListener('show.bs.modal', (ev) => {
         const incoming = ev.target;
-        document.querySelectorAll('.modal.show').forEach(m=>{
-          if(m!==incoming){ const inst = bootstrap.Modal.getInstance(m); inst && inst.hide(); }
+        document.querySelectorAll('.modal.show').forEach(m => {
+          if (m !== incoming) { const inst = bootstrap.Modal.getInstance(m); inst && inst.hide(); }
         });
       });
     }
   });
 
   // Keyboard shortcuts (Alt+T, Alt+G)
-  document.addEventListener('keydown', (e)=>{
-    if(e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey){
-      if(e.code === 'KeyT'){ if(ensureTransactionModal()) { e.preventDefault(); window.TransactionModal.openCreate(); } }
-      if(e.code === 'KeyG'){ if(ensureGoalModal()) { e.preventDefault(); window.GoalModal.openCreate(); } }
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      if (e.code === 'KeyT') { if (ensureTransactionModal()) { e.preventDefault(); window.TransactionModal.openCreate(); } }
+      if (e.code === 'KeyG') { if (ensureGoalModal()) { e.preventDefault(); window.GoalModal.openCreate(); } }
     }
   });
 })();

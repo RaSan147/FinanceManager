@@ -1,32 +1,42 @@
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 import json
-from collections import defaultdict
 
 class PurchaseAdvice:
     @staticmethod
     def save_advice(user_id, request_data, advice, db):
-        # Build base document
+        """Persist a purchase-advice record.
+
+        The stored document keeps a compact summary of the advice for fast reads
+        while preserving the full `advice` payload when present.
+        """
+
+        # Normalize amount and build base document for storage
+        amount_val = request_data.get('amount', 0) or 0
+        try:
+            amount_val = float(amount_val)
+        except (TypeError, ValueError):
+            amount_val = 0.0
+
         doc = {
             'user_id': user_id,
             'request': request_data,
             'advice': advice,
             'category': request_data.get('category', 'other'),
-            'amount': float(request_data.get('amount', request_data.get('amount', 0))),
+            'amount': amount_val,
             'created_at': datetime.now(timezone.utc),
             'is_archived': False,
             'tags': request_data.get('tags', []),
             'user_action': 'unknown'  # can be 'followed', 'ignored', or 'unknown'
         }
 
-        # safe-build summary to avoid errors if advice is not a dict
+        # Store a compact summary when advice is a dict
         summary = None
         if isinstance(advice, dict):
             reason_raw = advice.get('reason')
+            reason_short = None
             if isinstance(reason_raw, str):
-                reason_short = (reason_raw[:240] + '...') if len(reason_raw) > 240 else reason_raw
-            else:
-                reason_short = None
+                reason_short = reason_raw if len(reason_raw) <= 240 else (reason_raw[:240] + '...')
             summary = {
                 'recommendation': advice.get('recommendation'),
                 'reason': reason_short,
@@ -58,7 +68,7 @@ class PurchaseAdvice:
 
     @staticmethod
     def get_stats(user_id, db):
-        # 30-day spending by category
+        # Aggregate 30-day spend by category
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         pipeline = [
             {'$match': {
@@ -77,13 +87,13 @@ class PurchaseAdvice:
 
     @staticmethod
     def get_impact_on_goals(user_id, db):
-        # Get all active goals
+        # Fetch user's active (incomplete) goals
         goals = list(db.goals.find({
             'user_id': user_id,
             'is_completed': False
         }))
 
-        # Calculate total recommended savings
+        # Sum amounts for advice entries that recommended not purchasing ('no')
         pipeline = [
             {'$match': {
                 'user_id': user_id,
@@ -98,7 +108,7 @@ class PurchaseAdvice:
         saved_result = list(db.purchase_advice.aggregate(pipeline))
         total_saved = saved_result[0]['total_saved'] if saved_result else 0.0
 
-        # Calculate potential impact on goals
+        # Estimate how those saved amounts could progress savings goals
         for goal in goals:
             try:
                 gtype = goal.get('type')
@@ -106,7 +116,6 @@ class PurchaseAdvice:
                 # Default potential_progress to 0 for non-savings or missing target
                 if gtype == 'savings' and target_amount > 0:
                     progress = (float(total_saved) / target_amount) * 100.0
-                    # clamp to [0, 100]
                     goal['potential_progress'] = max(0.0, min(100.0, progress))
                 else:
                     goal['potential_progress'] = 0.0
@@ -123,11 +132,11 @@ class PurchaseAdvice:
 
     @staticmethod
     async def archive_old_entries(user_id, db, pastebin_client=None):
-        """Archive (offload) entries older than 30 days to Pastebin and delete body from DB.
+        """Archive entries older than 30 days.
 
-        Behavior:
-        - If pastebin client available: create paste for each, store URL, mark archived, and remove 'advice' field heavy content.
-        - If not: simply mark archived but keep data local.
+        If a pastebin client is provided, offload each entry's full payload to an external paste
+        and remove the bulky `advice` field from the database document. Otherwise mark as archived.
+        Returns the number of migrated/archived entries.
         """
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         old_entries = list(db.purchase_advice.find({

@@ -4,13 +4,11 @@
 
   function normalizeDateInput(val){
     if (!val) return null;
-    if (!window.SiteDate) throw new Error('SiteDate is required but missing');
-    return window.SiteDate.parse(val);
+    return globalThis.SiteDate.parse(val);
   }
 
   function isoDate(val){
-    if (!window.SiteDate) throw new Error('SiteDate is required but missing');
-    return window.SiteDate.toDateString(val);
+    return globalThis.SiteDate.toDateString(val);
   }
 
   class TransactionModel {
@@ -34,7 +32,7 @@
       try {
         if (typeof window.getTxCategoryLabel === 'function') return window.getTxCategoryLabel(type, code);
         const lang = window.txCategoryLang || 'en';
-        const labels = window.txCategoryLabels?.[type]?.[code];
+        const labels = window.txCategoryLabels[type] && window.txCategoryLabels[type][code];
         if (labels && (labels[lang] || labels.en)) return labels[lang] || labels.en;
       } catch(_){ /* ignore */ }
       return code;

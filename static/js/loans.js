@@ -91,22 +91,47 @@ class Loan {
 class LoansModule {
     static init(utils) {
         this.utils = utils;
+        this.state = { page: 1, perPage: 10, total: 0 };
         const loansTable = this.utils.qs('[data-loans-table]');
         if (loansTable) {
-            this.loadLoans();
+            this.initLoansPage();
             loansTable.addEventListener('click', (e) => this.onAction(e));
         }
     }
 
-    static async loadLoans() {
+    static initLoansPage() {
+        const { qs } = this.utils;
+        const table = qs('[data-loans-table]');
+        if (!table) return;
+
+        // Pagination click handler
+        qs('[data-loans-pagination]')?.addEventListener('click', e => {
+            const a = e.target.closest('a[data-page]');
+            if (!a) return;
+            e.preventDefault();
+            this.loadLoans(parseInt(a.dataset.page, 10));
+        });
+
+        // Listen for global events that should refresh loans list
+        window.addEventListener('transaction:created', () => { try { this.loadLoans(1); } catch(_) {} }, { passive: true });
+        window.addEventListener('loan:closed', () => { try { this.loadLoans(this.state.page); } catch(_) {} }, { passive: true });
+
+        this.loadLoans(1);
+    }
+
+    static async loadLoans(page = 1) {
         const tbody = this.utils.qs('[data-loans-body]');
-        if (!tbody) {
-            return;
-        }
+        if (!tbody) return;
+
+        const perPage = this.state.perPage || parseInt(tbody.closest('[data-loans-table]')?.getAttribute('data-per-page') || '10', 10);
 
         try {
-            const data = await this.utils.fetchJSON('/api/loans/list');
+            const data = await this.utils.fetchJSON(`/api/loans/list?page=${page}&per_page=${perPage}`);
             const items = data.items || [];
+
+            this.state.page = data.page || page;
+            this.state.perPage = data.per_page || perPage;
+            this.state.total = data.total || 0;
 
             tbody.innerHTML = ''; // Clear existing rows
 
@@ -118,18 +143,51 @@ class LoansModule {
                 td.textContent = 'No loans';
                 tr.appendChild(td);
                 tbody.appendChild(tr);
+                this.renderPagination();
                 return;
             }
 
+            const frag = document.createDocumentFragment();
             items.forEach(loanData => {
                 const loan = new Loan(loanData, this.helpers());
-                tbody.appendChild(loan.renderRow());
+                frag.appendChild(loan.renderRow());
             });
+            tbody.appendChild(frag);
+            this.renderPagination();
 
         } catch (error) {
             console.error('Failed to load loans:', error);
             tbody.innerHTML = '<tr><td colspan="9" class="text-danger text-center">Failed to load loans</td></tr>';
         }
+    }
+
+    static renderPagination() {
+        const { qs, createEl } = this.utils;
+        const wrap = qs('[data-loans-pagination]');
+        if (!wrap) return;
+
+        const totalPages = Math.ceil((this.state.total || 0) / (this.state.perPage || 10));
+        wrap.innerHTML = '';
+        if (totalPages <= 1) return;
+
+        const ul = createEl('ul', { class: 'pagination justify-content-center mt-3' });
+
+        const createPageItem = (text, page, isActive = false, isDisabled = false) => {
+            const li = createEl('li', { class: `page-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}` });
+            const a = createEl('a', { class: 'page-link', href: '#', dataset: { page } }, text);
+            li.appendChild(a);
+            return li;
+        };
+
+        if (this.state.page > 1) ul.appendChild(createPageItem('Previous', this.state.page - 1));
+
+        for (let p = 1; p <= totalPages; p++) {
+            ul.appendChild(createPageItem(p, p, p === this.state.page));
+        }
+
+        if (this.state.page < totalPages) ul.appendChild(createPageItem('Next', this.state.page + 1));
+
+        wrap.appendChild(ul);
     }
 
     static _formatDate(val) {
@@ -143,10 +201,10 @@ class LoansModule {
                 if (v.date) return normalize(v.date);
             }
                 if (typeof v === 'number') {
-                    return window.SiteDate.parse(v);
+                    return globalThis.SiteDate.parse(v);
                 }
             if (typeof v === 'string') {
-                const parsed = window.SiteDate.parse(v);
+                const parsed = globalThis.SiteDate.parse(v);
                 if (parsed) return parsed;
             }
             return null;
@@ -156,7 +214,7 @@ class LoansModule {
         if (!d) return '';
 
         // Consistent: rely on SiteDate formatting
-        return window.SiteDate.toDateString(d);
+    return globalThis.SiteDate.toDateString(d);
     }
 
     static async onAction(event) {
@@ -191,6 +249,7 @@ class LoansModule {
                 window.flash('Loan closed successfully', 'success');
             }
 
+            try { window.dispatchEvent(new CustomEvent('loan:closed', { detail: { loanId } })); } catch(_) {}
             await this.loadLoans();
 
         } catch (err) {
@@ -204,22 +263,20 @@ class LoansModule {
     }
 
     static helpers() {
-        const {
-            qs,
-            escapeHtml,
-            fmt,
-            money,
-            cap,
-            fetchJSON
-        } = this.utils;
-        return {
-            qs,
-            escapeHtml,
-            fmt,
-            money,
-            cap,
-            fetchJSON: fetchJSON || (App && App.utils && App.utils.fetchJSON)
-        };
+        if (!this.utils) {
+            console.error('LoansModule: missing utils. Ensure app_core.js initialized before this module.');
+            // Provide minimal fallbacks that are safe no-ops to avoid crashes
+            return {
+                qs: (s, r = document) => r.querySelector(s),
+                escapeHtml: (s) => (s || '').toString(),
+                fmt: (n) => (Number.isFinite(Number(n)) ? Number(n).toFixed(2) : '0.00'),
+                money: (n, sym) => (sym || '') + (Number.isFinite(Number(n)) ? Number(n).toFixed(2) : '0.00'),
+                cap: (s) => (s || '').charAt(0).toUpperCase() + (s || '').slice(1),
+                fetchJSON: (url, opts) => fetch(url, opts).then((r) => r.json())
+            };
+        }
+        const { qs, escapeHtml, fmt, money, cap, fetchJSON } = this.utils;
+        return { qs, escapeHtml, fmt, money, cap, fetchJSON };
     }
 }
 

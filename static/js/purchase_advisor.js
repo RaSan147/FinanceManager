@@ -209,7 +209,7 @@ class PurchaseAdvisor {
                 if (itemRec === 'yes') icon = '✅';
                 if (itemRec === 'no') icon = '❌';
                 if (itemRec === 'maybe') icon = '⚠️';
-                                                const date = window.SiteDate.toDateTimeString(item.created_at);
+                                                const date = globalThis.SiteDate.toDateTimeString(item.created_at);
                 const srcAmount = (item?.request?.amount_original ?? item?.request?.amount);
                 const amtNum = Number(srcAmount);
                 const amountSafe = Number.isFinite(amtNum) ? amtNum : 0;
