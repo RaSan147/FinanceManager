@@ -208,7 +208,7 @@
 		}
 
 		function renderCategoryChips(container, items) {
-			container.innerHTML = '';
+			if (container) App.utils.tools.del_child(container);
 			for (const it of items) {
 				const wrapper = document.createElement('span');
 				wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
@@ -373,10 +373,15 @@
 				} catch (_) {}
 				return;
 			}
-			listEl.innerHTML = '';
+			if (listEl) {
+				App.utils.tools.del_child(listEl);
+			}
 			let items = [...state.items];
 			if (!items.length) {
-				if (listEl) listEl.innerHTML = '<div class="text-muted small fst-italic">No items.</div>';
+				if (listEl) {
+					App.utils.tools.del_child(listEl);
+					listEl.innerHTML = '<div class="text-muted small fst-italic">No items.</div>';
+				}
 				updateActiveFilterChips();
 				updateFilterBtnActive();
 				return;

@@ -61,7 +61,7 @@
     function render() {
       if (!previewWrap) return;
       if (!pending.length) {
-        previewWrap.innerHTML = '';
+        App.utils.tools.del_child(previewWrap);
         if (clearBtn) clearBtn.classList.add('d-none');
         return;
       }

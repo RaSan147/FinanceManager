@@ -96,8 +96,8 @@ class PurchaseAdvisor {
     static displayAdvice(advice, targetEl) {
         // If a target container is provided, render there; otherwise fallback to the main feedback area
         const container = targetEl || document.getElementById('ai-feedback');
-        if (!container) return;
-        container.innerHTML = '';
+    if (!container) return;
+    App.utils.tools.del_child(container);
 
         // Normalize/adapt incoming advice object to safe defaults
         const safe = Object.assign({
@@ -181,7 +181,7 @@ class PurchaseAdvisor {
     static renderHistory(history) {
         // history: array, total: int, page: int, pageSize: int
         const container = document.getElementById('recommendation-history');
-        container.innerHTML = '';
+        if (container) App.utils.tools.del_child(container);
 
         // Support for new signature
         let items = history, total = 0, page = 1, pageSize = 5;

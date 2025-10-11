@@ -39,7 +39,7 @@
     const currentValue = categorySelect.value;
     
     // Clear current select
-    categorySelect.innerHTML = '';
+    if (categorySelect) App.utils.tools.del_child(categorySelect);
 
     // Add placeholder
     const placeholder = document.createElement('option');
@@ -47,23 +47,13 @@
     placeholder.textContent = 'Select a category';
     categorySelect.appendChild(placeholder);
 
-    // Add only options for selected type
+    // Add only optgroups that are flagged for the requested type. The template marks optgroups
+    // with `data-group-income` or `data-group-expense` and we treat those as authoritative.
     (allOptions || []).forEach(opt => {
-      // opt may be an Option or an OptGroup clone
       if (!opt || !opt.tagName) return;
-      // If it's an OPTION under an optgroup, tagName will be OPTION; preserve those
-      if (opt.tagName.toUpperCase() === 'OPTION') {
-        // Options may have dataset.groupIncome/groupExpense flags
-        if (typeVal === 'income' && opt.dataset && opt.dataset.groupIncome !== undefined) categorySelect.appendChild(opt.cloneNode(true));
-        else if (typeVal === 'expense' && opt.dataset && opt.dataset.groupExpense !== undefined) categorySelect.appendChild(opt.cloneNode(true));
-        return;
-      }
-      // For optgroup clones, iterate their child options
-      if (opt.tagName.toUpperCase() === 'OPTGROUP') {
-        Array.from(opt.querySelectorAll('option')).forEach(child => {
-          if (typeVal === 'income' && child.dataset && child.dataset.groupIncome !== undefined) categorySelect.appendChild(child.cloneNode(true));
-          else if (typeVal === 'expense' && child.dataset && child.dataset.groupExpense !== undefined) categorySelect.appendChild(child.cloneNode(true));
-        });
+      if (opt.tagName.toUpperCase() !== 'OPTGROUP') return;
+      if (opt.dataset && ((typeVal === 'income' && opt.dataset.groupIncome !== undefined) || (typeVal === 'expense' && opt.dataset.groupExpense !== undefined))) {
+        categorySelect.appendChild(opt.cloneNode(true));
       }
     });
 
@@ -91,14 +81,16 @@
 
   async function refreshCounterparties() {
     const kind = loanKind(categorySelect.value);
-    if (typeof kind === 'undefined') { dataList.innerHTML = ''; return; }
+    if (typeof kind === 'undefined') { if (dataList) App.utils.tools.del_child(dataList); return; }
     try {
       const url = new URL(window.location.origin + '/api/loans/counterparties');
       if (kind) url.searchParams.set('kind', kind);
       const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
       const data = await res.json();
       dataList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
-    } catch { dataList.innerHTML = ''; }
+    } catch {
+      if (dataList) App.utils.tools.del_child(dataList);
+    }
   }
 
   // ---------------------- Modal Openers ----------------------

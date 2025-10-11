@@ -133,7 +133,7 @@ class LoansModule {
             this.state.perPage = data.per_page || perPage;
             this.state.total = data.total || 0;
 
-            tbody.innerHTML = ''; // Clear existing rows
+            App.utils.tools.del_child(tbody); // Clear existing rows
 
             if (items.length === 0) {
                 const tr = document.createElement('tr');
@@ -163,11 +163,11 @@ class LoansModule {
 
     static renderPagination() {
         const { qs, createEl } = this.utils;
-        const wrap = qs('[data-loans-pagination]');
-        if (!wrap) return;
+    const wrap = qs('[data-loans-pagination]');
+    if (!wrap) return;
 
-        const totalPages = Math.ceil((this.state.total || 0) / (this.state.perPage || 10));
-        wrap.innerHTML = '';
+    const totalPages = Math.ceil((this.state.total || 0) / (this.state.perPage || 10));
+    App.utils.tools.del_child(wrap);
         if (totalPages <= 1) return;
 
         const ul = createEl('ul', { class: 'pagination justify-content-center mt-3' });
