@@ -1,5 +1,6 @@
 import json
 import time
+import traceback
 from typing import Any, List, Optional
 from bson import ObjectId
 
@@ -43,26 +44,30 @@ def default_serializer(obj):
         return str(obj)
     if hasattr(obj, "isoformat"):
         return obj.isoformat()
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+    raise TypeError(
+        f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
 def _strip(text: str, md_type: str) -> str:
     return FinancialBrain.strip_fences(text, md_type)
 
 
-def _compact_goal_with_local_currency(goal_dict:dict|GoalInDB, user: User, current_balance: float, include_ai_analysis=False) -> dict:
+def _compact_goal_with_local_currency(goal_dict: dict | GoalInDB, user: User, current_balance: float, include_ai_analysis=False) -> dict:
     """Return a compact goal dict and convert current pool to the goal currency.
 
     The compact representation intentionally keeps AI-facing fields
     light-weight to reduce token usage.
     """
     from utils.currency import currency_service
-    compact_goal = Goal.compact_dict(goal_dict, include_ai_analysis=include_ai_analysis)
+    compact_goal = Goal.compact_dict(
+        goal_dict, include_ai_analysis=include_ai_analysis)
     goal_currency = compact_goal["currency"]
 
-    compact_goal[f"current_balance_in_{goal_currency}"] = currency_service.convert_amount(current_balance, user.default_currency, goal_currency)
+    compact_goal[f"current_balance_in_{goal_currency}"] = currency_service.convert_amount(
+        current_balance, user.default_currency, goal_currency)
 
     return compact_goal
+
 
 def _build_financial_context(user: User) -> dict:
     """Assemble a compact financial context used by AI prompts.
@@ -88,15 +93,18 @@ def _build_financial_context(user: User) -> dict:
         # have one, but if any of these steps fail try individual fallbacks
         # instead of swallowing all errors and returning a zero balance.
         try:
-            lifetime_summary = calculate_lifetime_transaction_summary(user.id, db, cache_id=cache_id)
+            lifetime_summary = calculate_lifetime_transaction_summary(
+                user.id, db, cache_id=cache_id)
         except Exception:
             try:
-                lifetime_summary = calculate_lifetime_transaction_summary(user.id, db)
+                lifetime_summary = calculate_lifetime_transaction_summary(
+                    user.id, db)
             except Exception:
                 lifetime_summary = {"current_balance": 0}
 
         try:
-            year_summary = calculate_period_summary(user.id, db, 365, cache_id=cache_id)
+            year_summary = calculate_period_summary(
+                user.id, db, 365, cache_id=cache_id)
         except Exception:
             try:
                 year_summary = calculate_period_summary(user.id, db, 365)
@@ -106,44 +114,46 @@ def _build_financial_context(user: User) -> dict:
         try:
             end_now = now_utc()
             start_30 = end_now - timedelta(days=30)
-            last_30D_details = get_transactions(user.id, db, start_30, end_30 if False else end_now, cache_id=cache_id, clean=True)
+            last_30D_details = get_transactions(
+                user.id, db, start_30, end_30 if False else end_now, cache_id=cache_id, clean=True)
         except Exception:
             try:
                 end_now = now_utc()
                 start_30 = end_now - timedelta(days=30)
-                last_30D_details = get_transactions(user.id, db, start_30, end_now, clean=True)
+                last_30D_details = get_transactions(
+                    user.id, db, start_30, end_now, clean=True)
             except Exception:
                 last_30D_details = []
 
         try:
-            recent_3M_summary = get_N_month_income_expense(user.id, db, n=3, cache_id=cache_id)
+            recent_3M_summary = get_N_month_income_expense(
+                user.id, db, n=3, cache_id=cache_id)
         except Exception:
             try:
-                recent_3M_summary = get_N_month_income_expense(user.id, db, n=3)
+                recent_3M_summary = get_N_month_income_expense(
+                    user.id, db, n=3)
             except Exception:
                 recent_3M_summary = []
 
         # Respect user's saved goal sort preference (if present).
         try:
             user_doc = db.users.find_one({'_id': ObjectId(user.id)})
-            user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
+            user_goal_sort = (user_doc.get('sort_modes') or {}).get(
+                'goals') if user_doc else None
         except Exception:
             user_goal_sort = None
 
-        # Exclude heavy `ai_plan` text to keep tokens low.
-        proj = {
-            'ai_plan': 0,
-            'ai_priority': 1,
-            'ai_urgency': 1,
-            'ai_impact': 1,
-            'ai_health_impact': 1,
-            'ai_confidence': 1,
-            'ai_suggestions': 1,
-        }
+        # Exclude heavy `ai_plan` text to keep tokens low. Use exclusion-only
+        # projection to avoid MongoDB errors caused by mixing inclusion and
+        # exclusion. See: OperationFailure when using mixed projections.
+        proj = {'ai_plan': 0}
         try:
-            goals = Goal.get_active_goals(user.id, db, sort_mode=user_goal_sort, projection=proj)
-            compact_goals = [_compact_goal_with_local_currency(g, user, lifetime_summary.get("current_balance", 0)) for g in goals]
+            goals = Goal.get_active_goals(
+                user.id, db, sort_mode=user_goal_sort, projection=proj)
+            compact_goals = [_compact_goal_with_local_currency(
+                g, user, lifetime_summary.get("current_balance", 0)) for g in goals]
         except Exception:
+            traceback.print_exc()
             compact_goals = []
 
     finally:
@@ -173,6 +183,8 @@ def _build_financial_context(user: User) -> dict:
     }
 
 # ---------------- Prompt Builders -----------------
+
+
 def _analysis_prompt(user: User) -> str:
 
     # Pull multi-period data using a single cached transaction load to reduce Mongo hits.
@@ -193,7 +205,7 @@ def _analysis_prompt(user: User) -> str:
         "- Avoid duplicating tables/transactions that are already shown elsewhere in the main report."
         "- Do not include any scripts/css files or external links. Bootstrap 5.3.8 is already loaded in the DOM.\n"
 
-        f"\n\nUser Context: \n {json.dumps(financial_context, indent=2, default=str)}\n\n"
+        f"\n\nUser Context: \n {json.dumps(financial_context, indent=2, default=default_serializer)}\n\n"
 
         "HTML structure to follow: (Recommended, but adapt if needed)\n"
         "<div class='financial-report'>\n"
@@ -273,11 +285,12 @@ def _goal_priority_prompt(user: User, goal: dict) -> str:
     """
     financial_context = _build_financial_context(user)
     compact_goal = _compact_goal_with_local_currency(
-        goal, user, financial_context.get("lifetime_summary", {}).get("current_balance", 0)
+        goal, user, financial_context.get(
+            "lifetime_summary", {}).get("current_balance", 0)
     )
 
     return (
-"""You are a financial planning assistant. Your job: evaluate the importance and urgency of a single financial goal in the context of the user's finances. Respond with a STRICT JSON object only (no explanations, no markdown, no extra text).
+        """You are a financial planning assistant. Your job: evaluate the importance and urgency of a single financial goal in the context of the user's finances. Respond with a STRICT JSON object only (no explanations, no markdown, no extra text).
 """ + f"""
 Inputs:
 - financial_context: {json.dumps(financial_context, indent=2, default=str)}
@@ -315,8 +328,6 @@ Output only the JSON object (single line or pretty JSON is fine). Ensure valid J
     )
 
 
-
-
 # ---------------- Public API -----------------
 def get_ai_analysis(user: User) -> str:
     """Return HTML analysis for the sidebar (no markdown)."""
@@ -339,17 +350,21 @@ async def get_goal_plan(goal_dict: dict, user: User) -> str:
 
     import math
 
-    compact_goal = _compact_goal_with_local_currency(goal_dict, user, context["lifetime_summary"].get("current_balance", 0), include_ai_analysis=True)
+    compact_goal = _compact_goal_with_local_currency(
+        goal_dict, user, context["lifetime_summary"].get("current_balance", 0), include_ai_analysis=True)
     # compute months left (ceil of days / 30) and ensure at least 1
     days_left_val = int((compact_goal.get("days_left", 0) or 0))
     months_left = max(1, math.ceil(days_left_val / 30))
     compact_goal["months_left"] = months_left
 
     # Precompute helpful numeric fields to avoid model miscalculations
-    current_pool = float(context.get("lifetime_summary", {}).get("current_balance", 0) or 0.0)
+    current_pool = float(context.get("lifetime_summary", {}
+                                     ).get("current_balance", 0) or 0.0)
     target_amount = float(compact_goal.get("target_amount", 0) or 0.0)
-    monthly_income = float(context.get("user", {}).get("monthly_income") or 0.0)
-    required_monthly_savings = max(0.0, round((target_amount - current_pool) / max(1, months_left), 2))
+    monthly_income = float(context.get(
+        "user", {}).get("monthly_income") or 0.0)
+    required_monthly_savings = max(0.0, round(
+        (target_amount - current_pool) / max(1, months_left), 2))
     # Affordability labels per existing guidance
     ratio = required_monthly_savings / max(1.0, monthly_income)
     if ratio <= 0.25:
