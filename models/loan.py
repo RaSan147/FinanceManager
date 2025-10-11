@@ -79,7 +79,11 @@ class Loan:
         query: Dict[str, Any] = {'user_id': user_id}
         if not include_closed:
             query['status'] = 'open'
-        return list(db.loans.find(query).sort([('status', 1), ('created_at', -1)]))
+        # Ensure open loans are listed before closed ones while preserving
+        # the existing date ordering (newest first). Strings sort so that
+        # 'open' > 'closed', therefore sorting status descending (-1)
+        # places open loans at the top.
+        return list(db.loans.find(query).sort([('status', -1), ('created_at', -1)]))
 
     @staticmethod
     def list_open_counterparties(user_id: str, db, *, kind: Optional[str] = None) -> List[str]:

@@ -390,11 +390,11 @@ class GoalsModule {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(patchPayload)
                         });
-                        window.flash && window.flash('Goal updated (AI revalidating...)', 'success');
+                        window.flash?.('Goal updated (AI revalidating...)', 'success');
                         this.closeModal();
                         this.loadGoals(this.state.page);
                     } catch(err){
-                        window.flash && window.flash('Update failed','danger');
+                        window.flash?.('Update failed','danger');
                     }
                 });
             }, { once: false });
@@ -542,10 +542,10 @@ class GoalsModule {
             await this.utils.fetchJSON(`/api/goals/${id}/complete`, {
                 method: 'POST'
             });
-            window.flash && window.flash('Goal completed', 'success');
+            window.flash?.('Goal completed', 'success');
             this.loadGoals(this.state.page);
         } catch (err) {
-            window.flash && window.flash('Complete failed', 'danger');
+            window.flash?.('Complete failed', 'danger');
         }
     }
 
@@ -555,10 +555,10 @@ class GoalsModule {
             await this.utils.fetchJSON(`/api/goals/${id}`, {
                 method: 'DELETE'
             });
-            window.flash && window.flash('Goal deleted', 'success');
+            window.flash?.('Goal deleted', 'success');
             this.loadGoals(this.state.page);
         } catch (err) {
-            window.flash && window.flash('Delete failed', 'danger');
+            window.flash?.('Delete failed', 'danger');
         }
     }
 
@@ -567,9 +567,9 @@ class GoalsModule {
             await this.utils.fetchJSON(`/api/goals/${id}/revalidate`, {
                 method: 'POST'
             });
-            window.flash && window.flash('Revalidation started', 'info');
+            window.flash?.('Revalidation started', 'info');
         } catch (err) {
-            window.flash && window.flash('Revalidation failed', 'danger');
+            window.flash?.('Revalidation failed', 'danger');
         }
     }
 
@@ -580,7 +580,7 @@ class GoalsModule {
     // ------------- Modal Helpers -------------
     static openAddModal() {
         // Delegate to global GoalModal if present to avoid duplicate logic
-        if (window.GoalModal && typeof window.GoalModal.openCreate === 'function') {
+        if (typeof window.GoalModal?.openCreate === 'function') {
             window.GoalModal.openCreate();
             return;
         }

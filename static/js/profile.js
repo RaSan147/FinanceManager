@@ -27,9 +27,9 @@ class ProfileModule {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
-      window.flash && window.flash('Profile updated', 'success');
+  window.flash?.('Profile updated', 'success');
     } catch (err) {
-      window.flash && window.flash(err.message || 'Update failed', 'danger');
+  window.flash?.(err.message || 'Update failed', 'danger');
     } finally {
       btn.disabled = false;
       btn.textContent = original;

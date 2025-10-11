@@ -55,11 +55,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     });
     
-    // Set today's date as default for date inputs
-    if (!window.SiteDate) throw new Error('SiteDate must be loaded before script.js');
-    var today = window.SiteDate.toDateString(new Date());
-    document.getElementById('date')?.setAttribute('value', today);
-    document.getElementById('target_date')?.setAttribute('min', today);
+    // Set today's date as default for date inputs. SiteDate is provided globally as globalThis.SiteDate
+    var today = globalThis.SiteDate.toDateString(new Date());
+    const dateEl = document.getElementById('date');
+    if (dateEl) dateEl.setAttribute('value', today);
+
+    const targetEl = document.getElementById('target_date');
+    if (targetEl) targetEl.setAttribute('min', today);
     
     // Form validation
     var forms = document.querySelectorAll('.needs-validation');

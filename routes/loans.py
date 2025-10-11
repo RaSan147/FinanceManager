@@ -21,14 +21,27 @@ def init_loans_blueprint(mongo):
     def api_loans_list():
         from flask import request
         include_closed = request.args.get('include_closed', 'true').lower() != 'false'
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        if per_page > 100:
+            per_page = 100
+        # Calculate skip/limit and total count
+        skip = (page - 1) * per_page
+        total = mongo.db.loans.count_documents({'user_id': current_user.id})
+        if not include_closed:
+            total = mongo.db.loans.count_documents({'user_id': current_user.id, 'status': 'open'})
+
         loans = Loan.list_user_loans(current_user.id, mongo.db, include_closed=include_closed)
+        # Apply server-side pagination on the returned cursor/list
+        # Loan.list_user_loans currently returns a list; slice accordingly
+        paged = loans[skip: skip + per_page]
         out = []
-        for l in loans:
+        for l in paged:
             d = dict(l)
             if d.get('_id'):
                 d['_id'] = str(d['_id'])
             out.append(d)
-        return jsonify({'items': out})
+        return jsonify({'items': out, 'total': total, 'page': page, 'per_page': per_page})
 
     @bp.route('/api/loans/counterparties')
     @login_required

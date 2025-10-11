@@ -123,11 +123,11 @@
   btnZoomReset && btnZoomReset.addEventListener('click', () => resetTransform());
 
   // Wheel zoom
-  canvas && canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1 : -1); }, { passive:false });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1 : -1); }, { passive:false });
 
   // Drag to pan
   let drag = false, lx=0, ly=0;
-  canvas && canvas.addEventListener('mousedown', e => {
+  canvas.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
     // ignore drags that start on viewer controls (prev/next/close/tools)
     if (e.target && e.target.closest && e.target.closest('.fm-image-viewer-tool-btn, .fm-image-viewer-btn, .fm-image-viewer-close')) return;
@@ -135,8 +135,8 @@
   });
   window.addEventListener('mousemove', e => { if(!drag) return; const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY; tx+=dx; ty+=dy; applyTransform(); });
   // Ensure mouseup and pointerup always clear drag state to avoid stuck drag
-  window.addEventListener('mouseup', () => { drag = false; touchDrag = false; if (canvas) canvas.classList.remove('dragging'); });
-  window.addEventListener('pointerup', () => { drag = false; touchDrag = false; if (canvas) canvas.classList.remove('dragging'); });
+  window.addEventListener('mouseup', () => { drag = false; touchDrag = false; canvas.classList.remove('dragging'); });
+  window.addEventListener('pointerup', () => { drag = false; touchDrag = false; canvas.classList.remove('dragging'); });
 
   // Touch support: drag / swipe / pinch / double-tap
   let touchDrag = false, touchLx = 0, touchLy = 0;
@@ -149,7 +149,7 @@
     return Math.sqrt(dx*dx + dy*dy);
   }
 
-  canvas && canvas.addEventListener('touchstart', e => {
+  canvas.addEventListener('touchstart', e => {
     if (e.touches.length === 1) {
       // single touch -> potential drag or double-tap
       const t = e.touches[0];
@@ -173,7 +173,7 @@
     }
   }, { passive:false });
 
-  canvas && canvas.addEventListener('touchmove', e => {
+  canvas.addEventListener('touchmove', e => {
     if (e.touches.length === 2 && lastTouchCount === 2) {
       const dist = touchDistance(e.touches[0], e.touches[1]);
       const factor = dist / (pinchStartDist || dist);
@@ -193,7 +193,7 @@
     }
   }, { passive:false });
 
-  canvas && canvas.addEventListener('touchend', e => {
+  canvas.addEventListener('touchend', e => {
     canvas.classList.remove('dragging');
     if (lastTouchCount === 2 && (e.touches.length < 2)) {
       // pinch ended
@@ -214,10 +214,10 @@
   });
 
   // Prevent native dragstart which interferes with our mouse handling
-  if (stageImg && stageImg.addEventListener) stageImg.addEventListener('dragstart', e => e.preventDefault());
+  stageImg.addEventListener('dragstart', e => e.preventDefault());
 
   // Double click toggle 1x / 2x
-  canvas && canvas.addEventListener('dblclick', () => { scale = (scale>1.01)?1:2; tx=ty=0; applyTransform(); });
+  canvas.addEventListener('dblclick', () => { scale = (scale>1.01)?1:2; tx=ty=0; applyTransform(); });
 
   document.addEventListener('keydown', e => {
     if (!backdrop.classList.contains('active')) return;

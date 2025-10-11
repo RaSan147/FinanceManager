@@ -1,56 +1,62 @@
 (() => {
-  if (window.SiteDate) return;
-
   // SiteDate: central date parsing and formatting utilities used across the site.
-  // Public API (preserved):
-  // - parse(obj): returns a Date or null
-  // - toDateString(obj): 'YYYY-MM-DD' or '' (UTC-based)
-  // - toDateTimeString(obj): 'YYYY-MM-DD HH:MM' or '' (UTC-based)
-  // - toISOString(obj): ISO string or ''
+  // Exposes a single frozen global instance `SiteDate` (attached to `globalThis`).
+  // Public API: parse, toDateString, toDateTimeString, toISOString, format, relative
+
   class SiteDateUtil {
+    /**
+     * Parse various inputs into a Date or null.
+     * Accepts: Date, numeric timestamps (seconds or ms), ISO-like strings,
+     * or objects containing keys like $date, date, iso, datetime, at, value.
+     */
     parse(input) {
       if (input == null) return null;
-      // If already a Date
+
+      // Already a Date instance
       if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
 
-      // Numbers (timestamps in seconds or milliseconds)
+      // Numbers: timestamp in seconds or milliseconds
       if (typeof input === 'number') {
         return new Date(input > 1e12 ? input : input * 1000);
       }
 
-      // Strings: try Date.parse first (handles ISO and many common formats)
+      // Strings: handle empty, numeric timestamps, ISO, or space-separated date/time
       if (typeof input === 'string') {
         const s = input.trim();
         if (!s) return null;
-        // Fast numeric string -> treat as timestamp
+
+        // Pure integer strings: treat as unix timestamp (seconds or ms)
         if (/^-?\d+$/.test(s)) {
           const n = Number(s);
           return new Date(n > 1e12 ? n : n * 1000);
         }
-        // Try Date.parse
+
+        // Try built-in parser first (covers ISO and many browser-supported formats)
         const parsed = Date.parse(s);
         if (!isNaN(parsed)) return new Date(parsed);
-        // Try normalizing common "YYYY-MM-DD hh:mm" without T to ISO
+
+        // Some inputs use a space instead of 'T' between date and time (e.g. "YYYY-MM-DD hh:mm")
         const alt = s.replace(' ', 'T');
         const parsed2 = Date.parse(alt);
         if (!isNaN(parsed2)) return new Date(parsed2);
+
         return null;
       }
 
-      // Objects with typical date keys
+      // Objects with date-like fields (Mongo-style or wrapped values)
       if (typeof input === 'object') {
         const keys = ['$date', 'date', 'iso', 'datetime', 'at', 'value'];
         for (const k of keys) {
-          if (k in input) {
-            return this.parse(input[k]);
-          }
+          if (k in input) return this.parse(input[k]);
         }
       }
 
       return null;
     }
 
-    // Format helpers
+    /**
+     * Return UTC date in YYYY-MM-DD (empty string for invalid input)
+     */
     toDateString(input) {
       const d = this.parse(input);
       if (!d) return '';
@@ -60,6 +66,9 @@
       return `${y}-${m}-${day}`;
     }
 
+    /**
+     * Return UTC date/time in "YYYY-MM-DD HH:MM" (minutes precision)
+     */
     toDateTimeString(input) {
       const d = this.parse(input);
       if (!d) return '';
@@ -71,13 +80,18 @@
       return `${y}-${m}-${day} ${hh}:${mm}`;
     }
 
+    /**
+     * Return an ISO string or empty string for invalid input
+     */
     toISOString(input) {
       const d = this.parse(input);
       return d ? d.toISOString() : '';
     }
 
-    // Locale-aware display formatting using Intl.DateTimeFormat
-    // Example opts: { year: 'numeric', month: 'short', day: '2-digit' }
+    /**
+     * Locale-aware formatted representation using Intl.DateTimeFormat.
+     * `opts` follows Intl.DateTimeFormat options. Falls back to YYYY-MM-DD on error.
+     */
     format(input, opts) {
       const d = this.parse(input);
       if (!d) return '';
@@ -89,7 +103,9 @@
       }
     }
 
-    // Human-friendly relative time like '5m ago', '2h ago', '3d ago'.
+    /**
+     * Human-friendly relative time: '5s ago', '10m ago', '3h ago', '2d ago', etc.
+     */
     relative(input) {
       const d = this.parse(input);
       if (!d) return '';
@@ -112,6 +128,6 @@
     }
   }
 
-  // Expose a single, frozen instance to encourage read-only usage.
-  window.SiteDate = Object.freeze(new SiteDateUtil());
+  // Expose a single, frozen instance globally via globalThis (works in browsers and Node-like envs)
+  globalThis.SiteDate = Object.freeze(new SiteDateUtil());
 })();
