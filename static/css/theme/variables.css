@@ -18,7 +18,7 @@
 	/* Channel lists for composing alpha variants */
 	--accent-secondary-rgb: 107, 114, 128;
 	--accent-secondary: rgb(107, 114, 128);
-
+	
 	
 	--border-color: #e5e7eb;
 	--card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
@@ -47,6 +47,7 @@
 	--bs-success-bg-subtle: #d1e7dd;
 	/* .bg-white rgba(var(--bs-white-rgb), var(--bs-bg-opacity)) !important; */
 	--bs-white-rgb: var(--bg-primary-rgb);
+	--bs-secondary-color: rgba(33, 37, 41, 0.75);
 	--bs-bg-opacity: 1;
 }
 
@@ -87,6 +88,7 @@
 
 
 	--bs-success-bg-subtle: #0b5750;
+	--bs-secondary-color: rgba(248, 249, 250, 0.75);
 }
 
 

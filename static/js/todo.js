@@ -365,10 +365,18 @@
 		}
 
 		function renderList() {
+			if (!listEl) {
+				try {
+					console.warn('todo.js: renderList called but #todoFlatList (listEl) is missing');
+					// include a stack trace to help identify the caller and timing
+					console.trace && console.trace();
+				} catch (_) {}
+				return;
+			}
 			listEl.innerHTML = '';
 			let items = [...state.items];
 			if (!items.length) {
-				listEl.innerHTML = '<div class="text-muted small fst-italic">No items.</div>';
+				if (listEl) listEl.innerHTML = '<div class="text-muted small fst-italic">No items.</div>';
 				updateActiveFilterChips();
 				updateFilterBtnActive();
 				return;
@@ -454,6 +462,10 @@
 				const chips = []; // stage & sort omitted
 				if (state.category) chips.push(`<span class="badge text-bg-info text-dark">Cat: ${state.category}</span>`);
 				if (state.q) chips.push(`<span class="badge text-bg-dark">Q: ${state.q}</span>`);
+				if (!activeFiltersBar) {
+					console.debug('todo.js: activeFiltersBar missing; skipping updateActiveFilterChips');
+					return;
+				}
 				activeFiltersBar.innerHTML = chips.join(' ');
 				activeFiltersBar.style.display = chips.length ? 'flex' : 'none';
 			}
@@ -1259,23 +1271,57 @@
 			// Set up modal cleanup
 			window.CommentFormatter && window.CommentFormatter.setupModalCleanup(detailModalEl, ['[data-todo-comment-form]']);
 
-			// Initial fetch
-			try {
-				if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) {
-					console.debug('todo.js: calling apiList()');
-					console.log('todo.js: calling apiList()');
-				}
-			} catch (_) {}
-			apiList();
-			// Ensure global handlers are attached after initial data render so
-			// buttons/filters that may not have been present at script load get bound.
-			try { attachGlobalHandlers(); } catch (_) {}
-
-
 			// Attach global UI handlers idempotently. This helps if some DOM anchors
 			// weren't present at initial script run — we can re-bind after the list
 			// is rendered or whenever needed.
 			let _globalHandlersAttached = false;
+
+			// Start initial fetch: wait for anchors if necessary (avoid race where
+			// apiList runs before DOM anchors are present). We use a short
+			// MutationObserver window (5s) and fall back to proceed anyway.
+			function startInitialFetch() {
+				const startFetch = () => {
+					try {
+						if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) {
+							console.debug('todo.js: calling apiList()');
+							console.log('todo.js: calling apiList()');
+						}
+					} catch (_) {}
+					// perform the list fetch (safe even if anchors absent)
+					apiList();
+					// attach handlers defensively
+					try { attachGlobalHandlers(); } catch (_){ }
+				};
+
+				if (listEl && tmpl) {
+					startFetch();
+					return;
+				}
+
+				console.debug('todo.js: waiting for anchors before initial fetch');
+				const obsTarget = document.body || document.documentElement;
+				let timedOut = false;
+				const obs = new MutationObserver((mutations, o) => {
+					const l = document.getElementById('todoFlatList');
+					const t = document.getElementById('todoItemTemplate');
+					if (l && t) {
+						listEl = l; tmpl = t;
+						o.disconnect();
+						clearTimeout(timeoutId);
+						startFetch();
+					}
+				});
+				obs.observe(obsTarget, { childList: true, subtree: true });
+				const timeoutId = setTimeout(() => {
+					timedOut = true;
+					obs.disconnect();
+					console.warn('todo.js: anchors not found within wait window; proceeding anyway');
+					startFetch();
+				}, 5000);
+			}
+
+			startInitialFetch();
+
 			function attachGlobalHandlers() {
 				try {
 					// Stage view menu
@@ -1418,14 +1464,23 @@
 			once: true
 		});
 	} else {
-		onDom();
+		// yield one animation frame to reduce races with other scripts that
+		// run immediately after parsing. This is better than calling onDom()
+		// synchronously which can trigger init before anchors are inserted.
+		try {
+			if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(onDom);
+			else setTimeout(onDom, 0);
+		} catch (_) {
+			try { setTimeout(onDom, 0); } catch (_) { onDom(); }
+		}
 	}
 
 	// Also attempt immediate init in the common case where DOM is ready and App is available
 	try {
 		if (document.readyState !== 'loading' && window.App && App.utils) {
 			try {
-				_init();
+				if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => { try { _init(); } catch (e) { console.error('todo.js init error', e); } });
+				else setTimeout(() => { try { _init(); } catch (e) { console.error('todo.js init error', e); } }, 0);
 			} catch (e) {
 				console.error('todo.js init error', e);
 			}
