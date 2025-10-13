@@ -221,7 +221,10 @@ class Todo:
         # Allow explicit clearing (setting to None) for selected nullable fields
         allow_null = allow_null or []
         upd_raw: dict[str, Any] = {}
-        for k, v in patch.model_dump().items():
+        # Only iterate fields explicitly provided by the client. This ensures
+        # we don't accidentally touch fields that were omitted. Empty strings
+        # provided in the payload will be included here and applied as-is.
+        for k, v in patch.model_dump(exclude_unset=True).items():
             if v is not None:
                 upd_raw[k] = v
             elif k in allow_null:

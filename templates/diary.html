@@ -11,19 +11,27 @@
 <div class="card mb-3">
   <div class="card-body p-3">
     <div class="d-flex flex-wrap align-items-center mb-3 gap-3">
-        <div class="me-auto"></div>
+      <div class="me-auto"></div>
+      <div class="d-flex align-items-center gap-2 small flex-grow-1" id="diaryActiveFiltersBar" style="display:none"></div>
+      <div class="d-flex align-items-center gap-2 ms-auto">
         <div class="btn-group btn-group-sm">
-          <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" id="btnSortMenu" aria-expanded="false"><i class="fa fa-arrow-up-wide-short"></i> <span class="d-none d-md-inline" id="currentSortLabel">Newest</span></button>
-          <ul class="dropdown-menu dropdown-menu-end small" id="sortMenu">
+          <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" id="btnDiarySortMenu" aria-expanded="false">
+            <i class="fa fa-arrow-up-wide-short"></i>
+            <span class="d-none d-md-inline" id="diaryCurrentSortLabel">Newest</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end small" id="diarySortMenu">
             <li><button class="dropdown-item" data-sort="created_desc">Newest</button></li>
             <li><button class="dropdown-item" data-sort="created_asc">Oldest</button></li>
             <li><button class="dropdown-item" data-sort="updated_desc">Recently Updated</button></li>
             <li><button class="dropdown-item" data-sort="updated_asc">Least Updated</button></li>
           </ul>
         </div>
-      <div class="d-flex align-items-center gap-2 small flex-grow-1" id="diaryActiveFiltersBar" style="display:none"></div>
-      <div class="btn-group btn-group-sm">
-        <button class="btn btn-outline-secondary" id="btnDiaryFilterToggle" title="Show filters"><i class="fa fa-filter"></i> <span class="d-none d-md-inline">Filter</span></button>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" id="btnDiaryFilterToggle" title="Show filters">
+            <i class="fa fa-filter"></i>
+            <span class="d-none d-md-inline">Filter</span>
+          </button>
+        </div>
       </div>
     </div>
     <div id="diaryInlineFilters" class="row g-2 mb-2 d-none">
@@ -31,10 +39,7 @@
         <input type="text" class="form-control form-control-sm" id="diarySearch" placeholder="Search...">
       </div>
       <div class="col-6 col-md-3 col-lg-2">
-        <select class="form-select form-select-sm" id="diaryFilterCategory">
-          <option value="">Category (any)</option>
-          {% for c in categories %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
-        </select>
+        <input type="text" class="form-control form-control-sm" id="diaryFilterCategory" placeholder="Category (any)" />
       </div>
       <div class="col-12 col-md-2 col-lg-2 d-flex gap-2">
         <button class="btn btn-sm btn-primary" id="btnDiaryApplyFilters">Apply</button>

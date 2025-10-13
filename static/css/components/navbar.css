@@ -66,18 +66,23 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
 
 /* Compact mobile (below lg) – simple, flat, full-width for tap size without card look */
 @media (max-width: 991.98px) {
+	/* Offcanvas body replaces navbar-collapse on mobile */
+	.glassy-nav-offcanvas .offcanvas-body,
 	.glassy-nav .navbar-collapse {
 		padding: .5rem 0 .75rem;
 	}
 
+	.glassy-nav-offcanvas .offcanvas-body .navbar-nav,
 	.glassy-nav .navbar-collapse .navbar-nav {
 		width: 100%;
 	}
 
+	.glassy-nav-offcanvas .offcanvas-body .navbar-nav>.nav-item,
 	.glassy-nav .navbar-collapse .navbar-nav>.nav-item {
 		margin: .15rem .65rem;
 	}
 
+	.glassy-nav-offcanvas .offcanvas-body .navbar-nav>.nav-item>.nav-link,
 	.glassy-nav .navbar-collapse .navbar-nav>.nav-item>.nav-link {
 		display: flex;
 		width: 100%;
@@ -91,19 +96,34 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
 		transition: background .18s ease, color .18s ease;
 	}
 
+	.glassy-nav-offcanvas .offcanvas-body .navbar-nav>.nav-item>.nav-link:hover,
 	.glassy-nav .navbar-collapse .navbar-nav>.nav-item>.nav-link:hover {
 		background: var(--hover-bg);
 	}
 
+	.glassy-nav-offcanvas .offcanvas-body .navbar-nav>.nav-item>.nav-link.active,
 	.glassy-nav .navbar-collapse .navbar-nav>.nav-item>.nav-link.active {
 		background: var(--hover-bg);
 		font-weight: 600;
 	}
 
+	.glassy-nav-offcanvas .offcanvas-body .navbar-nav>.nav-item>.nav-link:focus-visible,
 	.glassy-nav .navbar-collapse .navbar-nav>.nav-item>.nav-link:focus-visible {
 		outline: 2px solid var(--accent-color, #6ea8fe);
 		outline-offset: 1px;
 	}
+}
+
+/* Offcanvas panel look to match glassy theme on mobile */
+.glassy-nav-offcanvas {
+	background-color: var(--glass-bg);
+	border-left: 1px solid var(--glass-border);
+}
+.glassy-nav-offcanvas .offcanvas-title,
+.glassy-nav-offcanvas .btn-close,
+.glassy-nav-offcanvas .nav-link,
+.glassy-nav-offcanvas .dropdown-item {
+	color: var(--text-primary) !important;
 }
 
 /* Desktop spacing + compact pills */
