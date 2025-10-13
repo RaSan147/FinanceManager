@@ -7,6 +7,7 @@ acceptable environment formats where helpful.
 
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 
@@ -74,6 +75,23 @@ class Config:
     # Default currency (ISO 4217). Stored uppercase to avoid downstream checks
     # needing to normalize values.
     DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "USD").upper()
+
+    # Session / cookie defaults. Make sessions persistent by default so
+    # installed PWAs (and browsers that treat sessions specially) will
+    # retain the session across app restarts. Adjust these via environment
+    # variables in production as appropriate.
+    PERMANENT_SESSION_DAYS = int(os.getenv("PERMANENT_SESSION_DAYS", "30"))
+    PERMANENT_SESSION_LIFETIME = timedelta(days=PERMANENT_SESSION_DAYS)
+
+    # Controls the duration of the Flask-Login "remember me" cookie.
+    REMEMBER_COOKIE_DAYS = int(os.getenv("REMEMBER_COOKIE_DAYS", "30"))
+    REMEMBER_COOKIE_DURATION = timedelta(days=REMEMBER_COOKIE_DAYS)
+
+    # Cookie attribute defaults. SESSION_COOKIE_SECURE should be enabled
+    # in production (HTTPS). SESSION_COOKIE_SAMESITE may be None/"Lax"/"Strict"/"None".
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = str(os.getenv("SESSION_COOKIE_SECURE", "0")).lower() in {"1", "true", "yes", "on"}
+    SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
     # Performance logging controls. Keep these off by default in production.
     LOG_PERF_DETAILS = str(os.getenv("LOG_PERF_DETAILS", "0")).lower() in {

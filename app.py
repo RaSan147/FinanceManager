@@ -219,7 +219,11 @@ def create_app(config_object=Config):
             user_data = mongo.db.users.find_one({'email': email})
             if user_data and bcrypt.check_password_hash(user_data['password'], password):
                 user = User(user_data, mongo.db)
-                login_user(user)
+                # Make the session permanent so the cookie gets an expiry and
+                # persists across browser/app restarts (helpful for PWAs).
+                from flask import session
+                session.permanent = True
+                login_user(user, remember=True)
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('dashboard.index'))
             else:
