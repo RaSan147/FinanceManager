@@ -91,6 +91,9 @@ def init_todo_blueprint(mongo):
             patch = TodoUpdate(**data)
         except PydValidationError as ve:
             return jsonify({'errors': ve.errors()}), 400
+        # Fetch previous item to compare old vs new category for pruning
+        prev = Todo.get(todo_id, current_user.id, mongo.db)
+        prev_cat = prev.category if prev else None
         upd = Todo.update(
             todo_id,
             current_user.id,
@@ -100,11 +103,22 @@ def init_todo_blueprint(mongo):
         )
         if not upd:
             return jsonify({'error': 'Not found'}), 404
-        if upd.category:
-            try:
-                Todo.add_category(current_user.id, upd.category, mongo.db)
-            except Exception:
-                pass
+        try:
+            # Ensure new category exists (if any)
+            if upd.category:
+                try:
+                    Todo.add_category(current_user.id, upd.category, mongo.db)
+                except Exception:
+                    pass
+            # If previous category was removed/changed, attempt to prune it if unreferenced
+            if prev_cat and prev_cat != (upd.category or None):
+                try:
+                    # Will only delete if no entries reference it
+                    Todo.delete_category(current_user.id, prev_cat, mongo.db)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         return jsonify({'item': upd.model_dump(by_alias=True)})
 
     # Stage-only fast update (lighter payload, avoids accidental clearing of other fields)
@@ -216,9 +230,18 @@ def init_todo_blueprint(mongo):
     @bp.route('/api/todo/<todo_id>', methods=['DELETE'], endpoint='api_todo_delete')
     @login_required
     def api_todo_delete(todo_id):  # type: ignore[override]
+        # Capture previous category before deletion, to prune if becoming unused
+        prev = Todo.get(todo_id, current_user.id, mongo.db)
+        prev_cat = prev.category if prev else None
         ok = Todo.delete(todo_id, current_user.id, mongo.db)
         if not ok:
             return jsonify({'error': 'Not found'}), 404
+        # Attempt to prune previous category if now unused
+        try:
+            if prev_cat:
+                Todo.delete_category(current_user.id, prev_cat, mongo.db)
+        except Exception:
+            pass
         return jsonify({'success': True})
 
 

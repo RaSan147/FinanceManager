@@ -6,6 +6,20 @@
 		console.log('todo.js loaded');
 	} catch (e) { console.error('todo.js: console.log failed at module load', e); throw e; }
 
+	// Early, robust delegated click for the Filter toggle so it works even if init is delayed
+	try {
+		if (!document._todoFilterDelegatedEarly) {
+			document.addEventListener('click', (e) => {
+				const btn = e.target.closest('#btnTodoFilterToggle');
+				if (btn) {
+					const box = document.getElementById('todoInlineFilters');
+					if (box) box.classList.toggle('d-none');
+				}
+			});
+			document._todoFilterDelegatedEarly = true;
+		}
+	} catch (_) {}
+
 	// Move the large module body into an initializer so we can defer startup
 	let _initStarted = false;
 	const _init = () => {
@@ -95,8 +109,8 @@
 		const searchEl = document.getElementById('todoSearch');
 		const btnToDoApplyFilters = document.getElementById('btnToDoApplyFilters');
 		const btnClearFilters = document.getElementById('btnClearFilters');
-		const sortMenuEl = document.getElementById('sortMenu');
-		const currentSortLabel = document.getElementById('currentSortLabel');
+		const sortMenuEl = document.getElementById('todoSortMenu');
+		const currentSortLabel = document.getElementById('todoCurrentSortLabel');
 		const activeFiltersBar = document.getElementById('activeFiltersBar');
 		if (!listEl || !tmpl) {
 			try {
@@ -207,7 +221,7 @@
 			} catch (_) {}
 		}
 
-		function renderCategoryChips(container, items) {
+		function renderCategoryChips(container, items, onChange) {
 			if (container) App.utils.tools.del_child(container);
 			for (const it of items) {
 				const wrapper = document.createElement('span');
@@ -228,7 +242,8 @@
 					const idx = items.indexOf(it);
 					if (idx !== -1) {
 						items.splice(idx, 1);
-						renderCategoryChips(container, items);
+						if (typeof onChange === 'function') onChange(items);
+						else renderCategoryChips(container, items);
 					}
 				});
 				wrapper.appendChild(text);
@@ -237,14 +252,123 @@
 			}
 		}
 
+		// --- Typeahead for To-Do filter category (like Diary) ---
+		function setupTodoFilterTypeahead() {
+			if (!categorySel) return;
+			if (categorySel._typeaheadBound) return;
+			categorySel._typeaheadBound = true;
+
+			// Ensure the parent can anchor an absolute dropdown
+			const parent = categorySel.parentElement;
+			if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+
+			const menu = document.createElement('div');
+			menu.className = 'dropdown-menu show';
+			menu.style.position = 'absolute';
+			menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
+			menu.style.maxHeight = '240px';
+			menu.style.overflowY = 'auto';
+			menu.style.display = 'none';
+			menu.style.zIndex = '1051';
+			(parent || document.body).appendChild(menu);
+
+			let activeIndex = -1;
+			let items = [];
+
+			function updateMenuPosition() {
+				try {
+					const rect = categorySel.getBoundingClientRect();
+					const parentRect = (parent || document.body).getBoundingClientRect();
+					const top = rect.top - parentRect.top + categorySel.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
+					const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
+					menu.style.top = `${top}px`;
+					menu.style.left = `${left}px`;
+					menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
+				} catch (_) {}
+			}
+
+			function hide() { menu.style.display = 'none'; activeIndex = -1; }
+			function show() { if (items.length) menu.style.display = ''; }
+			function setActive(idx) {
+				activeIndex = idx;
+				const nodes = menu.querySelectorAll('.dropdown-item');
+				nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
+			}
+
+			function pick(idx) {
+				if (idx < 0 || idx >= items.length) return;
+				categorySel.value = items[idx];
+				hide();
+			}
+
+			function renderList(list) {
+				items = list;
+				if (!items.length) { hide(); return; }
+				menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
+				menu.querySelectorAll('.dropdown-item').forEach(btn => {
+					btn.addEventListener('mousedown', (e) => { // mousedown to beat blur
+						e.preventDefault();
+						const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10);
+						pick(idx);
+					});
+				});
+				setActive(-1);
+				updateMenuPosition();
+				show();
+			}
+
+			function filterHints(q) {
+				const ql = (q || '').trim().toLowerCase();
+				if (!todoCategoryHints || !todoCategoryHints.length) return [];
+				if (!ql) return todoCategoryHints.slice(0, 8);
+				const starts = [];
+				const contains = [];
+				for (const name of todoCategoryHints) {
+					const nl = name.toLowerCase();
+					if (nl.startsWith(ql)) starts.push(name);
+					else if (nl.includes(ql)) contains.push(name);
+					if (starts.length >= 8) break;
+				}
+				const out = starts.concat(contains.filter(n => !starts.includes(n)));
+				return out.slice(0, 8);
+			}
+
+			categorySel.addEventListener('input', () => {
+				const q = categorySel.value || '';
+				const list = filterHints(q);
+				renderList(list);
+			});
+			categorySel.addEventListener('focus', () => {
+				loadTodoCategoryHints().finally(() => {
+					const list = filterHints(categorySel.value || '');
+					renderList(list);
+				});
+			});
+			categorySel.addEventListener('blur', () => { setTimeout(hide, 120); });
+			categorySel.addEventListener('keydown', (e) => {
+				if (menu.style.display === 'none') return;
+				const max = items.length - 1;
+				if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
+				else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
+				else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } }
+				else if (e.key === 'Escape') { hide(); }
+			});
+			window.addEventListener('resize', updateMenuPosition);
+			window.addEventListener('scroll', updateMenuPosition, true);
+		}
+
 		function setupCategoryWidget(rootEl, opts) {
 			const chipsWrap = rootEl.querySelector(opts.chipsSelector);
 			const inputEl = rootEl.querySelector(opts.inputSelector);
 			const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
 			const list = opts.initial && Array.isArray(opts.initial) ? [...opts.initial] : [];
+			let _cancelNextAdd = false; // set when ESC pressed to avoid adding on blur
 			function sync() {
-				renderCategoryChips(chipsWrap, list);
 				if (jsonInput) jsonInput.value = JSON.stringify(list);
+				renderCategoryChips(chipsWrap, list, () => {
+					if (jsonInput) jsonInput.value = JSON.stringify(list);
+					renderCategoryChips(chipsWrap, list, sync);
+				});
 			}
 			function addFromInput() {
 				const val = (inputEl.value || '').trim();
@@ -262,9 +386,119 @@
 					addFromInput();
 				});
 			}
-			inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); } });
-			inputEl.addEventListener('blur', () => { if ((inputEl.value||'').trim()) addFromInput(); });
-			inputEl.addEventListener('focus', () => loadTodoCategoryHints());
+			// Typeahead dropdown for category input (suggestions from todoCategoryHints)
+			(function attachTypeahead() {
+				if (!inputEl) return;
+				const parent = inputEl.parentElement;
+				if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+				const menu = document.createElement('div');
+				menu.className = 'dropdown-menu show';
+				menu.style.position = 'absolute';
+				menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
+				menu.style.maxHeight = '240px';
+				menu.style.overflowY = 'auto';
+				menu.style.display = 'none';
+				menu.style.zIndex = '1061';
+				(parent || rootEl).appendChild(menu);
+
+				let activeIndex = -1;
+				let items = [];
+
+				function updateMenuPosition() {
+					try {
+						const rect = inputEl.getBoundingClientRect();
+						const parentRect = (parent || document.body).getBoundingClientRect();
+						const top = rect.top - parentRect.top + inputEl.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
+						const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
+						menu.style.top = `${top}px`;
+						menu.style.left = `${left}px`;
+						menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
+					} catch (_) {}
+				}
+
+				function hide() { menu.style.display = 'none'; activeIndex = -1; }
+				function show() { if (items.length) menu.style.display = ''; }
+				function setActive(idx) {
+					activeIndex = idx;
+					const nodes = menu.querySelectorAll('.dropdown-item');
+					nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
+				}
+
+				function pick(idx) {
+					if (idx < 0 || idx >= items.length) return;
+					const name = items[idx];
+					if (!list.includes(name)) list.push(name);
+					inputEl.value = '';
+					sync();
+					hide();
+					try { inputEl.focus(); } catch (_) {}
+				}
+
+				function renderList(listIn) {
+					items = listIn;
+					if (!items.length) { hide(); return; }
+					menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
+					menu.querySelectorAll('.dropdown-item').forEach(btn => {
+						btn.addEventListener('mousedown', (e) => {
+							e.preventDefault();
+							const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10);
+							pick(idx);
+						});
+					});
+					setActive(-1);
+					updateMenuPosition();
+					show();
+				}
+
+				function filterHints(q) {
+					const ql = (q || '').trim().toLowerCase();
+					if (!todoCategoryHints || !todoCategoryHints.length) return [];
+					if (!ql) return todoCategoryHints.slice(0, 8);
+					const starts = [];
+					const contains = [];
+					for (const name of todoCategoryHints) {
+						const nl = name.toLowerCase();
+						if (nl.startsWith(ql)) starts.push(name);
+						else if (nl.includes(ql)) contains.push(name);
+						if (starts.length >= 8) break;
+					}
+					const out = starts.concat(contains.filter(n => !starts.includes(n)));
+					return out.slice(0, 8);
+				}
+
+				inputEl.addEventListener('input', () => {
+					const q = inputEl.value || '';
+					const list = filterHints(q);
+					renderList(list);
+				});
+				inputEl.addEventListener('focus', () => {
+					loadTodoCategoryHints().finally(() => {
+						const list = filterHints(inputEl.value || '');
+						renderList(list);
+					});
+				});
+				inputEl.addEventListener('blur', () => { setTimeout(hide, 120); });
+				inputEl.addEventListener('keydown', (e) => {
+					if (menu.style.display !== 'none' && (e.key === 'Enter')) { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); return; } }
+					if (menu.style.display !== 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) {
+						const max = items.length - 1;
+						if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
+						else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
+						else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelNextAdd = true; inputEl.value=''; hide(); }
+						return;
+					}
+					if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelNextAdd = true; inputEl.value=''; hide(); return; }
+					if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); }
+				});
+				window.addEventListener('resize', updateMenuPosition);
+				window.addEventListener('scroll', updateMenuPosition, true);
+			})();
+
+			// Fallback basic behaviors
+			inputEl.addEventListener('blur', () => {
+				if (_cancelNextAdd) { _cancelNextAdd = false; return; }
+				if ((inputEl.value||'').trim()) addFromInput();
+			});
 			sync();
 			return { getList: () => list };
 		}
@@ -1223,10 +1457,7 @@
 					throw err;
 				}
 			});
-			safeOn(filterToggle, 'click', () => {
-				const box = document.getElementById('todoInlineFilters');
-				box.classList.toggle('d-none');
-			});
+			// Removed direct binding for filterToggle; using a single delegated handler instead to avoid double toggles
 			safeOn(btnToDoApplyFilters, 'click', () => {
 				state.q = searchEl.value.trim();
 				state.category = categorySel.value || '';
@@ -1272,6 +1503,9 @@
 
 			// Don't force label here beyond default; after first fetch user preference will set it.
 			updateFilterBtnActive();
+
+			// Add delegated click as a robust fallback for Filter toggle
+			// Removed secondary delegated handler to prevent duplicate toggles; the early global handler defined at load time is sufficient
 
 			// Set up modal cleanup
 			window.CommentFormatter && window.CommentFormatter.setupModalCleanup(detailModalEl, ['[data-todo-comment-form]']);
@@ -1350,15 +1584,7 @@
 						stageViewMenuEl._todoBound = true;
 					}
 
-					// Filters and search
-					const filterToggleEl = document.getElementById('btnTodoFilterToggle');
-					if (filterToggleEl && !filterToggleEl._todoBound) {
-						filterToggleEl.addEventListener('click', () => {
-							const box = document.getElementById('todoInlineFilters');
-							if (box) box.classList.toggle('d-none');
-						});
-						filterToggleEl._todoBound = true;
-					}
+					// Filters and search: filter toggle handled by single delegated listener defined at load time
 
 					const btnApply = document.getElementById('btnToDoApplyFilters');
 					if (btnApply && !btnApply._todoBound) {
@@ -1386,8 +1612,15 @@
 						btnClear._todoBound = true;
 					}
 
+					// Bind typeahead on focus and when filters are shown
+					const catInput = document.getElementById('todoFilterCategory');
+					if (catInput && !catInput._typeaheadInitBound) {
+						catInput._typeaheadInitBound = true;
+						catInput.addEventListener('focus', () => { try { setupTodoFilterTypeahead(); loadTodoCategoryHints(); } catch (_) {} });
+					}
+
 					// Sort menu
-					const sortMenuLocal = document.getElementById('sortMenu');
+					const sortMenuLocal = document.getElementById('todoSortMenu');
 					if (sortMenuLocal) {
 						sortMenuLocal.querySelectorAll('[data-sort]').forEach(el => {
 							if (el._todoBound) return;

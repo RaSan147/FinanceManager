@@ -55,7 +55,9 @@ def init_diary_blueprint(mongo):
         item = Diary.create(payload, mongo.db)
         if item.category:
             try:
-                Diary.add_category(current_user.id, item.category, mongo.db)
+                # Ensure each category exists in the category list
+                for name in (item.category or []):
+                    Diary.add_category(current_user.id, name, mongo.db)
             except Exception:
                 pass
         return jsonify({'item': item.model_dump(by_alias=True)})
@@ -68,12 +70,20 @@ def init_diary_blueprint(mongo):
             patch = DiaryUpdate(**data)
         except PydValidationError as ve:
             return jsonify({'errors': ve.errors()}), 400
+        # Fetch previous entry to know previous categories for pruning
+        prev = Diary.get(entry_id, current_user.id, mongo.db)
+        prev_cats = (prev.category or []) if prev else []
         upd = Diary.update(entry_id, current_user.id, patch, mongo.db)
         if not upd:
             return jsonify({'error': 'Not found'}), 404
-        if upd.category:
+        if upd.category is not None:
             try:
-                Diary.add_category(current_user.id, upd.category, mongo.db)
+                # Ensure any new categories are present
+                for name in (upd.category or []):
+                    Diary.add_category(current_user.id, name, mongo.db)
+                # For any categories removed by this update, attempt to prune if unreferenced
+                removed = [n for n in prev_cats if n not in (upd.category or [])]
+                Diary.prune_unused_categories(current_user.id, removed, mongo.db)
             except Exception:
                 pass
         return jsonify({'item': upd.model_dump(by_alias=True)})
@@ -81,9 +91,16 @@ def init_diary_blueprint(mongo):
     @bp.route('/api/diary/<entry_id>', methods=['DELETE'], endpoint='api_diary_delete')
     @login_required
     def api_diary_delete(entry_id):  # type: ignore[override]
+        # fetch categories before delete for potential pruning
+        prev = Diary.get(entry_id, current_user.id, mongo.db)
+        prev_cats = (prev.category or []) if prev else []
         ok = Diary.delete(entry_id, current_user.id, mongo.db)
         if not ok:
             return jsonify({'error': 'Not found'}), 404
+        try:
+            Diary.prune_unused_categories(current_user.id, prev_cats, mongo.db)
+        except Exception:
+            pass
         return jsonify({'success': True})
 
     @bp.route('/api/diary/<entry_id>/detail', methods=['GET'], endpoint='api_diary_detail')

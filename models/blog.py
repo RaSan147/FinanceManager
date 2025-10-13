@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from bson import ObjectId
+import re
 
 from utils.timezone_utils import now_utc
 
@@ -59,11 +60,27 @@ class Blog:
             return None
         allow_null = allow_null or []
         upd_raw: Dict[str, Any] = {}
-        for k, v in patch.model_dump().items():
-            if v is not None:
+        # If patch is a pydantic model, prefer to only iterate fields that
+        # were actually provided by the caller. model_dump(exclude_unset=True)
+        # preserves explicit nulls (None) when a client sent the field with
+        # value null, while omitted fields are not present.
+        if hasattr(patch, 'model_dump'):
+            items = patch.model_dump(exclude_unset=True)
+        else:
+            # Fallback: assume patch is a dict-like object
+            items = dict(patch)
+
+        for k, v in items.items():
+            # If the client sent explicit null and it's allowed, mark for unset
+            if v is None:
+                if k in (allow_null or []):
+                    upd_raw[k] = None
+                else:
+                    # Client provided null for a field not allowed to be null -> ignore
+                    continue
+            else:
+                # Respect whatever value client provided (including empty string)
                 upd_raw[k] = v
-            elif k in allow_null:
-                upd_raw[k] = None
         if not upd_raw:
             return existing
         upd_raw["updated_at"] = now_utc()
@@ -92,11 +109,24 @@ class Blog:
         sort: str = "created_desc",
     ) -> Tuple[List[Dict[str, Any]], int]:
         col = db[cls.entries_collection]
-        filt: Dict[str, Any] = {"user_id": user_id}
+        base: Dict[str, Any] = {"user_id": user_id}
+        conditions: List[Dict[str, Any]] = []
         if category:
-            filt["category"] = category
+            # Case-insensitive exact match on category for both scalar and array storage
+            safe = f"^{re.escape(category)}$"
+            conditions.append({
+                "$or": [
+                    {"category": {"$regex": safe, "$options": "i"}},
+                    {"category": {"$elemMatch": {"$regex": safe, "$options": "i"}}},
+                ]
+            })
         if q:
-            filt["$or"] = [{f: {"$regex": q, "$options": "i"}} for f in cls.text_search_fields]
+            conditions.append({"$or": [{f: {"$regex": q, "$options": "i"}} for f in cls.text_search_fields]})
+        filt: Dict[str, Any]
+        if conditions:
+            filt = {"$and": [base] + conditions}
+        else:
+            filt = base
         sort_map: Dict[str, List[tuple]] = {
             "created_desc": [("created_at", -1)],
             "created_asc": [("created_at", 1)],
@@ -132,7 +162,8 @@ class Blog:
     def delete_category(cls, user_id: str, name: str, db) -> bool:
         # Only allow deletion if no entry references it
         col_entries = db[cls.entries_collection]
-        used = col_entries.find_one({"user_id": user_id, "category": name})
+        # Check both category string equals and category array contains the name
+        used = col_entries.find_one({"user_id": user_id, "$or": [{"category": name}, {"category": {"$elemMatch": {"$eq": name}}}]})
         if used:
             return False
         res = db[cls.categories_collection].delete_one({"user_id": user_id, "name": name})

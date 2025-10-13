@@ -41,19 +41,166 @@
     async function loadDiaryCategoryHints() {
       try {
         const dl = document.getElementById('diaryCategoriesGlobal');
-        if (dl.dataset.loaded === '1') return;
+        if (dl && dl.dataset.loaded === '1') {
+          // Already loaded: ensure local cache is populated from existing options if empty
+          if (!diaryCategoryHints || diaryCategoryHints.length === 0) {
+            try { diaryCategoryHints = Array.from(dl.querySelectorAll('option')).map(o => o.value).filter(Boolean).slice(0, 200); } catch (_) {}
+          }
+          return;
+        }
         const data = await App.utils.fetchJSONUnified('/api/diary-categories', { dedupe: true });
         diaryCategoryHints = (data.items || []).map(c => c.name).filter(Boolean).slice(0, 200);
-        dl.innerHTML = diaryCategoryHints.map(n => `<option value="${n}"></option>`).join('');
-        dl.dataset.loaded = '1';
+        if (dl) {
+          dl.innerHTML = diaryCategoryHints.map(n => `<option value="${n}"></option>`).join('');
+          dl.dataset.loaded = '1';
+        }
       } catch (err) {
         console.warn('loadDiaryCategoryHints failed', err);
+        try {
+          // Fallback: read any server-rendered options so typeahead still works offline
+          const dl = document.getElementById('diaryCategoriesGlobal');
+          if (dl) diaryCategoryHints = Array.from(dl.querySelectorAll('option')).map(o => o.value).filter(Boolean).slice(0, 200);
+        } catch (_) {}
       }
     }
 
     function truncateText(txt, lim = 300) { return (!txt) ? '' : (txt.length > lim ? txt.slice(0, lim) + '…' : txt); }
 
-    function renderCategoryChips(container, items) {
+    // Remove any styling classes that would make an element behave like a
+    // badge/tag (background/text utilities or previously applied tag classes).
+    // This ensures we can safely reuse the template element as a neutral
+    // container when rendering multiple tags without leaving old tag-color-
+    // classes behind (which caused nested badge styling).
+    function stripBadgeLikeClasses(el) {
+      if (!el || !el.classList) return;
+      const cls = Array.from(el.classList);
+      for (const cn of cls) {
+        if (/^bg-/.test(cn) || /^text-bg-/.test(cn) || /^text-/.test(cn) || /^tag-color-/.test(cn) || cn === 'tag-badge' || cn === 'badge') {
+          el.classList.remove(cn);
+        }
+      }
+    }
+
+    function normalizeCatsInput(v) {
+      // Accept null/undefined, JSON string of array, or array.
+      // Always return an array of trimmed strings (no empty entries).
+      // Enforce max name length same as server (64 chars).
+      const MAX = 64;
+      if (v == null) return [];
+      let arr = [];
+      if (Array.isArray(v)) arr = v.slice();
+      else if (typeof v === 'string') {
+        // Try JSON parse first (we store JSON in hidden inputs). If that
+        // fails, treat it as an empty array — don't attempt fallback coercion.
+        try {
+          const maybe = JSON.parse(v || '[]');
+          if (Array.isArray(maybe)) arr = maybe.slice();
+          else arr = [];
+        } catch (_) { arr = []; }
+      } else {
+        return [];
+      }
+      return arr.map(s => (s || '').toString().trim()).filter(Boolean).map(s => s.length > MAX ? s.slice(0, MAX) : s);
+    }
+
+    // Convert a category value (array or comma-separated string) to array.
+    function categoryToArray(val) {
+      if (Array.isArray(val)) return val.slice();
+      if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
+      return [];
+    }
+
+    // Render static (non-removable) category badges into a container.
+    function renderStaticCategoryBadges(container, catsVal) {
+      if (!container) return;
+      const cats = categoryToArray(catsVal);
+      if (!cats.length) {
+        container.classList.add('d-none');
+        return;
+      }
+      if (cats.length === 1) {
+        const name = cats[0];
+        App.utils.tools.del_child(container);
+        try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(container, name); } catch (_) {}
+        container.textContent = name;
+        container.classList.remove('d-none');
+        return;
+      }
+      // Multiple: convert template badge into a neutral container and append children
+      stripBadgeLikeClasses(container);
+      App.utils.tools.del_child(container);
+      for (const name of cats) {
+        const wrapper = document.createElement('span');
+        wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
+        BlogHelpers.applyCategoryBadge(wrapper, name);
+        wrapper.style.fontSize = '0.9em';
+        const text = document.createElement('span');
+        text.textContent = name;
+        text.style.whiteSpace = 'nowrap';
+        wrapper.appendChild(text);
+        container.appendChild(wrapper);
+      }
+      container.classList.remove('d-none');
+    }
+
+    // Per-entry controller to isolate state for the currently opened diary in the detail modal.
+    class DiaryDetailController {
+      static forForm(editForm) {
+        if (!editForm._controller) editForm._controller = new DiaryDetailController(editForm);
+        return editForm._controller;
+      }
+      constructor(editForm) {
+        this.form = editForm;
+        this.id = editForm?.dataset?.diaryId || null;
+        this.canonical = { title: '', content: '', cats: [] };
+        this.widget = null;
+      }
+      setId(id) { this.id = id; }
+      setCanonical(item) {
+        this.canonical = {
+          title: item?.title || '',
+          content: item?.content || '',
+          cats: categoryToArray(item?.category)
+        };
+      }
+      ensureWidget(initialCats) {
+        try {
+          this.widget = setupCategoryWidget(this.form, {
+            chipsSelector: '[data-diary-detail-categories]',
+            inputSelector: '[data-diary-detail-category-input]',
+            jsonInputSelector: '[data-diary-detail-categories-json]',
+            initial: Array.isArray(initialCats) ? initialCats : []
+          });
+        } catch (_) { this.widget = null; }
+        return this.widget;
+      }
+      readCurrent() {
+        const fd = new FormData(this.form);
+        const obj = {};
+        fd.forEach((v, k) => { obj[k] = v; });
+        // categories is JSON array in hidden input
+        const catsArr = normalizeCatsInput(obj.categories);
+        return {
+          title: (obj.title || '').toString(),
+          content: (obj.content || '').toString(),
+          category: catsArr.length ? catsArr : null
+        };
+      }
+      buildMinimalPatch() {
+        const current = this.readCurrent();
+        const minimal = {};
+        if ((current.title || '') !== (this.canonical.title || '')) minimal.title = (current.title === '') ? null : current.title;
+        if ((current.content || '') !== (this.canonical.content || '')) minimal.content = (current.content === '') ? null : current.content;
+        const origCats = Array.isArray(this.canonical.cats) ? this.canonical.cats : [];
+        const curCats = normalizeCatsInput(current.category);
+        if (JSON.stringify(origCats) !== JSON.stringify(curCats)) {
+          minimal.category = curCats.length ? curCats : null;
+        }
+        return Object.keys(minimal).length ? minimal : null;
+      }
+    }
+
+    function renderCategoryChips(container, items, onChange) {
       if (container) App.utils.tools.del_child(container);
       for (const name of items) {
         const wrapper = document.createElement('span');
@@ -74,7 +221,12 @@
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const idx = items.indexOf(name);
-          if (idx !== -1) { items.splice(idx, 1); renderCategoryChips(container, items); }
+          if (idx !== -1) {
+            items.splice(idx, 1);
+            // Ensure underlying hidden JSON input stays in sync so saves detect changes
+            if (typeof onChange === 'function') onChange(items);
+            else renderCategoryChips(container, items);
+          }
         });
 
         wrapper.appendChild(text);
@@ -88,32 +240,125 @@
       const chipsWrap = rootEl.querySelector(opts.chipsSelector);
       const inputEl = rootEl.querySelector(opts.inputSelector);
       const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
-      const list = Array.isArray(opts.initial) ? [...opts.initial] : [];
+
+      // If a widget already exists for this jsonInput, reuse it and just reset the list.
+      if (jsonInput && jsonInput._diaryCatWidget) {
+        try {
+          jsonInput._diaryCatWidget.setList(Array.isArray(opts.initial) ? opts.initial : normalizeCatsInput(opts.initial));
+          return jsonInput._diaryCatWidget;
+        } catch (_) { /* fall through to rebuild */ }
+      }
+
+      // Helper to deduplicate while preserving order.
+      const dedupe = (arr) => {
+        const seen = new Set();
+        const out = [];
+        for (const s of (arr || [])) {
+          const v = (s || '').toString().trim();
+          if (!v) continue;
+          if (!seen.has(v)) { seen.add(v); out.push(v); }
+        }
+        return out;
+      };
+
+  let list = Array.isArray(opts.initial) ? dedupe([...opts.initial]) : dedupe(normalizeCatsInput(opts.initial));
+  let _cancelNextAdd = false; // set when ESC pressed to avoid adding on blur
 
       const sync = () => {
-        renderCategoryChips(chipsWrap, list);
         if (jsonInput) jsonInput.value = JSON.stringify(list);
+        renderCategoryChips(chipsWrap, list, () => {
+          // when a chip is removed, update JSON and re-render
+          if (jsonInput) jsonInput.value = JSON.stringify(list);
+          renderCategoryChips(chipsWrap, list, sync);
+        });
       };
 
       const addFromInput = () => {
         const val = (inputEl.value || '').trim();
         if (!val) return;
         const parts = val.split(',').map(s => s.trim()).filter(Boolean);
-        for (const p of parts) if (!list.includes(p)) list.push(p);
+        for (const p of parts) {
+          if (!list.includes(p)) list.push(p);
+        }
         inputEl.value = '';
         sync();
         try { inputEl.focus(); } catch (_) {}
       };
 
+      // Bind event handlers once per widget; keep references for clean teardown.
+      const onKeyDown = (e) => {
+        // If the typeahead menu is open and Enter pressed, let the menu handler run
+        if (menu && menu.style.display !== 'none' && e.key === 'Enter') return;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelNextAdd = true; inputEl.value = ''; hide(); return; }
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); }
+      };
+      const onBlur = () => { if (_cancelNextAdd) { _cancelNextAdd = false; return; } if ((inputEl.value || '').trim()) addFromInput(); };
+      const onFocus = () => { loadDiaryCategoryHints(); };
       const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-diary-create-add-btn]') || rootEl.querySelector('[data-diary-detail-add-btn]');
-      if (addBtn) addBtn.addEventListener('click', (e) => { e.preventDefault(); addFromInput(); });
+      const onAddClick = (e) => { e.preventDefault(); addFromInput(); };
 
-      inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); } });
-      inputEl.addEventListener('blur', () => { if ((inputEl.value || '').trim()) addFromInput(); });
-      inputEl.addEventListener('focus', loadDiaryCategoryHints);
+      if (addBtn) addBtn.addEventListener('click', onAddClick);
+      inputEl.addEventListener('keydown', onKeyDown);
+      inputEl.addEventListener('blur', onBlur);
+      inputEl.addEventListener('focus', onFocus);
+
+      // Typeahead dropdown for diary category input (suggestions from diaryCategoryHints)
+      const parent = inputEl.parentElement;
+      if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+      const menu = document.createElement('div');
+      menu.className = 'dropdown-menu show';
+      menu.style.position = 'absolute';
+      menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
+      menu.style.maxHeight = '240px';
+      menu.style.overflowY = 'auto';
+      menu.style.display = 'none';
+      menu.style.zIndex = '1061';
+      (parent || rootEl).appendChild(menu);
+
+      let activeIndex = -1;
+      let items = [];
+
+      function updateMenuPosition() {
+        try {
+          const rect = inputEl.getBoundingClientRect();
+          const parentRect = (parent || document.body).getBoundingClientRect();
+          const top = rect.top - parentRect.top + inputEl.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
+          const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
+          menu.style.top = `${top}px`;
+          menu.style.left = `${left}px`;
+          menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
+        } catch (_) {}
+      }
+
+      function hide() { menu.style.display = 'none'; activeIndex = -1; }
+      function show() { if (items.length) menu.style.display = ''; }
+      function setActive(idx) { activeIndex = idx; const nodes = menu.querySelectorAll('.dropdown-item'); nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex)); }
+      function pick(idx) { if (idx < 0 || idx >= items.length) return; const name = items[idx]; if (!list.includes(name)) list.push(name); inputEl.value = ''; sync(); hide(); try { inputEl.focus(); } catch (_) {} }
+      function renderList(listIn) { items = listIn; if (!items.length) { hide(); return; } menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join(''); menu.querySelectorAll('.dropdown-item').forEach(btn => { btn.addEventListener('mousedown', (e) => { e.preventDefault(); const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10); pick(idx); }); }); setActive(-1); updateMenuPosition(); show(); }
+      function filterHints(q) { const ql = (q || '').trim().toLowerCase(); if (!diaryCategoryHints || !diaryCategoryHints.length) return []; if (!ql) return diaryCategoryHints.slice(0, 8); const starts = []; const contains = []; for (const name of diaryCategoryHints) { const nl = name.toLowerCase(); if (nl.startsWith(ql)) starts.push(name); else if (nl.includes(ql)) contains.push(name); if (starts.length >= 8) break; } const out = starts.concat(contains.filter(n => !starts.includes(n))); return out.slice(0, 8); }
+      inputEl.addEventListener('input', () => { const q = inputEl.value || ''; const list2 = filterHints(q); renderList(list2); });
+      inputEl.addEventListener('focus', () => { loadDiaryCategoryHints().finally(() => { const list2 = filterHints(inputEl.value || ''); renderList(list2); }); });
+  inputEl.addEventListener('keydown', (e) => { if (menu.style.display !== 'none' && (e.key === 'Enter')) { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); return; } } if (menu.style.display !== 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) { const max = items.length - 1; if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); hide(); } return; } });
+      window.addEventListener('resize', updateMenuPosition);
+      window.addEventListener('scroll', updateMenuPosition, true);
+
+      const widget = {
+        getList: () => list,
+        setList: (arr) => { list = dedupe(Array.isArray(arr) ? arr.slice() : normalizeCatsInput(arr)); sync(); },
+        destroy: () => {
+          try {
+            if (addBtn) addBtn.removeEventListener('click', onAddClick);
+            inputEl.removeEventListener('keydown', onKeyDown);
+            inputEl.removeEventListener('blur', onBlur);
+            inputEl.removeEventListener('focus', onFocus);
+          } catch (_) {}
+        }
+      };
+
+      if (jsonInput) jsonInput._diaryCatWidget = widget;
 
       sync();
-      return { getList: () => list };
+      return widget;
     }
 
     // --- List rendering & actions -------------------------------------------------
@@ -159,7 +404,7 @@
       node.dataset.id = it._id;
       node.querySelector('.diary-title').textContent = it.title || '(Untitled)';
       const cat = node.querySelector('.diary-category');
-      if (it.category) { cat.textContent = it.category; cat.classList.remove('d-none'); BlogHelpers.applyCategoryBadge(cat, it.category); }
+      renderStaticCategoryBadges(cat, it.category);
       const cEl = node.querySelector('.diary-content-trunc'); if (cEl) cEl.textContent = truncateText(it.content || '');
       const delBtn = node.querySelector('.btn-delete'); if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteEntry(it._id); });
     }
@@ -236,10 +481,15 @@
       const previewWrap = modalEl.querySelector('[data-diary-create-preview]');
 
       const updateCreatePreview = () => {
-        const enabled = createMarkdownToggle.checked;
         if (!previewWrap) return;
-        if (enabled) previewWrap.style.display = '', previewWrap.innerHTML = RichText.renderInlineContent(contentInput.value || '', 'create', true);
-  else if (previewWrap) { previewWrap.style.display = 'none'; App.utils.tools.del_child(previewWrap); }
+        const enabled = createMarkdownToggle.checked;
+        if (enabled) {
+          previewWrap.style.display = '';
+          previewWrap.innerHTML = RichText.renderInlineContent(contentInput.value || '', 'create', true);
+        } else {
+          previewWrap.style.display = 'none';
+          App.utils.tools.del_child(previewWrap);
+        }
       };
 
       if (createMarkdownToggle) createMarkdownToggle.addEventListener('change', updateCreatePreview);
@@ -276,8 +526,8 @@
       if (payload.categories) {
         try {
           const arr = JSON.parse(payload.categories || '[]');
-          if (Array.isArray(arr) && arr.length) payload.category = arr.join(', ');
-        } catch (_) {}
+          if (Array.isArray(arr)) payload.category = arr.length ? arr : null;
+        } catch (_) { payload.category = null; }
         delete payload.categories;
       }
 
@@ -287,9 +537,10 @@
       const method = id ? 'PATCH' : 'POST';
 
       if (id) {
-        ['title', 'content', 'category'].forEach(k => {
-          if (k in payload && payload[k] === '') payload[k] = null;
-        });
+        // Normalize empty values: title/content -> null, category -> null when empty
+        if ('title' in payload && payload.title === '') payload.title = null;
+        if ('content' in payload && payload.content === '') payload.content = null;
+        if ('category' in payload && (!payload.category || (Array.isArray(payload.category) && payload.category.length === 0))) payload.category = null;
       }
 
       try {
@@ -324,13 +575,13 @@
       activeFiltersBar.style.display = chips.length ? 'flex' : 'none';
     }
 
-    function currentSortLabelText() { const map = { created_desc: 'Newest', created_asc: 'Oldest' }; return map[state.sort] || 'Sort'; }
-    function updateSortLabel() { const el = document.getElementById('currentSortLabel'); if (el) el.textContent = currentSortLabelText(); }
-    function updateSortMenuActive() { const menu = document.getElementById('sortMenu'); if (!menu) return; menu.querySelectorAll('[data-sort]').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-sort') === state.sort)); }
+  function currentSortLabelText() { const map = { created_desc: 'Newest', created_asc: 'Oldest' }; return map[state.sort] || 'Sort'; }
+  function updateSortLabel() { const el = document.getElementById('diaryCurrentSortLabel'); if (el) el.textContent = currentSortLabelText(); }
+  function updateSortMenuActive() { const menu = document.getElementById('diarySortMenu'); if (!menu) return; menu.querySelectorAll('[data-sort]').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-sort') === state.sort)); }
 
     async function persistDiarySort(s) { try { await App.utils.fetchJSONUnified('/api/sort-pref', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'diary', sort: s }) }); } catch (_) {} }
 
-    const diarySortMenu = document.getElementById('sortMenu');
+  const diarySortMenu = document.getElementById('diarySortMenu');
     if (diarySortMenu) {
       const sortButtons = diarySortMenu.querySelectorAll('[data-sort]');
       sortButtons.forEach(el => {
@@ -348,14 +599,133 @@
       });
     }
 
-  filterToggle.addEventListener('click', () => document.getElementById('diaryInlineFilters').classList.toggle('d-none'));
+  filterToggle.addEventListener('click', () => {
+    const box = document.getElementById('diaryInlineFilters');
+    box.classList.toggle('d-none');
+    // When showing filters, preload category hints for the datalist
+    if (!box.classList.contains('d-none')) {
+      try { loadDiaryCategoryHints(); } catch (_) {}
+      try { setupDiaryFilterTypeahead(); } catch (_) {}
+    }
+  });
   btnDiaryApplyFilters.addEventListener('click', () => { state.q = searchEl.value.trim(); state.category = categorySel.value || ''; apiList(); });
   btnClearFilters.addEventListener('click', () => { searchEl.value = ''; categorySel.value = ''; state.q = ''; state.category = ''; apiList(); });
+  // Provide hints when category filter input gains focus and ensure typeahead is bound
+  if (categorySel) categorySel.addEventListener('focus', () => { try { setupDiaryFilterTypeahead(); loadDiaryCategoryHints(); } catch (_) {} });
+
+  // --- Typeahead for filter category -----------------------------------------
+  function setupDiaryFilterTypeahead() {
+    if (!categorySel) return;
+    if (categorySel._typeaheadBound) return;
+    categorySel._typeaheadBound = true;
+
+    // Ensure the parent can anchor an absolute dropdown
+    const parent = categorySel.parentElement;
+    if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+
+    const menu = document.createElement('div');
+    menu.className = 'dropdown-menu show';
+    menu.style.position = 'absolute';
+    menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
+    menu.style.maxHeight = '240px';
+    menu.style.overflowY = 'auto';
+    menu.style.display = 'none';
+    menu.style.zIndex = '1051';
+    (parent || document.body).appendChild(menu);
+
+    let activeIndex = -1;
+    let items = [];
+
+    function updateMenuPosition() {
+      try {
+        const rect = categorySel.getBoundingClientRect();
+        const parentRect = (parent || document.body).getBoundingClientRect();
+        const top = rect.top - parentRect.top + categorySel.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
+        const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+        menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
+      } catch (_) {}
+    }
+
+    function hide() { menu.style.display = 'none'; activeIndex = -1; }
+    function show() { if (items.length) menu.style.display = ''; }
+    function setActive(idx) {
+      activeIndex = idx;
+      const nodes = menu.querySelectorAll('.dropdown-item');
+      nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
+    }
+
+    function pick(idx) {
+      if (idx < 0 || idx >= items.length) return;
+      categorySel.value = items[idx];
+      hide();
+    }
+
+    function renderList(list) {
+      items = list;
+      if (!items.length) { hide(); return; }
+      menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
+      menu.querySelectorAll('.dropdown-item').forEach(btn => {
+        btn.addEventListener('mousedown', (e) => { // mousedown to beat blur
+          e.preventDefault();
+          const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10);
+          pick(idx);
+        });
+      });
+      setActive(-1);
+      updateMenuPosition();
+      show();
+    }
+
+    function filterHints(q) {
+      const ql = q.trim().toLowerCase();
+      if (!diaryCategoryHints || !diaryCategoryHints.length) return [];
+      if (!ql) return diaryCategoryHints.slice(0, 8);
+      const starts = [];
+      const contains = [];
+      for (const name of diaryCategoryHints) {
+        const nl = name.toLowerCase();
+        if (nl.startsWith(ql)) starts.push(name);
+        else if (nl.includes(ql)) contains.push(name);
+        if (starts.length >= 8) break;
+      }
+      const out = starts.concat(contains.filter(n => !starts.includes(n)));
+      return out.slice(0, 8);
+    }
+
+    categorySel.addEventListener('input', () => {
+      const q = categorySel.value || '';
+      const list = filterHints(q);
+      renderList(list);
+    });
+    categorySel.addEventListener('focus', () => {
+      // ensure hints loaded, then render for current query
+      loadDiaryCategoryHints().finally(() => {
+        const list = filterHints(categorySel.value || '');
+        renderList(list);
+      });
+    });
+    categorySel.addEventListener('blur', () => { setTimeout(hide, 120); });
+    categorySel.addEventListener('keydown', (e) => {
+      if (menu.style.display === 'none') return;
+      const max = items.length - 1;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
+      else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } }
+      else if (e.key === 'Escape') { hide(); }
+    });
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+  }
+
+  // Initialize typeahead early in case filters are already visible
+  try { setupDiaryFilterTypeahead(); } catch (_) {}
 
     function updateFilterBtnActive() { const active = !!(state.q || state.category); if (filterToggle) { filterToggle.classList.toggle('btn-primary', active); filterToggle.classList.toggle('btn-outline-secondary', !active); } }
 
     // --- Detail modal rendering & editing ---------------------------------------
-    function safeFormatDate(dateValue) { if (!dateValue) return 'Unknown date'; const dt = globalThis.SiteDate.parse(dateValue); if (!dt) return 'Invalid date'; return globalThis.SiteDate.toDateTimeString(dt); }
+  // Date formatting helper removed (unused)
 
     function switchToView() {
       if (!detailModalEl) return;
@@ -401,14 +771,51 @@
 
     let markdownPreference = null; function getMarkdownPreference() { if (markdownPreference === null) markdownPreference = localStorage.getItem('diary-markdown-enabled') === 'true'; return markdownPreference; }
 
-    const diaryEditStateCache = {}; let hasUnsavedChanges = false;
+  const diaryEditStateCache = {}; let hasUnsavedChanges = false;
+  // Store canonical/original values per diary id to compare when saving.
+  const diaryCanonical = {};
 
     function renderDetail(data) {
       if (!detailModalEl) return; const item = data.item || {}; const root = detailModalEl.querySelector('[data-diary-detail-root]'); if (!root) return;
       const currentDiaryId = item._id; root.dataset.currentDiaryId = currentDiaryId; switchToView();
 
       const titleEl = root.querySelector('[data-diary-detail-title]'); if (titleEl) titleEl.textContent = item.title || '(Untitled)';
-      const catEl = root.querySelector('[data-diary-detail-category]'); if (catEl) { if (item.category) { catEl.textContent = item.category; catEl.classList.remove('d-none'); BlogHelpers.applyCategoryBadge(catEl, item.category); } else catEl.classList.add('d-none'); }
+      const catEl = root.querySelector('[data-diary-detail-category]');
+      if (catEl) {
+        // Normalize and render multiple badges for category display. The
+        // stored category may be an array or a comma-joined string.
+        let cats = [];
+        if (Array.isArray(item.category)) cats = item.category.slice();
+        else if (typeof item.category === 'string' && item.category.trim()) cats = item.category.split(',').map(s => s.trim()).filter(Boolean);
+        if (cats.length) {
+          if (cats.length === 1) {
+            // single category: reuse the template badge element
+            const name = cats[0];
+            App.utils.tools.del_child(catEl);
+            try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(catEl, name); } catch (_) {}
+            catEl.textContent = name;
+            catEl.classList.remove('d-none');
+          } else {
+            // multiple categories: convert template badge into neutral container
+            stripBadgeLikeClasses(catEl);
+            App.utils.tools.del_child(catEl);
+            for (const name of cats) {
+              const wrapper = document.createElement('span');
+              wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
+              BlogHelpers.applyCategoryBadge(wrapper, name);
+              wrapper.style.fontSize = '0.9em';
+              const text = document.createElement('span');
+              text.textContent = name;
+              text.style.whiteSpace = 'nowrap';
+              wrapper.appendChild(text);
+              catEl.appendChild(wrapper);
+            }
+            catEl.classList.remove('d-none');
+          }
+        } else {
+          catEl.classList.add('d-none');
+        }
+      }
 
       const markdownToggle = detailModalEl.querySelector('[data-diary-markdown-toggle]'); const contentEl = root.querySelector('[data-diary-detail-content]');
 
@@ -457,20 +864,50 @@
       const editForm = root.querySelector('[data-diary-detail-edit-form]');
       if (editForm) {
         editForm.dataset.diaryId = currentDiaryId || '';
+        const controller = DiaryDetailController.forForm(editForm);
+        controller.setId(currentDiaryId);
+        controller.setCanonical(item);
+        // Record canonical/original values on inputs so we can tell if a user
+        // actually changed a value vs. leaving it alone. This prevents the
+        // 'only edit content' case from accidentally nulling title/categories.
+        const canonicalTitle = item.title || '';
+        const canonicalContent = item.content || '';
+  // Normalize stored category into an array. The DB may contain either
+  // a single string (possibly comma-separated) or an array. Split on
+  // commas for legacy comma-joined values so the UI shows separate
+  // chips and a user can remove them individually.
+  let canonicalCatsArr;
+  if (Array.isArray(item.category)) canonicalCatsArr = [...item.category];
+  else if (typeof item.category === 'string' && item.category.trim()) canonicalCatsArr = item.category.split(',').map(s => s.trim()).filter(Boolean);
+  else canonicalCatsArr = [];
+  const canonicalCatsJson = JSON.stringify(canonicalCatsArr || []);
+
         if (currentDiaryId && diaryEditStateCache[currentDiaryId]) {
           const cached = diaryEditStateCache[currentDiaryId];
-          editForm.querySelector('[data-diary-detail-edit-title]').value = cached.title || '';
-          const cachedCats = (cached.category && typeof cached.category === 'string') ? cached.category.split(',').map(s => s.trim()).filter(Boolean) : [];
-          setupCategoryWidget(editForm, { chipsSelector: '[data-diary-detail-categories]', inputSelector: '[data-diary-detail-category-input]', jsonInputSelector: '[data-diary-detail-categories-json]', initial: cachedCats });
-          editForm.querySelector('[data-diary-detail-edit-content]').value = cached.content || '';
+          // Populate editing inputs from cache (if present) or item.
+            const titleInput = editForm.querySelector('[data-diary-detail-edit-title]');
+            const contentInputEl = editForm.querySelector('[data-diary-detail-edit-content]');
+            titleInput.value = (cached.title !== undefined ? cached.title : canonicalTitle) || '';
+            const cachedCats = (cached.category && typeof cached.category === 'string') ? cached.category.split(',').map(s => s.trim()).filter(Boolean) : [];
+            controller.ensureWidget(cachedCats);
+            contentInputEl.value = (cached.content !== undefined ? cached.content : canonicalContent) || '';
+
+            // Save canonical originals into diaryCanonical map
+            try { diaryCanonical[currentDiaryId] = { title: canonicalTitle, content: canonicalContent, catsJson: canonicalCatsJson, catsStr: (canonicalCatsArr || []).join(', ') }; } catch (_) {}
+
           if (cached.isEditing) switchToEdit(); else switchToView();
         } else {
-          editForm.querySelector('[data-diary-detail-edit-title]').value = item.title || '';
-          const initialCats = Array.isArray(item.category) ? [...item.category] : (item.category ? [item.category] : []);
-          setupCategoryWidget(editForm, { chipsSelector: '[data-diary-detail-categories]', inputSelector: '[data-diary-detail-category-input]', jsonInputSelector: '[data-diary-detail-categories-json]', initial: initialCats });
-          editForm.querySelector('[data-diary-detail-edit-content]').value = item.content || '';
+          const titleInput = editForm.querySelector('[data-diary-detail-edit-title]');
+          const contentInputEl = editForm.querySelector('[data-diary-detail-edit-content]');
+          titleInput.value = canonicalTitle;
+          const initialCats = canonicalCatsArr;
+          controller.ensureWidget(initialCats);
+          contentInputEl.value = canonicalContent;
           loadDiaryCategoryHints();
           switchToView();
+
+          // Save canonical originals into diaryCanonical map
+          try { diaryCanonical[currentDiaryId] = { title: canonicalTitle, content: canonicalContent, catsJson: canonicalCatsJson, catsStr: (canonicalCatsArr || []).join(', ') }; } catch (_) {}
         }
 
         // Inline image uploader for edit form
@@ -516,6 +953,22 @@
             } catch (_) {}
           }
         });
+
+        // Ensure the canonical (header) Save button actually triggers the save.
+        // The delegated click above ignores clicks on the canonical button so a
+        // direct listener must exist. Bind it once here.
+        try {
+          const canonicalSaveBtn = detailModalEl.querySelector('[data-diary-detail-save-btn]');
+          if (canonicalSaveBtn && !canonicalSaveBtn._diarySaveBound) {
+            canonicalSaveBtn._diarySaveBound = true;
+            canonicalSaveBtn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              const rootInner = detailModalEl.querySelector('[data-diary-detail-root]');
+              const editFormInner = rootInner ? rootInner.querySelector('[data-diary-detail-edit-form]') : null;
+              if (editFormInner) diaryPerformDetailSave(editFormInner);
+            });
+          }
+        } catch (_) {}
       }
     }
 
@@ -530,17 +983,9 @@
     // --- Detail save / edit-state cache -----------------------------------------
     async function diaryPerformDetailSave(editForm) {
       if (!editForm) return; const diaryId = editForm.dataset.diaryId; if (!diaryId) return;
-      const fd = new FormData(editForm); const patch = {}; fd.forEach((v, k) => { patch[k] = v.toString(); });
-      if (patch.categories) { try { const arr = JSON.parse(patch.categories || '[]'); patch.category = Array.isArray(arr) && arr.length ? arr.join(', ') : ''; } catch (_) { patch.category = '' } delete patch.categories; }
-      if (patch.due_date === '') patch.due_date = null; if (patch.category === '') patch.category = null;
-
-      const originalItem = state.items.find(it => it._id === diaryId) || {};
-      const origCategoryStr = Array.isArray(originalItem.category) ? originalItem.category.join(', ') : (originalItem.category || '');
-      const minimal = {};
-      if ((patch.title || '') !== (originalItem.title || '')) minimal.title = (patch.title === '') ? null : patch.title;
-      if ((patch.content || '') !== (originalItem.content || '')) minimal.content = (patch.content === '') ? null : patch.content;
-      if ((patch.category == null ? '' : patch.category) !== origCategoryStr) minimal.category = (patch.category === '' ? null : patch.category);
-  if (!Object.keys(minimal).length) { window.flash('No changes to save', 'warning'); return; }
+        const controller = DiaryDetailController.forForm(editForm);
+        const minimal = controller.buildMinimalPatch();
+        if (!minimal) { window.flash('No changes to save', 'warning'); return; }
       try {
         await App.utils.fetchJSONUnified(`/api/diary/${diaryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(minimal) });
         window.flash('Updated', 'success'); clearEditStateFromCache(diaryId); try { switchToView(); } catch (_) {} openDetailModal(diaryId); apiList();
@@ -560,8 +1005,7 @@
     function updateUnsavedChangesFlag() { hasUnsavedChanges = Object.values(diaryEditStateCache).some(s => !!s.hasChanges); const originalTitle = document.title.replace(/^◌\s*/, ''); document.title = hasUnsavedChanges ? `◌ ${originalTitle}` : originalTitle; }
     function clearEditStateFromCache(diaryId) { delete diaryEditStateCache[diaryId]; updateUnsavedChangesFlag(); }
     function hasAnyUnsavedChanges() { return hasUnsavedChanges; }
-    function hasUnsavedChangesForDiary(diaryId) { return !!(diaryEditStateCache[diaryId] && diaryEditStateCache[diaryId].hasChanges); }
-    function getDiariesWithUnsavedChanges() { return Object.keys(diaryEditStateCache).filter(id => diaryEditStateCache[id].hasChanges); }
+  // Expose only minimal unsaved flag API internally; remove unused helpers
 
     // Navigation warnings and debounce helper
     BlogHelpers.setupNavigationWarnings(() => hasAnyUnsavedChanges());
