@@ -1,134 +1,205 @@
-/* Theme Variables (Light + Dark) */
+/* ==============================================
+   UNIFIED THEME VARIABLES (Light + Dark)
+   ============================================== */
+
+/* ========== BASE / LIGHT THEME ========== */
 :root {
-	/* ...extracted from original style.css root... */
+	/* ---------- Bootstrap Core Palette ---------- */
+	--bs-blue: #0d6efd;
+	--bs-indigo: #6610f2;
+	--bs-purple: #6f42c1;
+	--bs-pink: #d63384;
+	--bs-red: #dc3545;
+	--bs-orange: #fd7e14;
+	--bs-yellow: #ffc107;
+	--bs-green: #198754;
+	--bs-teal: #20c997;
+	--bs-cyan: #0dcaf0;
+	--bs-black: #000;
+	--bs-white: #fff;
+
+	--bs-gray: #6c757d;
+	--bs-gray-dark: #343a40;
+	--bs-gray-100: #f8f9fa;
+	--bs-gray-200: #e9ecef;
+	--bs-gray-300: #dee2e6;
+	--bs-gray-400: #ced4da;
+	--bs-gray-500: #adb5bd;
+	--bs-gray-600: #6c757d;
+	--bs-gray-700: #495057;
+	--bs-gray-800: #343a40;
+	--bs-gray-900: #212529;
+
+	/* ---------- Bootstrap Semantics ---------- */
+	--bs-primary: #0d6efd;
+	--bs-secondary: #6c757d;
+	--bs-success: #198754;
+	--bs-info: #0dcaf0;
+	--bs-warning: #ffc107;
+	--bs-danger: #dc3545;
+	--bs-light: #f8f9fa;
+	--bs-dark: #212529;
+
+	/* RGB channels */
+	--bs-primary-rgb: 13, 110, 253;
+	--bs-secondary-rgb: 108, 117, 125;
+	--bs-success-rgb: 25, 135, 84;
+	--bs-info-rgb: 13, 202, 240;
+	--bs-warning-rgb: 255, 193, 7;
+	--bs-danger-rgb: 220, 53, 69;
+	--bs-light-rgb: 248, 249, 250;
+	--bs-dark-rgb: 33, 37, 41;
+
+	/* ---------- Text & Backgrounds ---------- */
+	--bs-primary-text-emphasis: #052c65;
+	--bs-secondary-text-emphasis: #2b2f32;
+	--bs-success-text-emphasis: #0a3622;
+	--bs-info-text-emphasis: #055160;
+	--bs-warning-text-emphasis: #664d03;
+	--bs-danger-text-emphasis: #58151c;
+	--bs-light-text-emphasis: #495057;
+	--bs-dark-text-emphasis: #495057;
+
+	--bs-primary-bg-subtle: #cfe2ff;
+	--bs-secondary-bg-subtle: #e2e3e5;
+	--bs-success-bg-subtle: #d1e7dd;
+	--bs-info-bg-subtle: #cff4fc;
+	--bs-warning-bg-subtle: #fff3cd;
+	--bs-danger-bg-subtle: #f8d7da;
+	--bs-light-bg-subtle: #fcfcfd;
+	--bs-dark-bg-subtle: #ced4da;
+
+	--bs-primary-border-subtle: #9ec5fe;
+	--bs-secondary-border-subtle: #c4c8cb;
+	--bs-success-border-subtle: #a3cfbb;
+	--bs-info-border-subtle: #9eeaf9;
+	--bs-warning-border-subtle: #ffe69c;
+	--bs-danger-border-subtle: #f1aeb5;
+	--bs-light-border-subtle: #e9ecef;
+	--bs-dark-border-subtle: #adb5bd;
+
+	--bs-white-rgb: 255, 255, 255;
+	--bs-black-rgb: 0, 0, 0;
+
+	/* ---------- Core Typography & Body ---------- */
+	--bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
+		"Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+		"Noto Color Emoji";
+	--bs-body-font-size: 1rem;
+	--bs-body-font-weight: 400;
+	--bs-body-line-height: 1.5;
+	--bs-body-color: #212529;
+	--bs-body-color-rgb: 33, 37, 41;
+	--bs-body-bg: #fff;
+	--bs-body-bg-rgb: 255, 255, 255;
+
+	/* ---------- Site Primary Palette ---------- */
 	--bg-primary: rgb(246, 247, 251);
 	--bg-primary-rgb: 246, 247, 251;
 	--bg-secondary: rgb(255, 255, 255);
 	--bg-secondary-rgb: 255, 255, 255;
 	--bg-tertiary: rgb(241, 243, 248);
+
 	--text-primary: rgb(31, 41, 55);
 	--text-secondary: rgb(75, 85, 99);
 	--text-hint: rgb(107, 114, 128);
+
 	--accent-primary-rgb: 37, 99, 235;
 	--accent-primary: rgb(37, 99, 235);
 	--accent-primary-bright-rgb: 59, 130, 246;
 	--accent-primary-bright: rgb(59, 130, 246);
 	--accent-primary-brighter-rgb: 96, 165, 250;
 	--accent-primary-brighter: rgb(96, 165, 250);
-	/* Channel lists for composing alpha variants */
 	--accent-secondary-rgb: 107, 114, 128;
 	--accent-secondary: rgb(107, 114, 128);
-	
-	
+
 	--border-color: #e5e7eb;
-	--card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-	--success-bg: #d1fae5;
-	--danger-bg: #fee2e2;
-	--border-radius: 10px;
 	--hover-bg: rgba(var(--accent-primary-rgb), 0.08);
 	--glass-bg: rgba(255, 255, 255, 0.6);
 	--glass-border: rgba(255, 255, 255, 0.45);
-	--glass-blur: 14px;
-	--header-grad-1: rgba(var(--accent-primary-rgb), 0.10);
-	--header-grad-2: rgba(var(--accent-primary-bright-rgb), 0.08);
+
+	--success-bg: #d1fae5;
+	--danger-bg: #fee2e2;
 	--success-hex: #16a34a;
 	--success-rgb: 22, 163, 74;
 	--danger-hex: #ef4444;
 	--danger-rgb: 239, 68, 68;
 	--info-hex: #0ea5e9;
 	--info-rgb: 14, 165, 233;
+
+	--header-grad-1: rgba(var(--accent-primary-rgb), 0.10);
+	--header-grad-2: rgba(var(--accent-primary-bright-rgb), 0.08);
+
+	/* ---------- Shadows / Radius / Blur ---------- */
+	--border-radius: 10px;
+	--card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+	--shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+	--shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	--shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+	--glass-blur: 14px;
 	--glass-blur-mobile: 10px;
+
+	/* ---------- Decorative ---------- */
 	--bubble-tilt: 0.3deg;
 	--bubble-scale: 1.008;
 	--bubble-shadow: 0 16px 32px rgba(0, 0, 0, 0.14);
 
-
-
-	--bs-bg-opacity: 1;
-	--bs-white-rgb: var(--bg-primary-rgb);
-
-	--bs-secondary-color: rgba(33, 37, 41, 0.75);
-	--bs-light-bg-subtle: #fcfcfd;
-	--bs-success-bg-subtle: #d1e7dd;
+	/* ---------- Accessibility / Focus ---------- */
+	--focus-ring: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.25);
 }
 
+/* ========== DARK THEME ========== */
 [data-theme="dark"] {
-	/* dark overrides */
 	--bg-primary: #0b0f14;
 	--bg-primary-rgb: 11, 15, 20;
 	--bg-secondary: #0f1722;
 	--bg-secondary-rgb: 15, 23, 34;
 	--bg-tertiary: #131c2a;
 	--bg-tertiary-rgb: 19, 28, 42;
+
 	--text-primary: #e5e7eb;
 	--text-primary-rgb: 229, 231, 235;
 	--text-secondary: #94a3b8;
 	--text-secondary-rgb: 148, 163, 184;
 	--text-hint: #cbd5e1;
 	--text-hint-rgb: 203, 213, 225;
+
+	--accent-primary: #60a5fa;
+	--accent-primary-rgb: 96, 165, 250;
 	--accent-primary-bright: #3b82f6;
 	--accent-primary-bright-rgb: 59, 130, 246;
 	--accent-primary-brighter: #60a5fa;
 	--accent-primary-brighter-rgb: 96, 165, 250;
-	--accent-primary: #60a5fa;
-	--accent-primary-rgb: 96, 165, 250;
 	--accent-secondary: #64748b;
 	--accent-secondary-rgb: 100, 116, 139;
+
 	--border-color: #233046;
 	--card-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+
 	--success-bg: #064e3b;
 	--danger-bg: #7f1d1d;
 	--hover-bg: rgba(var(--accent-primary-brighter-rgb), 0.15);
 	--glass-bg: rgba(18, 29, 46, 0.55);
 	--glass-border: rgba(255, 255, 255, 0.08);
 	--glass-blur: 16px;
+
 	--header-grad-1: rgba(var(--accent-primary-brighter-rgb), 0.16);
 	--header-grad-2: rgba(var(--accent-primary-bright-rgb), 0.12);
 
+	/* Shadows */
+	--shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+	--shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+	--shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
 
-
-
-	--bs-secondary-color: rgba(248, 249, 250, 0.75);
-	--bs-light-bg-subtle: #1a1c1e;
+	/* Bootstrap contextual adjustments */
+	--bs-primary: #60a5fa;
+	--bs-primary-rgb: 96, 165, 250;
 	--bs-success-bg-subtle: #0b5750;
+	--bs-light-bg-subtle: #1a1c1e;
+	--bs-secondary-color: rgba(248, 249, 250, 0.75);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* ////////////////////////////////////// */
-:root {
-	/* Additional color refinements */
-    --accent-success: rgb(34, 197, 94);
-    --accent-success-rgb: 34, 197, 94;
-    --accent-warning: rgb(245, 158, 11);
-    --accent-warning-rgb: 245, 158, 11;
-    
-    /* Enhanced shadow variables */
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    
-    /* Focus states */
-    --focus-ring: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.25);
-}
-
-[data-theme="dark"] {
-    /* Dark mode refinements */
-    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
-    
-    /* Enhanced dark mode colors */
-    /* --accent-secondary: #4b5563; */
-}
+/* ==============================================
+   END OF THEME VARIABLES
+   ============================================== */
