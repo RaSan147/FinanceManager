@@ -1,10 +1,15 @@
-/* ==============================================
-   UNIFIED THEME VARIABLES (Light + Dark)
-   ============================================== */
+/* ==========================================================
+   UNIFIED THEME VARIABLES — LIGHT (default) + DARK
+   Bootstrap v5 aligned + Custom tokens mapping
+   ========================================================== */
 
-/* ========== BASE / LIGHT THEME ========== */
-:root {
-	/* ---------- Bootstrap Core Palette ---------- */
+/* ================= LIGHT THEME ================= */
+:root,
+[data-theme="light"] {
+	/* Prefer correct UA styling for form controls, scrollbars, etc. */
+	color-scheme: light;
+
+	/* --- Bootstrap Core Palette (static references) --- */
 	--bs-blue: #0d6efd;
 	--bs-indigo: #6610f2;
 	--bs-purple: #6f42c1;
@@ -17,6 +22,13 @@
 	--bs-cyan: #0dcaf0;
 	--bs-black: #000;
 	--bs-white: #fff;
+	--bs-black-rgb: 0, 0, 0;
+	--bs-white-rgb: 255, 255, 255;
+
+	/* Typography */
+	--bs-font-sans-serif: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	--bs-font-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	--bs-body-font-family: var(--bs-font-sans-serif);
 
 	--bs-gray: #6c757d;
 	--bs-gray-dark: #343a40;
@@ -30,70 +42,7 @@
 	--bs-gray-800: #343a40;
 	--bs-gray-900: #212529;
 
-	/* ---------- Bootstrap Semantics ---------- */
-	--bs-primary: #0d6efd;
-	--bs-secondary: #6c757d;
-	--bs-success: #198754;
-	--bs-info: #0dcaf0;
-	--bs-warning: #ffc107;
-	--bs-danger: #dc3545;
-	--bs-light: #f8f9fa;
-	--bs-dark: #212529;
-
-	/* RGB channels */
-	--bs-primary-rgb: 13, 110, 253;
-	--bs-secondary-rgb: 108, 117, 125;
-	--bs-success-rgb: 25, 135, 84;
-	--bs-info-rgb: 13, 202, 240;
-	--bs-warning-rgb: 255, 193, 7;
-	--bs-danger-rgb: 220, 53, 69;
-	--bs-light-rgb: 248, 249, 250;
-	--bs-dark-rgb: 33, 37, 41;
-
-	/* ---------- Text & Backgrounds ---------- */
-	--bs-primary-text-emphasis: #052c65;
-	--bs-secondary-text-emphasis: #2b2f32;
-	--bs-success-text-emphasis: #0a3622;
-	--bs-info-text-emphasis: #055160;
-	--bs-warning-text-emphasis: #664d03;
-	--bs-danger-text-emphasis: #58151c;
-	--bs-light-text-emphasis: #495057;
-	--bs-dark-text-emphasis: #495057;
-
-	--bs-primary-bg-subtle: #cfe2ff;
-	--bs-secondary-bg-subtle: #e2e3e5;
-	--bs-success-bg-subtle: #d1e7dd;
-	--bs-info-bg-subtle: #cff4fc;
-	--bs-warning-bg-subtle: #fff3cd;
-	--bs-danger-bg-subtle: #f8d7da;
-	--bs-light-bg-subtle: #fcfcfd;
-	--bs-dark-bg-subtle: #ced4da;
-
-	--bs-primary-border-subtle: #9ec5fe;
-	--bs-secondary-border-subtle: #c4c8cb;
-	--bs-success-border-subtle: #a3cfbb;
-	--bs-info-border-subtle: #9eeaf9;
-	--bs-warning-border-subtle: #ffe69c;
-	--bs-danger-border-subtle: #f1aeb5;
-	--bs-light-border-subtle: #e9ecef;
-	--bs-dark-border-subtle: #adb5bd;
-
-	--bs-white-rgb: 255, 255, 255;
-	--bs-black-rgb: 0, 0, 0;
-
-	/* ---------- Core Typography & Body ---------- */
-	--bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
-		"Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-		"Noto Color Emoji";
-	--bs-body-font-size: 1rem;
-	--bs-body-font-weight: 400;
-	--bs-body-line-height: 1.5;
-	--bs-body-color: #212529;
-	--bs-body-color-rgb: 33, 37, 41;
-	--bs-body-bg: #fff;
-	--bs-body-bg-rgb: 255, 255, 255;
-
-	/* ---------- Site Primary Palette ---------- */
+	/* --- App/Base Tokens --- */
 	--bg-primary: rgb(246, 247, 251);
 	--bg-primary-rgb: 246, 247, 251;
 	--bg-secondary: rgb(255, 255, 255);
@@ -104,19 +53,22 @@
 	--text-secondary: rgb(75, 85, 99);
 	--text-hint: rgb(107, 114, 128);
 
-	--accent-primary-rgb: 37, 99, 235;
 	--accent-primary: rgb(37, 99, 235);
-	--accent-primary-bright-rgb: 59, 130, 246;
+	--accent-primary-rgb: 37, 99, 235;
 	--accent-primary-bright: rgb(59, 130, 246);
-	--accent-primary-brighter-rgb: 96, 165, 250;
+	--accent-primary-bright-rgb: 59, 130, 246;
 	--accent-primary-brighter: rgb(96, 165, 250);
-	--accent-secondary-rgb: 107, 114, 128;
+	--accent-primary-brighter-rgb: 96, 165, 250;
 	--accent-secondary: rgb(107, 114, 128);
+	--accent-secondary-rgb: 107, 114, 128;
 
+	/* --- UI & Feedback --- */
 	--border-color: #e5e7eb;
 	--hover-bg: rgba(var(--accent-primary-rgb), 0.08);
 	--glass-bg: rgba(255, 255, 255, 0.6);
 	--glass-border: rgba(255, 255, 255, 0.45);
+	--glass-blur: 14px;
+	--glass-blur-mobile: 10px;
 
 	--success-bg: #d1fae5;
 	--danger-bg: #fee2e2;
@@ -130,27 +82,130 @@
 	--header-grad-1: rgba(var(--accent-primary-rgb), 0.10);
 	--header-grad-2: rgba(var(--accent-primary-bright-rgb), 0.08);
 
-	/* ---------- Shadows / Radius / Blur ---------- */
+	/* --- Shadows / Radius --- */
 	--border-radius: 10px;
 	--card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 	--shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 	--shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 	--shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
-	--glass-blur: 14px;
-	--glass-blur-mobile: 10px;
-
-	/* ---------- Decorative ---------- */
+	/* --- Decorative --- */
 	--bubble-tilt: 0.3deg;
 	--bubble-scale: 1.008;
 	--bubble-shadow: 0 16px 32px rgba(0, 0, 0, 0.14);
 
-	/* ---------- Accessibility / Focus ---------- */
+	/* --- Focus / Accessibility --- */
 	--focus-ring: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.25);
+
+	/* --- Bootstrap Theme Color Mappings (to app tokens) --- */
+	--bs-primary: var(--accent-primary);
+	--bs-secondary: var(--accent-secondary);
+	--bs-success: var(--success-hex);
+	--bs-info: var(--info-hex);
+	--bs-warning: #ffc107;
+	--bs-danger: var(--danger-hex);
+	--bs-light: #f8f9fa;
+	--bs-dark: #212529;
+
+	/* rgb counterparts (required by Bootstrap for rgba operations) */
+	--bs-primary-rgb: var(--accent-primary-rgb);
+	--bs-secondary-rgb: var(--accent-secondary-rgb);
+	--bs-success-rgb: 22, 163, 74;
+	--bs-info-rgb: 14, 165, 233;
+	--bs-warning-rgb: 255, 193, 7;
+	--bs-danger-rgb: 239, 68, 68;
+	--bs-light-rgb: 248, 249, 250;
+	--bs-dark-rgb: 33, 37, 41;
+
+	/* --- Bootstrap Base (body, typography, borders) --- */
+	--bs-body-bg: var(--bg-primary);
+	--bs-body-bg-rgb: var(--bg-primary-rgb);
+	--bs-body-color: var(--text-primary);
+	--bs-body-color-rgb: 33, 37, 41;
+	--bs-heading-color: #000;
+	--bs-link-color: var(--accent-primary-brighter);
+	--bs-link-hover-color: var(--accent-primary-bright);
+	--bs-border-color: var(--border-color);
+	--bs-border-color-translucent: rgba(0, 0, 0, 0.175);
+	--bs-emphasis-color: var(--bs-black);
+	--bs-emphasis-color-rgb: 0, 0, 0;
+	--bs-secondary-color: rgba(33, 37, 41, 0.75);
+	--bs-secondary-color-rgb: 33, 37, 41;
+	--bs-tertiary-color: rgba(33, 37, 41, 0.5);
+	--bs-tertiary-color-rgb: 33, 37, 41;
+	--bs-secondary-bg: var(--bs-gray-100);
+	--bs-secondary-bg-rgb: 248, 249, 250;
+	--bs-tertiary-bg: var(--bs-gray-200);
+	--bs-tertiary-bg-rgb: 233, 236, 239;
+	--bs-focus-ring-color: rgba(var(--bs-primary-rgb), 0.25);
+	--bs-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0));
+	--bs-code-color: var(--bs-pink);
+	--bs-highlight-bg: rgba(var(--bs-warning-rgb), 0.2);
+	--bs-bg-opacity: 1;
+	--bs-text-opacity: 1;
+	--bs-link-color-rgb: var(--accent-primary-brighter-rgb);
+	--bs-link-hover-color-rgb: var(--accent-primary-bright-rgb);
+
+	/* --- Bootstrap radii, shadows, focus, forms --- */
+	--bs-border-width: 1px;
+	--bs-border-style: solid;
+	--bs-border-radius: 0.375rem;
+	--bs-border-radius-sm: 0.25rem;
+	--bs-border-radius-lg: 0.5rem;
+	--bs-border-radius-xl: 1rem;
+	--bs-border-radius-xxl: 2rem;
+	--bs-border-radius-2xl: var(--bs-border-radius-xxl);
+	--bs-border-radius-pill: 50rem;
+	--bs-box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+	--bs-box-shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+	--bs-box-shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+	--bs-box-shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.075);
+	--bs-focus-ring-width: 0.25rem;
+	--bs-focus-ring-opacity: 0.25;
+	--bs-form-valid-color: #198754;
+	--bs-form-valid-border-color: #198754;
+	--bs-form-invalid-color: #dc3545;
+	--bs-form-invalid-border-color: #dc3545;
+
+	/* --- Text emphasis colors (light defaults) --- */
+	--bs-primary-text-emphasis: #052c65;
+	--bs-secondary-text-emphasis: #2b2f32;
+	--bs-success-text-emphasis: #0a3622;
+	--bs-info-text-emphasis: #055160;
+	--bs-warning-text-emphasis: #664d03;
+	--bs-danger-text-emphasis: #58151c;
+	--bs-light-text-emphasis: #495057;
+	--bs-dark-text-emphasis: #495057;
+
+	/* --- App aliases (for legacy/custom components) --- */
+	--app-bg: var(--bs-body-bg);
+	--app-text: var(--bs-body-color);
+
+	/* --- Subtle backgrounds/borders for contextual utilities & alerts --- */
+	--bs-primary-bg-subtle: rgba(var(--bs-primary-rgb), 0.1);
+	--bs-secondary-bg-subtle: rgba(var(--bs-secondary-rgb), 0.1);
+	--bs-success-bg-subtle: rgba(var(--bs-success-rgb), 0.1);
+	--bs-info-bg-subtle: rgba(var(--bs-info-rgb), 0.1);
+	--bs-warning-bg-subtle: rgba(var(--bs-warning-rgb), 0.18);
+	--bs-danger-bg-subtle: rgba(var(--bs-danger-rgb), 0.12);
+	--bs-light-bg-subtle: #fcfcfd;
+	--bs-dark-bg-subtle: #ced4da;
+
+	--bs-primary-border-subtle: rgba(var(--bs-primary-rgb), 0.4);
+	--bs-secondary-border-subtle: rgba(var(--bs-secondary-rgb), 0.4);
+	--bs-success-border-subtle: rgba(var(--bs-success-rgb), 0.4);
+	--bs-info-border-subtle: rgba(var(--bs-info-rgb), 0.4);
+	--bs-warning-border-subtle: rgba(var(--bs-warning-rgb), 0.4);
+	--bs-danger-border-subtle: rgba(var(--bs-danger-rgb), 0.4);
+	--bs-light-border-subtle: #e9ecef;
+	--bs-dark-border-subtle: #adb5bd;
 }
 
-/* ========== DARK THEME ========== */
+/* ================= DARK THEME ================= */
 [data-theme="dark"] {
+	color-scheme: dark;
+
+	/* --- App/Base Tokens --- */
 	--bg-primary: #0b0f14;
 	--bg-primary-rgb: 11, 15, 20;
 	--bg-secondary: #0f1722;
@@ -174,32 +229,98 @@
 	--accent-secondary: #64748b;
 	--accent-secondary-rgb: 100, 116, 139;
 
-	--border-color: #233046;
-	--card-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+	/* --- Bootstrap Theme Colors (override for dark) --- */
+	--bs-primary: var(--accent-primary);
+	--bs-primary-rgb: var(--accent-primary-rgb);
+	--bs-secondary: var(--accent-secondary);
+	--bs-secondary-rgb: var(--accent-secondary-rgb);
+	--bs-success: #16a34a;
+	--bs-success-rgb: 22, 163, 74;
+	--bs-danger: #ef4444;
+	--bs-danger-rgb: 239, 68, 68;
+	--bs-info: #0ea5e9;
+	--bs-info-rgb: 14, 165, 233;
+	--bs-warning: #facc15;
+	--bs-warning-rgb: 250, 204, 21;
+	--bs-dark: #0b0f14;
+	--bs-light: #1e293b;
+	--bs-light-rgb: 30, 41, 59;
+	--bs-black-rgb: 0, 0, 0;
+	--bs-white-rgb: 255, 255, 255;
 
-	--success-bg: #064e3b;
-	--danger-bg: #7f1d1d;
+	/* --- Bootstrap Base (body, typography, borders) --- */
+	--bs-body-bg: var(--bg-primary);
+	--bs-body-bg-rgb: var(--bg-primary-rgb);
+	--bs-body-color: var(--text-primary);
+	--bs-body-color-rgb: var(--text-primary-rgb);
+	--bs-border-color: #233046;
+	--bs-border-color-translucent: rgba(255, 255, 255, 0.15);
+	--bs-heading-color: #f8fafc;
+	--bs-link-color: var(--accent-primary);
+	--bs-link-hover-color: var(--accent-primary-brighter);
+	--bs-emphasis-color: var(--bs-white);
+	--bs-emphasis-color-rgb: 255, 255, 255;
+	--bs-secondary-color: rgba(248, 249, 250, 0.7);
+	--bs-secondary-color-rgb: 248, 249, 250;
+	--bs-tertiary-color: rgba(248, 249, 250, 0.5);
+	--bs-tertiary-color-rgb: 248, 249, 250;
+	--bs-secondary-bg: var(--bg-tertiary);
+	--bs-secondary-bg-rgb: var(--bg-tertiary-rgb);
+	--bs-tertiary-bg: #0f1722;
+	--bs-tertiary-bg-rgb: var(--bg-secondary-rgb);
+	--bs-focus-ring-color: rgba(var(--bs-primary-rgb), 0.35);
+	--bs-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+	--bs-code-color: #e879f9;
+	--bs-highlight-bg: rgba(var(--bs-warning-rgb), 0.18);
+	--bs-bg-opacity: 1;
+	--bs-text-opacity: 1;
+	--bs-link-color-rgb: var(--accent-primary-rgb);
+	--bs-link-hover-color-rgb: var(--accent-primary-brighter-rgb);
+
+	/* --- Surfaces --- */
+	--border-color: #233046;
 	--hover-bg: rgba(var(--accent-primary-brighter-rgb), 0.15);
 	--glass-bg: rgba(18, 29, 46, 0.55);
 	--glass-border: rgba(255, 255, 255, 0.08);
 	--glass-blur: 16px;
 
-	--header-grad-1: rgba(var(--accent-primary-brighter-rgb), 0.16);
-	--header-grad-2: rgba(var(--accent-primary-bright-rgb), 0.12);
+	/* --- Feedback samples (used by custom styles) --- */
+	--success-bg: #064e3b;
+	--danger-bg: #7f1d1d;
+	--success-rgb: 22, 163, 74;
+	--danger-rgb: 239, 68, 68;
+	--info-rgb: 14, 165, 233;
 
-	/* Shadows */
+	/* --- Subtle backgrounds/borders --- */
+	--bs-primary-bg-subtle: rgba(var(--bs-primary-rgb), 0.16);
+	--bs-secondary-bg-subtle: rgba(var(--bs-secondary-rgb), 0.14);
+	--bs-success-bg-subtle: rgba(var(--bs-success-rgb), 0.16);
+	--bs-info-bg-subtle: rgba(var(--bs-info-rgb), 0.16);
+	--bs-warning-bg-subtle: rgba(var(--bs-warning-rgb), 0.22);
+	--bs-danger-bg-subtle: rgba(var(--bs-danger-rgb), 0.18);
+	--bs-light-bg-subtle: #1a1c1e;
+	--bs-dark-bg-subtle: #334155;
+
+	--bs-primary-border-subtle: rgba(var(--bs-primary-rgb), 0.45);
+	--bs-secondary-border-subtle: rgba(var(--bs-secondary-rgb), 0.45);
+	--bs-success-border-subtle: rgba(var(--bs-success-rgb), 0.45);
+	--bs-info-border-subtle: rgba(var(--bs-info-rgb), 0.45);
+	--bs-warning-border-subtle: rgba(var(--bs-warning-rgb), 0.45);
+	--bs-danger-border-subtle: rgba(var(--bs-danger-rgb), 0.45);
+	--bs-light-border-subtle: #263042;
+	--bs-dark-border-subtle: #64748b;
+
+	/* --- Shadows --- */
+	--card-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
 	--shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
 	--shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
 	--shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
 
-	/* Bootstrap contextual adjustments */
-	--bs-primary: #60a5fa;
-	--bs-primary-rgb: 96, 165, 250;
-	--bs-success-bg-subtle: #0b5750;
-	--bs-light-bg-subtle: #1a1c1e;
-	--bs-secondary-color: rgba(248, 249, 250, 0.75);
+	/* --- App aliases (for legacy/custom components) --- */
+	--app-bg: var(--bs-body-bg);
+	--app-text: var(--bs-body-color);
 }
 
-/* ==============================================
+/* ==========================================================
    END OF THEME VARIABLES
-   ============================================== */
+   ========================================================== */

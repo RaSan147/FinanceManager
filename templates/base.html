@@ -119,16 +119,11 @@
 					<i class="fa-solid fa-wallet"></i>
 					<span>ReflectR</span>
 				</a>
-				<button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-label="Toggle navigation" aria-expanded="false">
+				<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-label="Toggle navigation" aria-expanded="false">
 					<span class="navbar-toggler-icon"></span>
 				</button>
 
-				<div class="offcanvas offcanvas-end offcanvas-lg glassy-nav-offcanvas" tabindex="-1" id="navbarNav" aria-labelledby="navbarNavLabel">
-					<div class="offcanvas-header d-lg-none">
-						<h5 class="offcanvas-title" id="navbarNavLabel">Menu</h5>
-						<button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-					</div>
-					<div class="offcanvas-body">
+				<div class="collapse navbar-collapse" id="navbarNav">
 						<ul class="navbar-nav me-auto flex-grow-1">
 						{% if current_user.is_authenticated %}
 						<li class="nav-item">
@@ -195,7 +190,6 @@
 						<li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Register</a></li>
 						{% endif %}
 						</ul>
-					</div>
 				</div>
 			</div>
 		</nav>
@@ -289,12 +283,12 @@
 	{% block extra_js %}{% endblock %}
 
 	<script>
-	// Offcanvas UX: auto-close on link click (excluding dropdown toggles) on mobile; no custom toggler needed
+	// Collapse UX: auto-hide the navbar collapse after navigating (exclude dropdown toggles) on mobile
 	(function(){
 		try{
 			var panel = document.getElementById('navbarNav');
 			if(!panel || !window.bootstrap) return;
-			var api = window.bootstrap.Offcanvas.getOrCreateInstance(panel, { backdrop: true, scroll: false });
+			var api = window.bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false });
 			panel.addEventListener('click', function(e){
 				if (e.target.closest('.dropdown-toggle')) return; // allow dropdown to toggle
 				var link = e.target.closest('a.nav-link:not(.dropdown-toggle), .dropdown-item');

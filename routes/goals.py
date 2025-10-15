@@ -318,6 +318,42 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
                     pass
         return jsonify({'error': 'Plan unavailable'}), 404
 
+    @bp.route('/api/goals/revalidate-bulk', methods=['POST'], endpoint='api_goals_revalidate_bulk')
+    @login_required
+    def api_goals_revalidate_bulk():  # type: ignore[override]
+        data = request.get_json(force=True, silent=True) or {}
+        mode = (data.get('mode') or 'latest10').lower()
+        if mode not in ('all', 'latest10'):
+            mode = 'latest10'
+        # Fetch active goals only (exclude completed) and lightweight projection
+        proj = {'ai_plan': 0}
+        cursor = mongo.db.goals.find({'user_id': current_user.id, 'is_completed': False}, proj).sort([('created_at', -1)])
+        if mode == 'latest10':
+            cursor = cursor.limit(10)
+        goals = list(cursor)
+        count = len(goals)
+        if count == 0:
+            return jsonify({'queued': 0})
+        # For each goal, if offloaded plan exists, schedule remote delete, then run AI enhance in background
+        def _kick(goal_doc):
+            if goal_doc.get('ai_plan_paste_url'):
+                async def _del_remote():
+                    from models.goal import Goal as GoalModel
+                    await GoalModel.delete_remote_ai_plan_if_any(goal_doc, pastebin_client)
+                threading.Thread(target=lambda: asyncio.run(_del_remote()), daemon=True).start()
+            try:
+                threading.Thread(
+                    target=lambda: asyncio.run(
+                        Goal._ai_enhance_goal(goal_doc['_id'], goal_doc, mongo.db, ai_engine)
+                    ),
+                    daemon=True
+                ).start()
+            except Exception:
+                pass
+        for g in goals:
+            _kick(g)
+        return jsonify({'queued': count, 'mode': mode})
+
     # Note: goals sort preference is now handled by the unified /api/sort-pref endpoint
 
     return bp

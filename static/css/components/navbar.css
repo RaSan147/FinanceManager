@@ -75,6 +75,7 @@ body.dark-mode .glassy-nav .navbar-toggler-icon {
 	.glassy-nav-offcanvas .offcanvas-body .navbar-nav,
 	.glassy-nav .navbar-collapse .navbar-nav {
 		width: 100%;
+		flex-direction: column;
 	}
 
 	.glassy-nav-offcanvas .offcanvas-body .navbar-nav>.nav-item,
