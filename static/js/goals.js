@@ -371,6 +371,34 @@ class GoalsModule {
         }
         // Don't force a client-side default sort here. If the server returns a persisted sort it will be applied on load.
 
+        // Bulk re-evaluate dropdown actions
+        const bulkWrap = qs('[data-goals-bulk]');
+        if (bulkWrap) {
+            bulkWrap.addEventListener('click', (e) => {
+                const a = e.target.closest('a[data-bulk-reval]');
+                if (!a) return;
+                e.preventDefault();
+                const mode = a.getAttribute('data-bulk-reval'); // 'all' | 'latest10'
+                const confirmMsg = mode === 'all'
+                    ? 'Re-evaluate ALL active goals? This runs in the background.'
+                    : 'Re-evaluate the latest 10 active goals?';
+                if (!confirm(confirmMsg)) return;
+                App.utils.withSingleFlight(bulkWrap, async () => {
+                    try {
+                        const resp = await App.utils.fetchJSONUnified('/api/goals/revalidate-bulk', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ mode })
+                        });
+                        const count = (resp && (resp.queued || resp.count || resp.total || 0)) || 0;
+                        window.flash?.(`Re-evaluation started for ${count} goal(s).`, 'info');
+                    } catch (err) {
+                        window.flash?.('Bulk re-evaluation failed', 'danger');
+                    }
+                });
+            });
+        }
+
         // Remove local submit handler to avoid duplicate POST; global_modals handles creation.
         if (addForm) {
             addForm.addEventListener('submit', (e) => {

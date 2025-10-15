@@ -10,6 +10,30 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h4 class="card-title mb-0">Your Goals</h4>
                     <div class="d-flex align-items-center gap-2 header-actions ms-auto">
+                        <!-- Bulk re-evaluate controls -->
+                        <div class="dropdown" data-goals-bulk>
+                            <button class="btn btn-sm btn-light d-flex align-items-center"
+                                    data-bs-toggle="dropdown"
+                                    aria-label="Re-evaluate goals"
+                                    title="Re-evaluate goals">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span class="d-none d-md-inline ms-1">Re-evaluate</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end small">
+                                <li>
+                                    <a class="dropdown-item" href="#" data-bulk-reval="latest10">
+                                        <i class="fa-solid fa-forward-step me-1"></i>
+                                        Latest 10 (active)
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#" data-bulk-reval="all">
+                                        <i class="fa-solid fa-arrows-rotate me-1"></i>
+                                        All (active)
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                         <div class="dropdown">
                             <button class="btn btn-sm btn-light d-flex align-items-center"
                                     data-bs-toggle="dropdown"
