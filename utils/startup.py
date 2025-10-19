@@ -150,12 +150,18 @@ def run_master_global_warmup(cache_mongo_uri: Optional[str] = None) -> None:
         return
 
     try:
-        # Use a short-lived client to avoid shared sockets across forks
-        client = MongoClient(cache_mongo_uri)
+        # Use a short-lived client to avoid shared sockets across forks.
+        # Reduce selection timeout so master startup doesn't hang when Mongo isn't reachable.
+        client = MongoClient(cache_mongo_uri, serverSelectionTimeoutMS=3000)
         try:
-            # Prefer any DB encoded in the URI, else fall back to a common name
-            db = client.get_default_database()
-            if db is None:
+            # Prefer any DB encoded in the URI; if none specified in the URI,
+            # get_default_database() may raise or return None. Fall back to a
+            # known cache DB name to proceed gracefully.
+            try:
+                db = client.get_default_database()
+            except Exception:
+                db = None
+            if not db:
                 # If no default DB in URI, fall back to a known cache DB name
                 db = client['self_finance_tracker_cache']
 
