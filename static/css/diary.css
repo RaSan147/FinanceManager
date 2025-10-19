@@ -29,11 +29,7 @@ body.dark-mode .diary-item.card:hover {
 .diary-item .diary-category {
   transition: box-shadow .2s, filter .2s, opacity .2s;
 }
-.diary-item .diary-category:hover {
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-primary-rgb), .28);
-  filter: saturate(1.05);
-  opacity: .95;
-}
+
 
 /* Reuse tag badge styles from To-Do for consistent look */
 .diary-item .badge.tag-badge { margin-right: .1rem; }
