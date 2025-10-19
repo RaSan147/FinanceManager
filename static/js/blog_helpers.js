@@ -335,3 +335,226 @@
     applyStageBadge
   };
 })();
+
+/*
+ * Extended helpers extracted from Diary/To-Do modules to reduce duplication.
+ * These are attached after the initial IIFE to avoid large diffs above.
+ */
+(function(){
+  if (!window.BlogHelpers) return;
+
+  // Normalize categories input (null | JSON string of array | array) -> array of trimmed strings
+  function normalizeCatsInput(v) {
+    const MAX = 64;
+    if (v == null) return [];
+    let arr = [];
+    if (Array.isArray(v)) arr = v.slice();
+    else if (typeof v === 'string') {
+      try {
+        const maybe = JSON.parse(v || '[]');
+        if (Array.isArray(maybe)) arr = maybe.slice();
+        else arr = [];
+      } catch (_) { arr = []; }
+    } else {
+      return [];
+    }
+    return arr
+      .map(s => (s || '').toString().trim())
+      .filter(Boolean)
+      .map(s => s.length > MAX ? s.slice(0, MAX) : s);
+  }
+
+  function categoryToArray(val) {
+    if (Array.isArray(val)) return val.slice();
+    if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
+    return [];
+  }
+
+  function stripBadgeLikeClasses(el) {
+    if (!el || !el.classList) return;
+    const cls = Array.from(el.classList);
+    for (const cn of cls) {
+      if (/^bg-/.test(cn) || /^text-bg-/.test(cn) || /^text-/.test(cn) || /^tag-color-/.test(cn) || cn === 'tag-badge' || cn === 'badge') {
+        el.classList.remove(cn);
+      }
+    }
+  }
+
+  // Render 0/1/many category badges into the container
+  function renderCategoryBadges(container, catsVal) {
+    if (!container) return;
+    const cats = categoryToArray(catsVal);
+    if (!cats.length) {
+      container.classList.add('d-none');
+      return;
+    }
+    if (cats.length === 1) {
+      const name = cats[0];
+      App.utils.tools.del_child(container);
+      try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(container, name); } catch (_) {}
+      container.textContent = name;
+      container.classList.remove('d-none');
+      return;
+    }
+    stripBadgeLikeClasses(container);
+    App.utils.tools.del_child(container);
+    for (const name of cats) {
+      const wrapper = document.createElement('span');
+      wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
+      try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(wrapper, name); } catch (_) {}
+      wrapper.style.fontSize = '0.9em';
+      const text = document.createElement('span');
+      text.textContent = name;
+      text.style.whiteSpace = 'nowrap';
+      wrapper.appendChild(text);
+      container.appendChild(wrapper);
+    }
+    container.classList.remove('d-none');
+  }
+
+  // Generic TagTypeahead-based category widget builder
+  function setupCategoryWidget(rootEl, opts) {
+    const chipsWrap = rootEl.querySelector(opts.chipsSelector);
+    const inputEl = rootEl.querySelector(opts.inputSelector);
+    const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
+    const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-blog-create-add-btn]')
+      || rootEl.querySelector('[data-todo-detail-add-btn]')
+      || rootEl.querySelector('[data-diary-detail-add-btn]');
+    if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
+    const widget = window.TagTypeahead.create({
+      inputEl,
+      chipsEl: chipsWrap,
+      jsonInput,
+      addBtn,
+      initial: Array.isArray(opts.initial) ? opts.initial : normalizeCatsInput(opts.initial),
+      ensureLoaded: () => (typeof opts.ensureLoaded === 'function' ? opts.ensureLoaded() : undefined),
+      getHints: () => (typeof opts.getHints === 'function' ? opts.getHints() : []),
+      applyBadge: (el, name) => { try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(el, name); } catch(_){} }
+    });
+    return widget;
+  }
+
+  // Lightweight filter input typeahead with dropdown
+  function setupFilterTypeahead(inputEl, options) {
+    if (!inputEl) return null;
+    if (inputEl._bhTypeaheadBound) return inputEl._bhTypeaheadInstance || null;
+    inputEl._bhTypeaheadBound = true;
+    const getHints = options && options.getHints ? options.getHints : (() => []);
+    const ensureLoaded = options && options.ensureLoaded ? options.ensureLoaded : (() => Promise.resolve());
+    const limit = (options && options.limit) || 8;
+    const parent = inputEl.parentElement;
+    if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+    const menu = document.createElement('div');
+    menu.className = 'dropdown-menu show';
+    menu.style.position = 'absolute';
+    menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
+    menu.style.maxHeight = '240px';
+    menu.style.overflowY = 'auto';
+    menu.style.display = 'none';
+    menu.style.zIndex = String((options && options.zIndex) || 1051);
+    (parent || document.body).appendChild(menu);
+    let activeIndex = -1;
+    let items = [];
+    function updateMenuPosition() {
+      try {
+        const rect = inputEl.getBoundingClientRect();
+        const parentRect = (parent || document.body).getBoundingClientRect();
+        const top = rect.top - parentRect.top + inputEl.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
+        const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+        menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
+      } catch (_) {}
+    }
+    function hide() { menu.style.display = 'none'; activeIndex = -1; }
+    function show() { if (items.length) menu.style.display = ''; }
+    function setActive(idx) {
+      activeIndex = idx;
+      const nodes = menu.querySelectorAll('.dropdown-item');
+      nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
+    }
+    function pick(idx) {
+      if (idx < 0 || idx >= items.length) return;
+      inputEl.value = items[idx];
+      hide();
+      if (typeof options.onPick === 'function') options.onPick(items[idx]);
+    }
+    function filterHints(q) {
+      const ql = (q || '').trim().toLowerCase();
+      const all = getHints() || [];
+      if (!ql) return all.slice(0, limit);
+      const starts = [];
+      const contains = [];
+      for (const name of all) {
+        const nl = String(name).toLowerCase();
+        if (nl.startsWith(ql)) starts.push(name);
+        else if (nl.includes(ql)) contains.push(name);
+        if (starts.length >= limit) break;
+      }
+      const out = starts.concat(contains.filter(n => !starts.includes(n)));
+      return out.slice(0, limit);
+    }
+    function renderList(list) {
+      items = Array.isArray(list) ? list.slice() : [];
+      if (!items.length) { hide(); return; }
+      menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
+      menu.querySelectorAll('.dropdown-item').forEach(btn => {
+        btn.addEventListener('mousedown', (e) => { e.preventDefault(); const idx = parseInt(btn.getAttribute('data-idx')||'-1',10); pick(idx); });
+      });
+      setActive(-1);
+      updateMenuPosition();
+      show();
+    }
+    inputEl.addEventListener('input', () => {
+      const list = filterHints(inputEl.value || '');
+      renderList(list);
+    });
+    inputEl.addEventListener('focus', () => {
+      Promise.resolve().then(() => ensureLoaded()).finally(() => {
+        renderList(filterHints(inputEl.value || ''));
+      });
+    });
+    inputEl.addEventListener('blur', () => { setTimeout(hide, 120); });
+    inputEl.addEventListener('keydown', (e) => {
+      if (menu.style.display === 'none') return;
+      const max = items.length - 1;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
+      else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } }
+      else if (e.key === 'Escape') { hide(); }
+    });
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    const onDocMouseDownFilter = (e) => { try { if (!menu.contains(e.target) && e.target !== inputEl) hide(); } catch (_) {} };
+    const onFocusOutFilter = (e) => {
+      const rel = e.relatedTarget;
+      if (!rel || !menu.contains(rel)) {
+        setTimeout(() => {
+          if (document.activeElement !== inputEl && !menu.contains(document.activeElement)) hide();
+        }, 0);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDownFilter);
+    inputEl.addEventListener('focusout', onFocusOutFilter);
+
+    const api = { destroy() { try { document.removeEventListener('mousedown', onDocMouseDownFilter); } catch(_){} try { inputEl.removeEventListener('focusout', onFocusOutFilter); } catch(_){} try { window.removeEventListener('resize', updateMenuPosition); window.removeEventListener('scroll', updateMenuPosition, true); } catch(_){} try { menu.remove(); } catch(_){} } };
+    inputEl._bhTypeaheadInstance = api;
+    return api;
+  }
+
+  // Optional ImageKit thumb transform passthrough
+  function thumb(url, w, h, smart) {
+    try { if (window.ImageUploader && window.ImageUploader.thumbTransform) return window.ImageUploader.thumbTransform(url, w, h, !!smart); } catch(_){}
+    return url;
+  }
+
+  Object.assign(window.BlogHelpers, {
+    normalizeCatsInput,
+    categoryToArray,
+    stripBadgeLikeClasses,
+    renderCategoryBadges,
+    setupCategoryWidget,
+    setupFilterTypeahead,
+    thumb
+  });
+})();

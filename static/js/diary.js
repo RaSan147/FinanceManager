@@ -20,11 +20,11 @@
     const btnClearFilters = document.getElementById('btnDiaryClearFilters');
     const activeFiltersBar = document.getElementById('diaryActiveFiltersBar');
 
-    // Local references to global helpers for clarity and fewer repeated window lookups
-    const BlogHelpers = window.BlogHelpers;
-    const RichText = window.RichText;
-    const ImageUploader = window.ImageUploader;
-    const CommentFormatter = window.CommentFormatter;
+  // Local references to global helpers for clarity and fewer repeated window lookups
+  const BlogHelpers = window.BlogHelpers;
+  const RichText = window.RichText;
+  const ImageUploader = window.ImageUploader;
+  const CommentFormatter = window.CommentFormatter;
 
   // Bootstrap modal instances (guard bootstrap since it's optional in some environments).
   // Ensure modals are direct children of <body> so Bootstrap's backdrop stacks correctly.
@@ -66,83 +66,6 @@
 
     function truncateText(txt, lim = 300) { return (!txt) ? '' : (txt.length > lim ? txt.slice(0, lim) + '…' : txt); }
 
-    // Remove any styling classes that would make an element behave like a
-    // badge/tag (background/text utilities or previously applied tag classes).
-    // This ensures we can safely reuse the template element as a neutral
-    // container when rendering multiple tags without leaving old tag-color-
-    // classes behind (which caused nested badge styling).
-    function stripBadgeLikeClasses(el) {
-      if (!el || !el.classList) return;
-      const cls = Array.from(el.classList);
-      for (const cn of cls) {
-        if (/^bg-/.test(cn) || /^text-bg-/.test(cn) || /^text-/.test(cn) || /^tag-color-/.test(cn) || cn === 'tag-badge' || cn === 'badge') {
-          el.classList.remove(cn);
-        }
-      }
-    }
-
-    function normalizeCatsInput(v) {
-      // Accept null/undefined, JSON string of array, or array.
-      // Always return an array of trimmed strings (no empty entries).
-      // Enforce max name length same as server (64 chars).
-      const MAX = 64;
-      if (v == null) return [];
-      let arr = [];
-      if (Array.isArray(v)) arr = v.slice();
-      else if (typeof v === 'string') {
-        // Try JSON parse first (we store JSON in hidden inputs). If that
-        // fails, treat it as an empty array — don't attempt fallback coercion.
-        try {
-          const maybe = JSON.parse(v || '[]');
-          if (Array.isArray(maybe)) arr = maybe.slice();
-          else arr = [];
-        } catch (_) { arr = []; }
-      } else {
-        return [];
-      }
-      return arr.map(s => (s || '').toString().trim()).filter(Boolean).map(s => s.length > MAX ? s.slice(0, MAX) : s);
-    }
-
-    // Convert a category value (array or comma-separated string) to array.
-    function categoryToArray(val) {
-      if (Array.isArray(val)) return val.slice();
-      if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
-      return [];
-    }
-
-    // Render static (non-removable) category badges into a container.
-    function renderStaticCategoryBadges(container, catsVal) {
-      if (!container) return;
-      const cats = categoryToArray(catsVal);
-      if (!cats.length) {
-        container.classList.add('d-none');
-        return;
-      }
-      if (cats.length === 1) {
-        const name = cats[0];
-        App.utils.tools.del_child(container);
-        try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(container, name); } catch (_) {}
-        container.textContent = name;
-        container.classList.remove('d-none');
-        return;
-      }
-      // Multiple: convert template badge into a neutral container and append children
-      stripBadgeLikeClasses(container);
-      App.utils.tools.del_child(container);
-      for (const name of cats) {
-        const wrapper = document.createElement('span');
-        wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
-        BlogHelpers.applyCategoryBadge(wrapper, name);
-        wrapper.style.fontSize = '0.9em';
-        const text = document.createElement('span');
-        text.textContent = name;
-        text.style.whiteSpace = 'nowrap';
-        wrapper.appendChild(text);
-        container.appendChild(wrapper);
-      }
-      container.classList.remove('d-none');
-    }
-
     // Per-entry controller to isolate state for the currently opened diary in the detail modal.
     class DiaryDetailController {
       static forForm(editForm) {
@@ -160,16 +83,18 @@
         this.canonical = {
           title: item?.title || '',
           content: item?.content || '',
-          cats: categoryToArray(item?.category)
+          cats: BlogHelpers.categoryToArray(item?.category)
         };
       }
       ensureWidget(initialCats) {
         try {
-          this.widget = setupCategoryWidget(this.form, {
+          this.widget = BlogHelpers.setupCategoryWidget(this.form, {
             chipsSelector: '[data-diary-detail-categories]',
             inputSelector: '[data-diary-detail-category-input]',
             jsonInputSelector: '[data-diary-detail-categories-json]',
-            initial: Array.isArray(initialCats) ? initialCats : []
+            initial: Array.isArray(initialCats) ? initialCats : [],
+            ensureLoaded: () => loadDiaryCategoryHints(),
+            getHints: () => diaryCategoryHints
           });
         } catch (_) { this.widget = null; }
         return this.widget;
@@ -179,7 +104,7 @@
         const obj = {};
         fd.forEach((v, k) => { obj[k] = v; });
         // categories is JSON array in hidden input
-        const catsArr = normalizeCatsInput(obj.categories);
+  const catsArr = BlogHelpers.normalizeCatsInput(obj.categories);
         return {
           title: (obj.title || '').toString(),
           content: (obj.content || '').toString(),
@@ -191,8 +116,8 @@
         const minimal = {};
         if ((current.title || '') !== (this.canonical.title || '')) minimal.title = (current.title === '') ? null : current.title;
         if ((current.content || '') !== (this.canonical.content || '')) minimal.content = (current.content === '') ? null : current.content;
-        const origCats = Array.isArray(this.canonical.cats) ? this.canonical.cats : [];
-        const curCats = normalizeCatsInput(current.category);
+  const origCats = Array.isArray(this.canonical.cats) ? this.canonical.cats : [];
+  const curCats = BlogHelpers.normalizeCatsInput(current.category);
         if (JSON.stringify(origCats) !== JSON.stringify(curCats)) {
           minimal.category = curCats.length ? curCats : null;
         }
@@ -200,59 +125,7 @@
       }
     }
 
-    function renderCategoryChips(container, items, onChange) {
-      if (container) App.utils.tools.del_child(container);
-      for (const name of items) {
-        const wrapper = document.createElement('span');
-        wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
-        BlogHelpers.applyCategoryBadge(wrapper, name);
-        wrapper.style.fontSize = '0.9em';
-
-        const text = document.createElement('span');
-        text.textContent = name;
-        text.style.whiteSpace = 'nowrap';
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn chip-close btn-sm ms-2';
-        btn.setAttribute('aria-label', 'Remove');
-        btn.style.marginLeft = '0.4rem';
-        btn.innerHTML = "<i class='fa-solid fa-xmark' aria-hidden='true'></i>";
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const idx = items.indexOf(name);
-          if (idx !== -1) {
-            items.splice(idx, 1);
-            // Ensure underlying hidden JSON input stays in sync so saves detect changes
-            if (typeof onChange === 'function') onChange(items);
-            else renderCategoryChips(container, items);
-          }
-        });
-
-        wrapper.appendChild(text);
-        wrapper.appendChild(btn);
-        container.appendChild(wrapper);
-      }
-    }
-
-    function setupCategoryWidget(rootEl, opts) {
-      const chipsWrap = rootEl.querySelector(opts.chipsSelector);
-      const inputEl = rootEl.querySelector(opts.inputSelector);
-      const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
-      const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-diary-create-add-btn]') || rootEl.querySelector('[data-diary-detail-add-btn]');
-      if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
-      const widget = window.TagTypeahead.create({
-        inputEl,
-        chipsEl: chipsWrap,
-        jsonInput,
-        addBtn,
-        initial: Array.isArray(opts.initial) ? opts.initial : normalizeCatsInput(opts.initial),
-        ensureLoaded: () => loadDiaryCategoryHints(),
-        getHints: () => diaryCategoryHints,
-        applyBadge: (el, name) => { try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(el, name); } catch(_){} }
-      });
-      return widget;
-    }
+    // Use shared helpers for chips and widget when editing/creating categories
 
     // --- List rendering & actions -------------------------------------------------
     listEl.addEventListener('click', e => {
@@ -297,7 +170,7 @@
       node.dataset.id = it._id;
       node.querySelector('.diary-title').textContent = it.title || '(Untitled)';
       const cat = node.querySelector('.diary-category');
-      renderStaticCategoryBadges(cat, it.category);
+  BlogHelpers.renderCategoryBadges(cat, it.category);
       const cEl = node.querySelector('.diary-content-trunc'); if (cEl) cEl.textContent = truncateText(it.content || '');
       const delBtn = node.querySelector('.btn-delete'); if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteEntry(it._id); });
     }
@@ -355,11 +228,14 @@
       }
 
       try {
-        setupCategoryWidget(form, {
+        BlogHelpers.setupCategoryWidget(form, {
           chipsSelector: '[data-diary-create-categories]',
           inputSelector: '[data-diary-create-category-input]',
           jsonInputSelector: '[data-diary-create-categories-json]',
-          initial: []
+          addBtnSelector: '[data-diary-create-add-btn]',
+          initial: [],
+          ensureLoaded: () => loadDiaryCategoryHints(),
+          getHints: () => diaryCategoryHints
         });
         loadDiaryCategoryHints();
       } catch (_) {}
@@ -498,138 +374,23 @@
     // When showing filters, preload category hints for the datalist
     if (!box.classList.contains('d-none')) {
       try { loadDiaryCategoryHints(); } catch (_) {}
-      try { setupDiaryFilterTypeahead(); } catch (_) {}
+      try {
+        BlogHelpers.setupFilterTypeahead(categorySel, {
+          getHints: () => diaryCategoryHints,
+          ensureLoaded: () => loadDiaryCategoryHints(),
+          limit: 8,
+          zIndex: 1051
+        });
+      } catch (_) {}
     }
   });
   btnDiaryApplyFilters.addEventListener('click', () => { state.q = searchEl.value.trim(); state.category = categorySel.value || ''; apiList(); });
   btnClearFilters.addEventListener('click', () => { searchEl.value = ''; categorySel.value = ''; state.q = ''; state.category = ''; apiList(); });
   // Provide hints when category filter input gains focus and ensure typeahead is bound
-  if (categorySel) categorySel.addEventListener('focus', () => { try { setupDiaryFilterTypeahead(); loadDiaryCategoryHints(); } catch (_) {} });
-
-  // --- Typeahead for filter category -----------------------------------------
-  function setupDiaryFilterTypeahead() {
-    if (!categorySel) return;
-    if (categorySel._typeaheadBound) return;
-    categorySel._typeaheadBound = true;
-
-    // Ensure the parent can anchor an absolute dropdown
-    const parent = categorySel.parentElement;
-    if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
-
-    const menu = document.createElement('div');
-    menu.className = 'dropdown-menu show';
-    menu.style.position = 'absolute';
-    menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
-    menu.style.maxHeight = '240px';
-    menu.style.overflowY = 'auto';
-    menu.style.display = 'none';
-    menu.style.zIndex = '1051';
-    (parent || document.body).appendChild(menu);
-
-    let activeIndex = -1;
-    let items = [];
-
-    function updateMenuPosition() {
-      try {
-        const rect = categorySel.getBoundingClientRect();
-        const parentRect = (parent || document.body).getBoundingClientRect();
-        const top = rect.top - parentRect.top + categorySel.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
-        const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
-        menu.style.top = `${top}px`;
-        menu.style.left = `${left}px`;
-        menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
-      } catch (_) {}
-    }
-
-    function hide() { menu.style.display = 'none'; activeIndex = -1; }
-    function show() { if (items.length) menu.style.display = ''; }
-    function setActive(idx) {
-      activeIndex = idx;
-      const nodes = menu.querySelectorAll('.dropdown-item');
-      nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
-    }
-
-    function pick(idx) {
-      if (idx < 0 || idx >= items.length) return;
-      categorySel.value = items[idx];
-      hide();
-    }
-
-    function renderList(list) {
-      items = list;
-      if (!items.length) { hide(); return; }
-      menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
-      menu.querySelectorAll('.dropdown-item').forEach(btn => {
-        btn.addEventListener('mousedown', (e) => { // mousedown to beat blur
-          e.preventDefault();
-          const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10);
-          pick(idx);
-        });
-      });
-      setActive(-1);
-      updateMenuPosition();
-      show();
-    }
-
-    function filterHints(q) {
-      const ql = q.trim().toLowerCase();
-      if (!diaryCategoryHints || !diaryCategoryHints.length) return [];
-      if (!ql) return diaryCategoryHints.slice(0, 8);
-      const starts = [];
-      const contains = [];
-      for (const name of diaryCategoryHints) {
-        const nl = name.toLowerCase();
-        if (nl.startsWith(ql)) starts.push(name);
-        else if (nl.includes(ql)) contains.push(name);
-        if (starts.length >= 8) break;
-      }
-      const out = starts.concat(contains.filter(n => !starts.includes(n)));
-      return out.slice(0, 8);
-    }
-
-    categorySel.addEventListener('input', () => {
-      const q = categorySel.value || '';
-      const list = filterHints(q);
-      renderList(list);
-    });
-    categorySel.addEventListener('focus', () => {
-      // ensure hints loaded, then render for current query
-      loadDiaryCategoryHints().finally(() => {
-        const list = filterHints(categorySel.value || '');
-        renderList(list);
-      });
-    });
-    categorySel.addEventListener('blur', () => { setTimeout(hide, 120); });
-    categorySel.addEventListener('keydown', (e) => {
-      if (menu.style.display === 'none') return;
-      const max = items.length - 1;
-      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
-      else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } }
-      else if (e.key === 'Escape') { hide(); }
-    });
-    window.addEventListener('resize', updateMenuPosition);
-    window.addEventListener('scroll', updateMenuPosition, true);
-    // Hide menu when clicking/focusing outside
-    const onDocMouseDownFilter = (e) => {
-      try {
-        if (!menu.contains(e.target) && e.target !== categorySel) hide();
-      } catch (_) {}
-    };
-    const onFocusOutFilter = (e) => {
-      const rel = e.relatedTarget;
-      if (!rel || !menu.contains(rel)) {
-        setTimeout(() => {
-          if (document.activeElement !== categorySel && !menu.contains(document.activeElement)) hide();
-        }, 0);
-      }
-    };
-    document.addEventListener('mousedown', onDocMouseDownFilter);
-    categorySel.addEventListener('focusout', onFocusOutFilter);
-  }
+  if (categorySel) categorySel.addEventListener('focus', () => { try { BlogHelpers.setupFilterTypeahead(categorySel, { getHints: () => diaryCategoryHints, ensureLoaded: () => loadDiaryCategoryHints(), limit: 8 }); loadDiaryCategoryHints(); } catch (_) {} });
 
   // Initialize typeahead early in case filters are already visible
-  try { setupDiaryFilterTypeahead(); } catch (_) {}
+  try { BlogHelpers.setupFilterTypeahead(categorySel, { getHints: () => diaryCategoryHints, ensureLoaded: () => loadDiaryCategoryHints(), limit: 8 }); } catch (_) {}
 
     function updateFilterBtnActive() { const active = !!(state.q || state.category); if (filterToggle) { filterToggle.classList.toggle('btn-primary', active); filterToggle.classList.toggle('btn-outline-secondary', !active); } }
 
@@ -706,7 +467,7 @@
             catEl.classList.remove('d-none');
           } else {
             // multiple categories: convert template badge into neutral container
-            stripBadgeLikeClasses(catEl);
+            BlogHelpers.stripBadgeLikeClasses(catEl);
             App.utils.tools.del_child(catEl);
             for (const name of cats) {
               const wrapper = document.createElement('span');
@@ -775,7 +536,7 @@
         editForm.dataset.diaryId = currentDiaryId || '';
         const controller = DiaryDetailController.forForm(editForm);
         controller.setId(currentDiaryId);
-        controller.setCanonical(item);
+  controller.setCanonical(item);
         // Record canonical/original values on inputs so we can tell if a user
         // actually changed a value vs. leaving it alone. This prevents the
         // 'only edit content' case from accidentally nulling title/categories.
@@ -998,7 +759,7 @@
           }
 
           if (files.length) handleFiles(files, 'Pasted');
-        });
+                    });
 
         detailModalEl.addEventListener('show.bs.modal', () => { const did = formC.dataset.diaryId; if (!did) return; const d = diaryDrafts[did]; if (d) { formC.querySelector('[name="body"]').value = d.body || ''; images = Array.from(d.images || []); renderPreviews(); } });
 
@@ -1028,12 +789,7 @@
             continue;
           }
 
-          const placeholder = '\n![uploading]()';
-          const start = contentInput.selectionStart;
-          const end = contentInput.selectionEnd;
-          const orig = contentInput.value;
-          contentInput.value = orig.slice(0, start) + placeholder + orig.slice(end);
-          contentInput.selectionStart = contentInput.selectionEnd = start + placeholder.length;
+          const idTag = BlogHelpers.insertUploadingPlaceholder(contentInput);
 
           const r = new FileReader();
           r.onload = async () => {
@@ -1043,9 +799,9 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: r.result })
               });
-              contentInput.value = contentInput.value.replace('![uploading]()', `![img](${res.url})`);
+              contentInput.value = contentInput.value.replace(`![uploading-${idTag}]()`, `![img](${res.url})`);
             } catch (_) {
-              contentInput.value = contentInput.value.replace('![uploading]()', '(image failed)');
+              contentInput.value = contentInput.value.replace(`![uploading-${idTag}]()`, '(image failed)');
             }
           };
           r.readAsDataURL(f);

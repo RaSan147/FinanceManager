@@ -1,3 +1,25 @@
+/*
+ * static/js/todo.js
+ *
+ * To-Do UI module
+ * - Responsible for listing, filtering, creating and editing to-dos via modals
+ * - Uses App.utils.fetchJSONUnified for all API calls
+ * - Integrates with BlogHelpers, RichText, ImageUploader when available
+ *
+ * Improvements in this refactor:
+ * - Single global DEBUG flag for easy debug toggling
+ * - JSDoc on main helpers to improve discoverability
+ * - Defensive checks for optional dependencies (BlogHelpers, RichText, ImageUploader)
+ *
+ * Toggle debug logging by setting `window.TODO_DEBUG = true` in the console.
+ */
+'use strict';
+
+// Global debug flag: set window.TODO_DEBUG = true in the console to enable verbose logs
+/* eslint-disable no-unused-vars */
+var TODO_DEBUG = window && window.TODO_DEBUG || false;
+/* eslint-enable no-unused-vars */
+
 (() => {
 	// Ensure the module only initializes once
 	if (window.__todoModuleLoaded) return;
@@ -21,22 +43,21 @@
 	} catch (_) {}
 
 	// Move the large module body into an initializer so we can defer startup
-	let _initStarted = false;
-	const _init = () => {
-		if (_initStarted) {
+		let _initStarted = false;
+		const _init = () => {
+			if (_initStarted) {
 			try {
-				console.log('todo.js: init already started');
+					if (window && window.TODO_DEBUG) console.log('todo.js: init already started');
 			} catch (_) {}
 			return;
 		}
 		_initStarted = true;
-		const TODO_DEBUG = false; // set true to enable debug logging for edit-state cache
-		try {
-			if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) {
-				console.debug('todo.js: _init starting');
-				console.log('todo.js: _init starting');
-			}
-		} catch (e) { console.error('todo.js: debug logging failed in _init', e); throw e; }
+			try {
+				if (window && window.TODO_DEBUG) {
+					console.debug('todo.js: _init starting');
+					console.log('todo.js: _init starting');
+				}
+			} catch (e) { console.error('todo.js: debug logging failed in _init', e); throw e; }
 
 		// Instrument event listener registration and invocation for extensive logging.
 		// This is idempotent and scoped to runtime (only applied once).
@@ -130,6 +151,13 @@
 
 		// Hints cache for category typeahead (shared by filter and widget)
 		let todoCategoryHints = [];
+
+		/**
+		 * Load and cache category hints used by the filter typeahead and category widgets.
+		 * Populates the `todoCategoryHints` array and the `<datalist id="todoCategoriesGlobal">` when present.
+		 * Uses App.utils.fetchJSONUnified('/api/todo-categories') to retrieve items.
+		 * @returns {Promise<void>}
+		 */
 		async function loadTodoCategoryHints() {
 			try {
 				const dl = document.getElementById('todoCategoriesGlobal');
@@ -155,54 +183,7 @@
 			}
 		}
 
-		// Utilities for rendering category badges like Diary
-		function stripBadgeLikeClasses(el) {
-			if (!el || !el.classList) return;
-			const cls = Array.from(el.classList);
-			for (const cn of cls) {
-				if (/^bg-/.test(cn) || /^text-bg-/.test(cn) || /^text-/.test(cn) || /^tag-color-/.test(cn) || cn === 'tag-badge' || cn === 'badge') {
-					el.classList.remove(cn);
-				}
-			}
-		}
-
-		function categoryToArray(val) {
-			if (Array.isArray(val)) return val.slice();
-			if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
-			return [];
-		}
-
-		function renderStaticCategoryBadges(container, catsVal) {
-			if (!container) return;
-			const cats = categoryToArray(catsVal);
-			if (!cats.length) {
-				container.classList.add('d-none');
-				return;
-			}
-			if (cats.length === 1) {
-				const name = cats[0];
-				App.utils.tools.del_child(container);
-				try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(container, name); } catch (_) {}
-				container.textContent = name;
-				container.classList.remove('d-none');
-				return;
-			}
-			// Multiple: convert template badge into neutral container and append children
-			stripBadgeLikeClasses(container);
-			App.utils.tools.del_child(container);
-			for (const name of cats) {
-				const wrapper = document.createElement('span');
-				wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
-				try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(wrapper, name); } catch (_) {}
-				wrapper.style.fontSize = '0.9em';
-				const text = document.createElement('span');
-				text.textContent = name;
-				text.style.whiteSpace = 'nowrap';
-				wrapper.appendChild(text);
-				container.appendChild(wrapper);
-			}
-			container.classList.remove('d-none');
-		}
+		// Category badges now rendered via shared BlogHelpers.renderCategoryBadges
 
 		// --- UI helpers for sort and filter toggle ---
 		function updateSortLabel() {
@@ -231,76 +212,17 @@
 			}
 		}
 
-		function setupTodoFilterTypeahead() {
-			if (!categorySel) return;
-			if (categorySel._typeaheadBound) return;
-			categorySel._typeaheadBound = true;
 
-			const parent = categorySel.parentElement;
-			if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+		// Filter typeahead now provided by shared BlogHelpers.setupFilterTypeahead
 
-			const menu = document.createElement('div');
-			menu.className = 'dropdown-menu show';
-			menu.style.position = 'absolute';
-			menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
-			menu.style.maxHeight = '240px';
-			menu.style.overflowY = 'auto';
-			menu.style.display = 'none';
-			menu.style.zIndex = '1051';
-			(parent || document.body).appendChild(menu);
 
-			let activeIndex = -1;
-			let items = [];
-
-			function updateMenuPosition() {
-				try {
-					const rect = categorySel.getBoundingClientRect();
-					const parentRect = (parent || document.body).getBoundingClientRect();
-					const top = rect.top - parentRect.top + categorySel.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
-					const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
-					menu.style.top = `${top}px`;
-					menu.style.left = `${left}px`;
-					menu.style.minWidth = Math.max(categorySel.offsetWidth, 160) + 'px';
-				} catch (_) {}
-			}
-
-			function hide() { menu.style.display = 'none'; activeIndex = -1; }
-			function show() { if (items.length) menu.style.display = ''; }
-			function setActive(idx) { activeIndex = idx; const nodes = menu.querySelectorAll('.dropdown-item'); nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex)); }
-			function pick(idx) { if (idx < 0 || idx >= items.length) return; categorySel.value = items[idx]; hide(); }
-			function renderList(list) { items = list; if (!items.length) { hide(); return; } menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join(''); menu.querySelectorAll('.dropdown-item').forEach(btn => { btn.addEventListener('mousedown', (e) => { e.preventDefault(); const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10); pick(idx); }); }); setActive(-1); updateMenuPosition(); show(); }
-			function filterHints(q) { const ql = (q || '').trim().toLowerCase(); if (!todoCategoryHints || !todoCategoryHints.length) return []; if (!ql) return todoCategoryHints.slice(0, 8); const starts = []; const contains = []; for (const name of todoCategoryHints) { const nl = name.toLowerCase(); if (nl.startsWith(ql)) starts.push(name); else if (nl.includes(ql)) contains.push(name); if (starts.length >= 8) break; } const out = starts.concat(contains.filter(n => !starts.includes(n))); return out.slice(0, 8); }
-
-			categorySel.addEventListener('input', () => { const q = categorySel.value || ''; const list = filterHints(q); renderList(list); });
-			categorySel.addEventListener('focus', () => { loadTodoCategoryHints().finally(() => { const list = filterHints(categorySel.value || ''); renderList(list); }); });
-			categorySel.addEventListener('blur', () => { setTimeout(hide, 120); });
-			categorySel.addEventListener('keydown', (e) => { if (menu.style.display === 'none') return; const max = items.length - 1; if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); } else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } } else if (e.key === 'Escape') { hide(); } });
-			window.addEventListener('resize', updateMenuPosition);
-			window.addEventListener('scroll', updateMenuPosition, true);
-			const onDocMouseDownFilter = (e) => { try { if (!menu.contains(e.target) && e.target !== categorySel) hide(); } catch (_) {} };
-			const onFocusOutFilter = (e) => { const rel = e.relatedTarget; if (!rel || !menu.contains(rel)) { setTimeout(() => { if (document.activeElement !== categorySel && !menu.contains(document.activeElement)) hide(); }, 0); } };
-			document.addEventListener('mousedown', onDocMouseDownFilter);
-			categorySel.addEventListener('focusout', onFocusOutFilter);
-		}
-
-		function setupCategoryWidget(rootEl, opts) {
-			const chipsWrap = rootEl.querySelector(opts.chipsSelector);
-			const inputEl = rootEl.querySelector(opts.inputSelector);
-			const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
-			const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-todo-create-add-btn]') || rootEl.querySelector('[data-todo-detail-add-btn]');
-			if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
-			const widget = window.TagTypeahead.create({
-				inputEl,
-				chipsEl: chipsWrap,
-				jsonInput,
-				addBtn,
-				initial: (opts.initial && Array.isArray(opts.initial)) ? opts.initial : [],
-				ensureLoaded: () => loadTodoCategoryHints(),
-				getHints: () => todoCategoryHints,
-				applyBadge: (el, name) => { try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(el, name); } catch(_){} }
-			});
-			return widget;
-		}
+		/**
+		 * Initialize the TagTypeahead category widget inside a root element.
+		 * This wires the chips container, input and hidden JSON input for category editing.
+		 * @param {HTMLElement} rootEl - Root DOM element containing widget sub-elements
+		 * @param {Object} opts - Selectors and initial values
+		 */
+		// Category widget now provided by shared BlogHelpers.setupCategoryWidget
 
 		// Use the global RichText implementation only (no fallbacks). Let it fail loudly if missing.
 		const RichText = window.RichText;
@@ -357,7 +279,7 @@
 				|| (stage !== origStage)
 				|| (due !== origDue)
 				|| (description !== origDescription);
-			if (hasChanges || isEditing) {
+				if (hasChanges || isEditing) {
 				todoEditStateCache[todoId] = {
 					isEditing,
 					title,
@@ -367,17 +289,17 @@
 					description,
 					hasChanges
 				};
-				if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: saveEditStateToCache', todoId, todoEditStateCache[todoId]);
-			} else {
-				delete todoEditStateCache[todoId];
-				if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: cleared cache for', todoId);
-			}
+					if (window && window.TODO_DEBUG) console.debug('todo: saveEditStateToCache', todoId, todoEditStateCache[todoId]);
+				} else {
+					delete todoEditStateCache[todoId];
+					if (window && window.TODO_DEBUG) console.debug('todo: cleared cache for', todoId);
+				}
 			updateUnsavedChangesFlag();
 		}
 
 		function clearEditStateFromCache(todoId) {
 			delete todoEditStateCache[todoId];
-			if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: clearEditStateFromCache', todoId);
+			if (window && window.TODO_DEBUG) console.debug('todo: clearEditStateFromCache', todoId);
 			updateUnsavedChangesFlag();
 		}
 
@@ -390,6 +312,12 @@
 		function hasAnyUnsavedChanges() {
 			return hasUnsavedChanges;
 		}
+
+		/**
+		 * Fetch the to-do list from the server according to `state` (filters, sort, viewStage).
+		 * Updates `state.items` and triggers a re-render via `renderList()`.
+		 * @param {boolean} [forceFresh=false] - When true, adds a cache-buster to the request
+		 */
 		async function apiList(forceFresh = false) {
 			// Add lightweight cache-buster when we know data changed (stage update/delete)
 			let url = `/api/todo?per_page=100` + (forceFresh ? `&__ts=${Date.now()}` : '');
@@ -421,6 +349,11 @@
 			renderList();
 		}
 
+
+		/**
+		 * Render the flat list of to-dos into `#todoFlatList` using `#todoItemTemplate`.
+		 * Respects `state.items` and binds handlers for each rendered item.
+		 */
 		function renderList() {
 			if (!listEl) {
 				try {
@@ -465,7 +398,7 @@
 				node.querySelector('.todo-title').textContent = it.title;
 				const cat = node.querySelector('.todo-category');
 				if (cat) {
-					try { renderStaticCategoryBadges(cat, it.category); } catch (e) { console.error('todo.js: renderStaticCategoryBadges failed', e); }
+					try { window.BlogHelpers && window.BlogHelpers.renderCategoryBadges(cat, it.category); } catch (e) { console.error('todo.js: renderCategoryBadges failed', e); }
 				}
 				const due = node.querySelector('.todo-due');
 				if (it.due_date) {
@@ -645,11 +578,14 @@
 
 				// setup create modal category widget
 				try {
-					setupCategoryWidget(form, {
+					window.BlogHelpers.setupCategoryWidget(form, {
 						chipsSelector: '[data-todo-create-categories]',
 						inputSelector: '[data-todo-create-category-input]',
 						jsonInputSelector: '[data-todo-create-categories-json]',
-						initial: []
+						addBtnSelector: '[data-todo-create-add-btn]',
+						initial: [],
+						ensureLoaded: () => loadTodoCategoryHints(),
+						getHints: () => todoCategoryHints
 					});
 					loadTodoCategoryHints();
 				} catch (_) {}
@@ -746,6 +682,11 @@
 					} catch (e) { console.error('todo.js: comment delete failed in safeRenderComments', e); if (window.flash) window.flash('Delete failed', 'danger'); throw e; }
 				}));
 			}
+
+			/**
+			 * Open the detail modal for a given to-do id. Fetches detail and comments then renders.
+			 * @param {string} id - To-do id
+			 */
 			async function openDetailModal(id) {
 				try {
 					const data = await App.utils.fetchJSONUnified(`/api/todo/${id}/detail`, {
@@ -766,6 +707,12 @@
 				}
 			}
 
+
+			/**
+			 * Render detail modal content from server-provided data object.
+			 * Populates view and edit forms, comments and history.
+			 * @param {Object} data - Server response with `item` and `comments` properties
+			 */
 			function renderDetail(data) {
 				if (!detailModalEl) return;
 				const item = data.item || {};
@@ -895,17 +842,19 @@
 					// If we have a cached unsaved edit state for this item, restore it.
 					const cached = item._id && todoEditStateCache[item._id] ? todoEditStateCache[item._id] : null;
 					if (cached) {
-						if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: restoring cache for', item._id, cached);
+						if (window && window.TODO_DEBUG) console.debug('todo: restoring cache for', item._id, cached);
 						// Title
 						editForm.querySelector('[data-todo-detail-edit-title]').value = cached.title || '';
 						// Categories (cached may be comma-separated string)
 						const cachedCats = (cached.category && typeof cached.category === 'string') ? cached.category.split(',').map(s => s.trim()).filter(Boolean) : [];
 						try {
-							setupCategoryWidget(editForm, {
+							window.BlogHelpers.setupCategoryWidget(editForm, {
 								chipsSelector: '[data-todo-detail-categories]',
 								inputSelector: '[data-todo-detail-category-input]',
 								jsonInputSelector: '[data-todo-detail-categories-json]',
-								initial: cachedCats
+								initial: cachedCats,
+								ensureLoaded: () => loadTodoCategoryHints(),
+								getHints: () => todoCategoryHints
 							});
 							loadTodoCategoryHints();
 						} catch (_) {}
@@ -929,18 +878,20 @@
 							btnCancel && btnCancel.classList.remove('d-none');
 						}
 					} else {
-						if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) console.debug('todo: no cache for', item._id, '— populating from server');
+						if (window && window.TODO_DEBUG) console.debug('todo: no cache for', item._id, '— populating from server');
 						// No cached state — populate from server-provided item
 						editForm.querySelector('[data-todo-detail-edit-title]').value = item.title || '';
 						const initialCats = [];
 						if (Array.isArray(item.category)) initialCats.push(...item.category);
 						else if (item.category) initialCats.push(item.category);
 						try {
-							setupCategoryWidget(editForm, {
+							window.BlogHelpers.setupCategoryWidget(editForm, {
 								chipsSelector: '[data-todo-detail-categories]',
 								inputSelector: '[data-todo-detail-category-input]',
 								jsonInputSelector: '[data-todo-detail-categories-json]',
-								initial: initialCats
+								initial: initialCats,
+								ensureLoaded: () => loadTodoCategoryHints(),
+								getHints: () => todoCategoryHints
 							});
 							loadTodoCategoryHints();
 						} catch (_) {}
@@ -1259,6 +1210,13 @@
 			}
 
 			// Safe attach: ignore missing optional elements instead of throwing
+			/**
+			 * Safely attach an event handler if the element exists.
+			 * Useful for optional controls that may be absent on some pages.
+			 * @param {HTMLElement|null} el - Element to attach to (may be null)
+			 * @param {string} ev - Event name
+			 * @param {Function} fn - Handler
+			 */
 			const safeOn = (el, ev, fn) => {
 				try {
 					if (!el) {
@@ -1306,6 +1264,12 @@
 				state.category = '';
 				apiList();
 			});
+			/**
+			 * Persist a user sort preference for todos on the server.
+			 * Best-effort: failures are intentionally ignored.
+			 * @param {string} s - Sort key
+			 * @returns {Promise<void>}
+			 */
 			async function saveSortPreference(s) {
 				try {
 					await App.utils.fetchJSONUnified('/api/sort-pref', {
@@ -1354,10 +1318,14 @@
 			// Start initial fetch: wait for anchors if necessary (avoid race where
 			// apiList runs before DOM anchors are present). We use a short
 			// MutationObserver window (5s) and fall back to proceed anyway.
+			/**
+			 * Locate required anchors (list/template) then perform the initial fetch.
+			 * Uses a short MutationObserver window (5s) if anchors are not yet present.
+			 */
 			function startInitialFetch() {
 				const startFetch = () => {
 					try {
-						if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) {
+						if (window && window.TODO_DEBUG) {
 							console.debug('todo.js: calling apiList()');
 							console.log('todo.js: calling apiList()');
 						}
@@ -1397,6 +1365,11 @@
 
 			startInitialFetch();
 
+			/**
+			 * Attach handlers for global UI controls. Idempotent: each anchor uses
+			 * an internal flag to avoid double-binding when this function is called
+			 * multiple times.
+			 */
 			function attachGlobalHandlers() {
 				try {
 					// Stage view menu
@@ -1452,7 +1425,7 @@
 					const catInput = document.getElementById('todoFilterCategory');
 					if (catInput && !catInput._typeaheadInitBound) {
 						catInput._typeaheadInitBound = true;
-						catInput.addEventListener('focus', () => { try { setupTodoFilterTypeahead(); loadTodoCategoryHints(); } catch (_) {} });
+						catInput.addEventListener('focus', () => { try { window.BlogHelpers.setupFilterTypeahead(catInput, { getHints: () => todoCategoryHints, ensureLoaded: () => loadTodoCategoryHints(), limit: 8 }); loadTodoCategoryHints(); } catch (_) {} });
 					}
 
 					// Sort menu
@@ -1511,7 +1484,7 @@
 		}
 		const start = Date.now();
 		const iv = setInterval(() => {
-			if (typeof TODO_DEBUG !== 'undefined' && TODO_DEBUG) {
+			if (window && window.TODO_DEBUG) {
 				try {
 					console.debug('todo.js: polling for App.utils...');
 					console.log('todo.js: polling for App.utils...');
