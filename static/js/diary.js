@@ -236,128 +236,21 @@
     }
 
     function setupCategoryWidget(rootEl, opts) {
-      // opts: {chipsSelector, inputSelector, jsonInputSelector, initial, addBtnSelector}
       const chipsWrap = rootEl.querySelector(opts.chipsSelector);
       const inputEl = rootEl.querySelector(opts.inputSelector);
       const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
-
-      // If a widget already exists for this jsonInput, reuse it and just reset the list.
-      if (jsonInput && jsonInput._diaryCatWidget) {
-        try {
-          jsonInput._diaryCatWidget.setList(Array.isArray(opts.initial) ? opts.initial : normalizeCatsInput(opts.initial));
-          return jsonInput._diaryCatWidget;
-        } catch (_) { /* fall through to rebuild */ }
-      }
-
-      // Helper to deduplicate while preserving order.
-      const dedupe = (arr) => {
-        const seen = new Set();
-        const out = [];
-        for (const s of (arr || [])) {
-          const v = (s || '').toString().trim();
-          if (!v) continue;
-          if (!seen.has(v)) { seen.add(v); out.push(v); }
-        }
-        return out;
-      };
-
-  let list = Array.isArray(opts.initial) ? dedupe([...opts.initial]) : dedupe(normalizeCatsInput(opts.initial));
-  let _cancelNextAdd = false; // set when ESC pressed to avoid adding on blur
-
-      const sync = () => {
-        if (jsonInput) jsonInput.value = JSON.stringify(list);
-        renderCategoryChips(chipsWrap, list, () => {
-          // when a chip is removed, update JSON and re-render
-          if (jsonInput) jsonInput.value = JSON.stringify(list);
-          renderCategoryChips(chipsWrap, list, sync);
-        });
-      };
-
-      const addFromInput = () => {
-        const val = (inputEl.value || '').trim();
-        if (!val) return;
-        const parts = val.split(',').map(s => s.trim()).filter(Boolean);
-        for (const p of parts) {
-          if (!list.includes(p)) list.push(p);
-        }
-        inputEl.value = '';
-        sync();
-        try { inputEl.focus(); } catch (_) {}
-      };
-
-      // Bind event handlers once per widget; keep references for clean teardown.
-      const onKeyDown = (e) => {
-        // If the typeahead menu is open and Enter pressed, let the menu handler run
-        if (menu && menu.style.display !== 'none' && e.key === 'Enter') return;
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelNextAdd = true; inputEl.value = ''; hide(); return; }
-        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); }
-      };
-      const onBlur = () => { if (_cancelNextAdd) { _cancelNextAdd = false; return; } if ((inputEl.value || '').trim()) addFromInput(); };
-      const onFocus = () => { loadDiaryCategoryHints(); };
       const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-diary-create-add-btn]') || rootEl.querySelector('[data-diary-detail-add-btn]');
-      const onAddClick = (e) => { e.preventDefault(); addFromInput(); };
-
-      if (addBtn) addBtn.addEventListener('click', onAddClick);
-      inputEl.addEventListener('keydown', onKeyDown);
-      inputEl.addEventListener('blur', onBlur);
-      inputEl.addEventListener('focus', onFocus);
-
-      // Typeahead dropdown for diary category input (suggestions from diaryCategoryHints)
-      const parent = inputEl.parentElement;
-      if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
-      const menu = document.createElement('div');
-      menu.className = 'dropdown-menu show';
-      menu.style.position = 'absolute';
-      menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
-      menu.style.maxHeight = '240px';
-      menu.style.overflowY = 'auto';
-      menu.style.display = 'none';
-      menu.style.zIndex = '1061';
-      (parent || rootEl).appendChild(menu);
-
-      let activeIndex = -1;
-      let items = [];
-
-      function updateMenuPosition() {
-        try {
-          const rect = inputEl.getBoundingClientRect();
-          const parentRect = (parent || document.body).getBoundingClientRect();
-          const top = rect.top - parentRect.top + inputEl.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
-          const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
-          menu.style.top = `${top}px`;
-          menu.style.left = `${left}px`;
-          menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
-        } catch (_) {}
-      }
-
-      function hide() { menu.style.display = 'none'; activeIndex = -1; }
-      function show() { if (items.length) menu.style.display = ''; }
-      function setActive(idx) { activeIndex = idx; const nodes = menu.querySelectorAll('.dropdown-item'); nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex)); }
-      function pick(idx) { if (idx < 0 || idx >= items.length) return; const name = items[idx]; if (!list.includes(name)) list.push(name); inputEl.value = ''; sync(); hide(); try { inputEl.focus(); } catch (_) {} }
-      function renderList(listIn) { items = listIn; if (!items.length) { hide(); return; } menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join(''); menu.querySelectorAll('.dropdown-item').forEach(btn => { btn.addEventListener('mousedown', (e) => { e.preventDefault(); const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10); pick(idx); }); }); setActive(-1); updateMenuPosition(); show(); }
-      function filterHints(q) { const ql = (q || '').trim().toLowerCase(); if (!diaryCategoryHints || !diaryCategoryHints.length) return []; if (!ql) return diaryCategoryHints.slice(0, 8); const starts = []; const contains = []; for (const name of diaryCategoryHints) { const nl = name.toLowerCase(); if (nl.startsWith(ql)) starts.push(name); else if (nl.includes(ql)) contains.push(name); if (starts.length >= 8) break; } const out = starts.concat(contains.filter(n => !starts.includes(n))); return out.slice(0, 8); }
-      inputEl.addEventListener('input', () => { const q = inputEl.value || ''; const list2 = filterHints(q); renderList(list2); });
-      inputEl.addEventListener('focus', () => { loadDiaryCategoryHints().finally(() => { const list2 = filterHints(inputEl.value || ''); renderList(list2); }); });
-  inputEl.addEventListener('keydown', (e) => { if (menu.style.display !== 'none' && (e.key === 'Enter')) { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); return; } } if (menu.style.display !== 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) { const max = items.length - 1; if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); hide(); } return; } });
-      window.addEventListener('resize', updateMenuPosition);
-      window.addEventListener('scroll', updateMenuPosition, true);
-
-      const widget = {
-        getList: () => list,
-        setList: (arr) => { list = dedupe(Array.isArray(arr) ? arr.slice() : normalizeCatsInput(arr)); sync(); },
-        destroy: () => {
-          try {
-            if (addBtn) addBtn.removeEventListener('click', onAddClick);
-            inputEl.removeEventListener('keydown', onKeyDown);
-            inputEl.removeEventListener('blur', onBlur);
-            inputEl.removeEventListener('focus', onFocus);
-          } catch (_) {}
-        }
-      };
-
-      if (jsonInput) jsonInput._diaryCatWidget = widget;
-
-      sync();
+      if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
+      const widget = window.TagTypeahead.create({
+        inputEl,
+        chipsEl: chipsWrap,
+        jsonInput,
+        addBtn,
+        initial: Array.isArray(opts.initial) ? opts.initial : normalizeCatsInput(opts.initial),
+        ensureLoaded: () => loadDiaryCategoryHints(),
+        getHints: () => diaryCategoryHints,
+        applyBadge: (el, name) => { try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(el, name); } catch(_){} }
+      });
       return widget;
     }
 
@@ -717,6 +610,22 @@
     });
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
+    // Hide menu when clicking/focusing outside
+    const onDocMouseDownFilter = (e) => {
+      try {
+        if (!menu.contains(e.target) && e.target !== categorySel) hide();
+      } catch (_) {}
+    };
+    const onFocusOutFilter = (e) => {
+      const rel = e.relatedTarget;
+      if (!rel || !menu.contains(rel)) {
+        setTimeout(() => {
+          if (document.activeElement !== categorySel && !menu.contains(document.activeElement)) hide();
+        }, 0);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDownFilter);
+    categorySel.addEventListener('focusout', onFocusOutFilter);
   }
 
   // Initialize typeahead early in case filters are already visible

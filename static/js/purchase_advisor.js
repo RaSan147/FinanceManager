@@ -38,6 +38,27 @@ class PurchaseAdvisor {
         const form = document.getElementById('purchase-form');
         if (!form) return;
 
+        // Setup TagTypeahead for tags input (per-input instance)
+        try {
+            const chipsEl = form.querySelector('[data-pa-tags-chips]');
+            const inputEl = form.querySelector('[data-pa-tags-input]');
+            const jsonEl = form.querySelector('[data-pa-tags-json]');
+            if (chipsEl && inputEl && jsonEl && window.TagTypeahead) {
+                // Provide a small set of common tag hints; could be extended via API later
+                const commonHints = ['urgent', 'luxury', 'need', 'want', 'gift', 'budget', 'deal', 'sale', 'replacement', 'subscription'];
+                this._tagsWidget = window.TagTypeahead.create({
+                    inputEl,
+                    chipsEl,
+                    jsonInput: jsonEl,
+                    initial: [],
+                    ensureLoaded: () => Promise.resolve(),
+                    getHints: () => commonHints,
+                });
+            }
+        } catch (e) {
+            console.warn('PurchaseAdvisor: TagTypeahead init failed', e);
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!form.checkValidity()) {
@@ -52,8 +73,15 @@ class PurchaseAdvisor {
             spinner.classList.remove('d-none');
 
             try {
-                // Collect tags from TagManager (advisor-tagging.js)
-                const tags = window.TagManager ? window.TagManager.getTags() : [];
+                // Collect tags from TagTypeahead hidden JSON
+                let tags = [];
+                try {
+                    const jsonEl = form.querySelector('[data-pa-tags-json]');
+                    if (jsonEl && jsonEl.value) {
+                        const arr = JSON.parse(jsonEl.value);
+                        if (Array.isArray(arr)) tags = arr;
+                    }
+                } catch (_) { tags = []; }
 
                 const formData = {
                     description: form.elements.description?.value,

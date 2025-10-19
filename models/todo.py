@@ -46,8 +46,8 @@ class TodoBase(BaseModel):
     user_id: str
     title: str = Field(..., min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
-    # Category free-text (user defined) limited to 60 chars (front & back)
-    category: Optional[str] = Field(default=None, max_length=TODO_CATEGORY_MAX)
+    # Category tags: store as list of strings (like Diary)
+    category: Optional[list[str]] = Field(default=None)
     stage: Literal[
         "wondering", "planning", "in_progress", "paused", "gave_up", "done"
     ] = Field(default=DEFAULT_TODO_STAGE)
@@ -73,10 +73,32 @@ class TodoBase(BaseModel):
     @field_validator("category")
     @classmethod
     def _norm_cat(cls, v):
+        # Accept None, list[str], or comma-joined string (legacy). Truncate to max length.
         if v is None:
             return None
-        v2 = v.strip()
-        return v2 if v2 else None
+        if isinstance(v, list):
+            out: list[str] = []
+            for x in v:
+                if not isinstance(x, str):
+                    continue
+                s = x.strip()
+                if not s:
+                    continue
+                if len(s) > TODO_CATEGORY_MAX:
+                    s = s[:TODO_CATEGORY_MAX]
+                out.append(s)
+            return out if out else None
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            parts: list[str] = []
+            for p in (p.strip() for p in s.split(',') if p.strip()):
+                if len(p) > TODO_CATEGORY_MAX:
+                    p = p[:TODO_CATEGORY_MAX]
+                parts.append(p)
+            return parts if parts else None
+        return None
 
     @field_validator("due_date", mode="before")
     @classmethod
@@ -109,8 +131,8 @@ class TodoCreate(TodoBase):
 class TodoUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    # Mirror create constraint (<=60 chars)
-    category: Optional[str] = Field(default=None, max_length=TODO_CATEGORY_MAX)
+    # Mirror create (list of strings)
+    category: Optional[list[str]] = Field(default=None)
     stage: Optional[Literal[
         "wondering", "planning", "in_progress", "paused", "gave_up", "done"
     ]] = None
@@ -131,8 +153,21 @@ class TodoUpdate(BaseModel):
     def _norm_cat(cls, v):
         if v is None:
             return None
-        v2 = v.strip()
-        return v2 if v2 else None
+        if isinstance(v, list):
+            out = [str(x).strip() for x in v if isinstance(x, str) and x.strip()]
+            return out if out else None
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            parts = [p.strip() for p in s.split(',') if p.strip()]
+            return parts if parts else None
+        try:
+            s = str(v).strip()
+            parts = [p.strip() for p in s.split(',') if p.strip()]
+            return parts if parts else None
+        except Exception:
+            return None
 
     @field_validator("due_date", mode="before")
     @classmethod

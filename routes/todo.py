@@ -75,10 +75,11 @@ def init_todo_blueprint(mongo):
         except PydValidationError as ve:
             return jsonify({'errors': ve.errors()}), 400
         item = Todo.create(payload, mongo.db)
-        # Auto add category if new
+        # Auto add categories if new (list semantics like Diary)
         if item.category:
             try:
-                Todo.add_category(current_user.id, item.category, mongo.db)
+                for name in (item.category or []):
+                    Todo.add_category(current_user.id, name, mongo.db)
             except Exception:
                 pass
         return jsonify({'item': item.model_dump(by_alias=True)})
@@ -93,7 +94,7 @@ def init_todo_blueprint(mongo):
             return jsonify({'errors': ve.errors()}), 400
         # Fetch previous item to compare old vs new category for pruning
         prev = Todo.get(todo_id, current_user.id, mongo.db)
-        prev_cat = prev.category if prev else None
+        prev_cats = (prev.category or []) if prev else []
         upd = Todo.update(
             todo_id,
             current_user.id,
@@ -104,19 +105,20 @@ def init_todo_blueprint(mongo):
         if not upd:
             return jsonify({'error': 'Not found'}), 404
         try:
-            # Ensure new category exists (if any)
-            if upd.category:
+            # Ensure new categories exist (if any)
+            if upd.category is not None:
                 try:
-                    Todo.add_category(current_user.id, upd.category, mongo.db)
+                    for name in (upd.category or []):
+                        Todo.add_category(current_user.id, name, mongo.db)
                 except Exception:
                     pass
-            # If previous category was removed/changed, attempt to prune it if unreferenced
-            if prev_cat and prev_cat != (upd.category or None):
-                try:
-                    # Will only delete if no entries reference it
-                    Todo.delete_category(current_user.id, prev_cat, mongo.db)
-                except Exception:
-                    pass
+                # Prune removed categories
+                removed = [n for n in prev_cats if n not in (upd.category or [])]
+                for n in removed:
+                    try:
+                        Todo.delete_category(current_user.id, n, mongo.db)
+                    except Exception:
+                        pass
         except Exception:
             pass
         return jsonify({'item': upd.model_dump(by_alias=True)})
@@ -232,14 +234,17 @@ def init_todo_blueprint(mongo):
     def api_todo_delete(todo_id):  # type: ignore[override]
         # Capture previous category before deletion, to prune if becoming unused
         prev = Todo.get(todo_id, current_user.id, mongo.db)
-        prev_cat = prev.category if prev else None
+        prev_cats = (prev.category or []) if prev else []
         ok = Todo.delete(todo_id, current_user.id, mongo.db)
         if not ok:
             return jsonify({'error': 'Not found'}), 404
-        # Attempt to prune previous category if now unused
+        # Attempt to prune previous categories if now unused
         try:
-            if prev_cat:
-                Todo.delete_category(current_user.id, prev_cat, mongo.db)
+            for n in (prev_cats or []):
+                try:
+                    Todo.delete_category(current_user.id, n, mongo.db)
+                except Exception:
+                    pass
         except Exception:
             pass
         return jsonify({'success': True})

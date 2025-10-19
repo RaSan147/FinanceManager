@@ -108,6 +108,36 @@ class Loan:
         return sorted([n for n in names if isinstance(n, str) and n.strip()])
 
     @staticmethod
+    def list_open_counterparties_ranked(user_id: str, db, *, kind: Optional[str] = None, limit: int = 50) -> List[str]:
+        """Return counterparties for open loans ranked by outstanding amount (desc).
+
+        kind options mirror list_open_counterparties.
+        """
+        direction: Optional[str] = None
+        if kind == 'repaid_by_me':
+            direction = 'taken'
+        elif kind == 'repaid_to_me':
+            direction = 'given'
+
+        match: Dict[str, Any] = {'user_id': user_id, 'status': 'open'}
+        if direction:
+            match['direction'] = direction
+        pipeline = [
+            { '$match': match },
+            { '$group': { '_id': '$counterparty', 'total_outstanding': { '$sum': { '$ifNull': ['$outstanding_amount', 0] } } } },
+            { '$match': { '_id': { '$ne': None } } },
+            { '$sort': { 'total_outstanding': -1, '_id': 1 } },
+            { '$limit': int(limit or 50) }
+        ]
+        try:
+            rows = list(db.loans.aggregate(pipeline))
+        except Exception:
+            # Fallback to distinct if aggregate unsupported
+            return Loan.list_open_counterparties(user_id, db, kind=kind)
+        # Return counterparty names only
+        return [r.get('_id') for r in rows if isinstance(r.get('_id'), str) and r.get('_id').strip()]
+
+    @staticmethod
     def close_loan(loan_id: ObjectId, user_id: str, db, *, note: Optional[str] = None) -> bool:
         update_doc: Dict[str, Any] = {
             '$set': {

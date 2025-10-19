@@ -89,6 +89,9 @@
 				titleEl = modalEl.querySelector('[data-todo-modal-title]');
 				idInput = form ? form.querySelector('[data-todo-id]') : null;
 				submitBtn = form ? form.querySelector('[data-todo-submit-btn]') : null;
+				// Top save button mirrors footer Save and triggers submit
+				const saveTop = modalEl.querySelector('[data-todo-save-top]');
+				if (saveTop && submitBtn) saveTop.addEventListener('click', () => submitBtn.click());
 				stageSelect = form ? form.querySelector('[data-todo-stage-select]') : null;
 				metaEl = form ? form.querySelector('[data-todo-meta]') : null;
 				bsModal = window.bootstrap ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
@@ -112,153 +115,127 @@
 		const sortMenuEl = document.getElementById('todoSortMenu');
 		const currentSortLabel = document.getElementById('todoCurrentSortLabel');
 		const activeFiltersBar = document.getElementById('activeFiltersBar');
-		if (!listEl || !tmpl) {
+
+		// Module state and derived constants
+		const state = { q: '', category: '', sort: null, sortExplicit: false, items: [], viewStage: 'all' };
+		const stages = (() => {
 			try {
-				console.log('todo.js: missing DOM anchors at init', {
-					listEl: !!listEl,
-					tmpl: !!tmpl
-				});
-			} catch (_) {}
-					// Poll for anchors for a short period and then proceed.
-					// This avoids Promise/async syntax while still handling transient DOM races.
-					(function pollForAnchors(timeoutMs = 2000, interval = 120) {
-						const start = Date.now();
-						const ivAnch = setInterval(() => {
-							const l = document.getElementById('todoFlatList');
-							const t = document.getElementById('todoItemTemplate');
-							if (l && t) {
-								clearInterval(ivAnch);
-								listEl = l;
-								tmpl = t;
-								try {
-									console.log('todo.js: anchors after wait', {
-										listEl: !!listEl,
-										tmpl: !!tmpl
-									});
-									try {
-										console.debug('todo.js: anchors detailed', {
-											btnNewTodoTop: !!document.getElementById('btnNewTodoTop'),
-											btnToDoApplyFilters: !!document.getElementById('btnToDoApplyFilters'),
-											btnClearFilters: !!document.getElementById('btnClearFilters'),
-											stageViewMenu: !!document.getElementById('stageViewMenu'),
-											todoFlatList: !!document.getElementById('todoFlatList'),
-											todoItemTemplate: !!document.getElementById('todoItemTemplate')
-										});
-									} catch (_) {}
-								} catch (_) {}
-							} else if (Date.now() - start > timeoutMs) {
-								clearInterval(ivAnch);
-								// proceed anyway; later code will abort if anchors missing
-								try {
-									console.warn('todo.js: required DOM anchors not found after polling; proceeding anyway');
-								} catch (_) {}
-							}
-						}, interval);
-					})();
+				const root = stageViewMenu || document.getElementById('stageViewMenu');
+				if (!root) return [];
+				return Array.from(root.querySelectorAll('[data-stage]'))
+					.map(el => el.getAttribute('data-stage'))
+					.filter(Boolean);
+			} catch (_) { return []; }
+		})();
 
-		}
-
-		// Intentionally call shared helper directly where needed (will throw if BlogHelpers missing).
-
-		// Global stages and local UI state
-		const stages = ['wondering', 'planning', 'in_progress', 'paused', 'gave_up', 'done'];
-		const state = {
-			// sort: current sort key. We deliberately avoid sending it to the API
-			// until the user explicitly chooses a sort so that the server can
-			// respond with the persisted per-user preference (current_user.todo_sort).
-			sort: 'created_desc',
-			// whether user explicitly changed sort this session (to decide if we send ?sort=)
-			sortExplicit: false,
-			viewStage: 'all',
-			q: '',
-			category: '',
-			items: []
-		};
-
-		// --- UI helpers available across _init scope ---
-		function updateSortLabel() {
-			if (!currentSortLabel) return;
-			const map = {
-				created_desc: 'Newest',
-				created_asc: 'Oldest',
-				updated_desc: 'Recently Updated',
-				updated_asc: 'Least Updated',
-				due_date: 'Due Date'
-			};
-			currentSortLabel.textContent = map[state.sort] || 'Sort';
-		}
-
-		function updateSortMenuActive() {
-			if (!sortMenuEl) return;
-			const opts = sortMenuEl.querySelectorAll('[data-sort]');
-			opts.forEach(btn => {
-				const s = btn.getAttribute('data-sort');
-				btn.classList.toggle('active', s === state.sort);
-			});
-		}
-
-		function updateFilterBtnActive() {
-			const filterBtn = document.getElementById('btnTodoFilterToggle');
-			const active = !!(state.q || state.category || state.viewStage !== 'all');
-			if (filterBtn) {
-				filterBtn.classList.toggle('btn-primary', active);
-				filterBtn.classList.toggle('btn-outline-secondary', !active);
-			}
-		}
-
-		// Todo category hints & widget helpers
+		// Hints cache for category typeahead (shared by filter and widget)
 		let todoCategoryHints = [];
 		async function loadTodoCategoryHints() {
 			try {
-				if (document.getElementById('todoCategoriesGlobal')?.dataset.loaded === '1') return;
+				const dl = document.getElementById('todoCategoriesGlobal');
+				if (dl && dl.dataset.loaded === '1') {
+					// If already loaded, ensure cache populated from existing options if empty
+					if (!todoCategoryHints || todoCategoryHints.length === 0) {
+						try { todoCategoryHints = Array.from(dl.querySelectorAll('option')).map(o => o.value).filter(Boolean).slice(0, 200); } catch (_) {}
+					}
+					return;
+				}
 				const data = await App.utils.fetchJSONUnified('/api/todo-categories', { dedupe: true });
 				todoCategoryHints = (data.items || []).map(c => c.name).filter(Boolean).slice(0, 200);
-				const dl = document.getElementById('todoCategoriesGlobal');
 				if (dl) {
 					dl.innerHTML = todoCategoryHints.map(n => `<option value="${n}"></option>`).join('');
 					dl.dataset.loaded = '1';
 				}
-			} catch (_) {}
-		}
-
-		function renderCategoryChips(container, items, onChange) {
-			if (container) App.utils.tools.del_child(container);
-			for (const it of items) {
-				const wrapper = document.createElement('span');
-				wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
-				try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(wrapper, it); } catch (_) {}
-				wrapper.style['font-size'] = '0.9em';
-				const text = document.createElement('span');
-				text.textContent = it;
-				text.style['white-space'] = 'nowrap';
-				const btn = document.createElement('button');
-				btn.type = 'button';
-				btn.className = 'btn chip-close btn-sm ms-2';
-				btn.setAttribute('aria-label', 'Remove');
-				btn.style['margin-left'] = '0.4rem';
-				btn.innerHTML = "<i class='fa-solid fa-xmark' aria-hidden='true'></i>";
-				btn.addEventListener('click', (e) => {
-					e.stopPropagation();
-					const idx = items.indexOf(it);
-					if (idx !== -1) {
-						items.splice(idx, 1);
-						if (typeof onChange === 'function') onChange(items);
-						else renderCategoryChips(container, items);
-					}
-				});
-				wrapper.appendChild(text);
-				wrapper.appendChild(btn);
-				container.appendChild(wrapper);
+			} catch (err) {
+				console.warn('loadTodoCategoryHints failed', err);
+				try {
+					const dl = document.getElementById('todoCategoriesGlobal');
+					if (dl) todoCategoryHints = Array.from(dl.querySelectorAll('option')).map(o => o.value).filter(Boolean).slice(0, 200);
+				} catch (_) {}
 			}
 		}
 
-		// --- Typeahead for To-Do filter category (like Diary) ---
+		// Utilities for rendering category badges like Diary
+		function stripBadgeLikeClasses(el) {
+			if (!el || !el.classList) return;
+			const cls = Array.from(el.classList);
+			for (const cn of cls) {
+				if (/^bg-/.test(cn) || /^text-bg-/.test(cn) || /^text-/.test(cn) || /^tag-color-/.test(cn) || cn === 'tag-badge' || cn === 'badge') {
+					el.classList.remove(cn);
+				}
+			}
+		}
+
+		function categoryToArray(val) {
+			if (Array.isArray(val)) return val.slice();
+			if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim()).filter(Boolean);
+			return [];
+		}
+
+		function renderStaticCategoryBadges(container, catsVal) {
+			if (!container) return;
+			const cats = categoryToArray(catsVal);
+			if (!cats.length) {
+				container.classList.add('d-none');
+				return;
+			}
+			if (cats.length === 1) {
+				const name = cats[0];
+				App.utils.tools.del_child(container);
+				try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(container, name); } catch (_) {}
+				container.textContent = name;
+				container.classList.remove('d-none');
+				return;
+			}
+			// Multiple: convert template badge into neutral container and append children
+			stripBadgeLikeClasses(container);
+			App.utils.tools.del_child(container);
+			for (const name of cats) {
+				const wrapper = document.createElement('span');
+				wrapper.className = 'badge me-1 mb-1 d-inline-flex align-items-center py-1 px-2 tag-badge';
+				try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(wrapper, name); } catch (_) {}
+				wrapper.style.fontSize = '0.9em';
+				const text = document.createElement('span');
+				text.textContent = name;
+				text.style.whiteSpace = 'nowrap';
+				wrapper.appendChild(text);
+				container.appendChild(wrapper);
+			}
+			container.classList.remove('d-none');
+		}
+
+		// --- UI helpers for sort and filter toggle ---
+		function updateSortLabel() {
+			if (!currentSortLabel) return;
+			let label = 'Sort';
+			if (state.sort) {
+				const btn = sortMenuEl ? sortMenuEl.querySelector(`[data-sort="${state.sort}"]`) : null;
+				label = btn ? (btn.textContent || 'Sort') : (String(state.sort).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+			}
+			currentSortLabel.textContent = label;
+		}
+
+		function updateSortMenuActive() {
+			if (!sortMenuEl) return;
+			sortMenuEl.querySelectorAll('[data-sort]').forEach(el => {
+				const s = el.getAttribute('data-sort');
+				el.classList.toggle('active', !!state.sort && s === state.sort);
+			});
+		}
+
+		function updateFilterBtnActive() {
+			const active = !!(state.q || state.category);
+			if (filterToggle) {
+				filterToggle.classList.toggle('btn-primary', active);
+				filterToggle.classList.toggle('btn-outline-secondary', !active);
+			}
+		}
+
 		function setupTodoFilterTypeahead() {
 			if (!categorySel) return;
 			if (categorySel._typeaheadBound) return;
 			categorySel._typeaheadBound = true;
 
-			// Ensure the parent can anchor an absolute dropdown
 			const parent = categorySel.parentElement;
 			if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
 
@@ -289,218 +266,40 @@
 
 			function hide() { menu.style.display = 'none'; activeIndex = -1; }
 			function show() { if (items.length) menu.style.display = ''; }
-			function setActive(idx) {
-				activeIndex = idx;
-				const nodes = menu.querySelectorAll('.dropdown-item');
-				nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
-			}
+			function setActive(idx) { activeIndex = idx; const nodes = menu.querySelectorAll('.dropdown-item'); nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex)); }
+			function pick(idx) { if (idx < 0 || idx >= items.length) return; categorySel.value = items[idx]; hide(); }
+			function renderList(list) { items = list; if (!items.length) { hide(); return; } menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join(''); menu.querySelectorAll('.dropdown-item').forEach(btn => { btn.addEventListener('mousedown', (e) => { e.preventDefault(); const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10); pick(idx); }); }); setActive(-1); updateMenuPosition(); show(); }
+			function filterHints(q) { const ql = (q || '').trim().toLowerCase(); if (!todoCategoryHints || !todoCategoryHints.length) return []; if (!ql) return todoCategoryHints.slice(0, 8); const starts = []; const contains = []; for (const name of todoCategoryHints) { const nl = name.toLowerCase(); if (nl.startsWith(ql)) starts.push(name); else if (nl.includes(ql)) contains.push(name); if (starts.length >= 8) break; } const out = starts.concat(contains.filter(n => !starts.includes(n))); return out.slice(0, 8); }
 
-			function pick(idx) {
-				if (idx < 0 || idx >= items.length) return;
-				categorySel.value = items[idx];
-				hide();
-			}
-
-			function renderList(list) {
-				items = list;
-				if (!items.length) { hide(); return; }
-				menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
-				menu.querySelectorAll('.dropdown-item').forEach(btn => {
-					btn.addEventListener('mousedown', (e) => { // mousedown to beat blur
-						e.preventDefault();
-						const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10);
-						pick(idx);
-					});
-				});
-				setActive(-1);
-				updateMenuPosition();
-				show();
-			}
-
-			function filterHints(q) {
-				const ql = (q || '').trim().toLowerCase();
-				if (!todoCategoryHints || !todoCategoryHints.length) return [];
-				if (!ql) return todoCategoryHints.slice(0, 8);
-				const starts = [];
-				const contains = [];
-				for (const name of todoCategoryHints) {
-					const nl = name.toLowerCase();
-					if (nl.startsWith(ql)) starts.push(name);
-					else if (nl.includes(ql)) contains.push(name);
-					if (starts.length >= 8) break;
-				}
-				const out = starts.concat(contains.filter(n => !starts.includes(n)));
-				return out.slice(0, 8);
-			}
-
-			categorySel.addEventListener('input', () => {
-				const q = categorySel.value || '';
-				const list = filterHints(q);
-				renderList(list);
-			});
-			categorySel.addEventListener('focus', () => {
-				loadTodoCategoryHints().finally(() => {
-					const list = filterHints(categorySel.value || '');
-					renderList(list);
-				});
-			});
+			categorySel.addEventListener('input', () => { const q = categorySel.value || ''; const list = filterHints(q); renderList(list); });
+			categorySel.addEventListener('focus', () => { loadTodoCategoryHints().finally(() => { const list = filterHints(categorySel.value || ''); renderList(list); }); });
 			categorySel.addEventListener('blur', () => { setTimeout(hide, 120); });
-			categorySel.addEventListener('keydown', (e) => {
-				if (menu.style.display === 'none') return;
-				const max = items.length - 1;
-				if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
-				else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
-				else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } }
-				else if (e.key === 'Escape') { hide(); }
-			});
+			categorySel.addEventListener('keydown', (e) => { if (menu.style.display === 'none') return; const max = items.length - 1; if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); } else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } } else if (e.key === 'Escape') { hide(); } });
 			window.addEventListener('resize', updateMenuPosition);
 			window.addEventListener('scroll', updateMenuPosition, true);
+			const onDocMouseDownFilter = (e) => { try { if (!menu.contains(e.target) && e.target !== categorySel) hide(); } catch (_) {} };
+			const onFocusOutFilter = (e) => { const rel = e.relatedTarget; if (!rel || !menu.contains(rel)) { setTimeout(() => { if (document.activeElement !== categorySel && !menu.contains(document.activeElement)) hide(); }, 0); } };
+			document.addEventListener('mousedown', onDocMouseDownFilter);
+			categorySel.addEventListener('focusout', onFocusOutFilter);
 		}
 
 		function setupCategoryWidget(rootEl, opts) {
 			const chipsWrap = rootEl.querySelector(opts.chipsSelector);
 			const inputEl = rootEl.querySelector(opts.inputSelector);
 			const jsonInput = rootEl.querySelector(opts.jsonInputSelector);
-			const list = opts.initial && Array.isArray(opts.initial) ? [...opts.initial] : [];
-			let _cancelNextAdd = false; // set when ESC pressed to avoid adding on blur
-			function sync() {
-				if (jsonInput) jsonInput.value = JSON.stringify(list);
-				renderCategoryChips(chipsWrap, list, () => {
-					if (jsonInput) jsonInput.value = JSON.stringify(list);
-					renderCategoryChips(chipsWrap, list, sync);
-				});
-			}
-			function addFromInput() {
-				const val = (inputEl.value || '').trim();
-				if (!val) return;
-				const parts = val.split(',').map(s => s.trim()).filter(Boolean);
-				for (const p of parts) if (!list.includes(p)) list.push(p);
-				inputEl.value = '';
-				sync();
-			}
-			// support explicit add button
 			const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-todo-create-add-btn]') || rootEl.querySelector('[data-todo-detail-add-btn]');
-			if (addBtn) {
-				addBtn.addEventListener('click', (e) => {
-					e.preventDefault();
-					addFromInput();
-				});
-			}
-			// Typeahead dropdown for category input (suggestions from todoCategoryHints)
-			(function attachTypeahead() {
-				if (!inputEl) return;
-				const parent = inputEl.parentElement;
-				if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
-				const menu = document.createElement('div');
-				menu.className = 'dropdown-menu show';
-				menu.style.position = 'absolute';
-				menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
-				menu.style.maxHeight = '240px';
-				menu.style.overflowY = 'auto';
-				menu.style.display = 'none';
-				menu.style.zIndex = '1061';
-				(parent || rootEl).appendChild(menu);
-
-				let activeIndex = -1;
-				let items = [];
-
-				function updateMenuPosition() {
-					try {
-						const rect = inputEl.getBoundingClientRect();
-						const parentRect = (parent || document.body).getBoundingClientRect();
-						const top = rect.top - parentRect.top + inputEl.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
-						const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
-						menu.style.top = `${top}px`;
-						menu.style.left = `${left}px`;
-						menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
-					} catch (_) {}
-				}
-
-				function hide() { menu.style.display = 'none'; activeIndex = -1; }
-				function show() { if (items.length) menu.style.display = ''; }
-				function setActive(idx) {
-					activeIndex = idx;
-					const nodes = menu.querySelectorAll('.dropdown-item');
-					nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
-				}
-
-				function pick(idx) {
-					if (idx < 0 || idx >= items.length) return;
-					const name = items[idx];
-					if (!list.includes(name)) list.push(name);
-					inputEl.value = '';
-					sync();
-					hide();
-					try { inputEl.focus(); } catch (_) {}
-				}
-
-				function renderList(listIn) {
-					items = listIn;
-					if (!items.length) { hide(); return; }
-					menu.innerHTML = items.map((n, i) => `<button type="button" class="dropdown-item" data-idx="${i}">${n}</button>`).join('');
-					menu.querySelectorAll('.dropdown-item').forEach(btn => {
-						btn.addEventListener('mousedown', (e) => {
-							e.preventDefault();
-							const idx = parseInt(btn.getAttribute('data-idx') || '-1', 10);
-							pick(idx);
-						});
-					});
-					setActive(-1);
-					updateMenuPosition();
-					show();
-				}
-
-				function filterHints(q) {
-					const ql = (q || '').trim().toLowerCase();
-					if (!todoCategoryHints || !todoCategoryHints.length) return [];
-					if (!ql) return todoCategoryHints.slice(0, 8);
-					const starts = [];
-					const contains = [];
-					for (const name of todoCategoryHints) {
-						const nl = name.toLowerCase();
-						if (nl.startsWith(ql)) starts.push(name);
-						else if (nl.includes(ql)) contains.push(name);
-						if (starts.length >= 8) break;
-					}
-					const out = starts.concat(contains.filter(n => !starts.includes(n)));
-					return out.slice(0, 8);
-				}
-
-				inputEl.addEventListener('input', () => {
-					const q = inputEl.value || '';
-					const list = filterHints(q);
-					renderList(list);
-				});
-				inputEl.addEventListener('focus', () => {
-					loadTodoCategoryHints().finally(() => {
-						const list = filterHints(inputEl.value || '');
-						renderList(list);
-					});
-				});
-				inputEl.addEventListener('blur', () => { setTimeout(hide, 120); });
-				inputEl.addEventListener('keydown', (e) => {
-					if (menu.style.display !== 'none' && (e.key === 'Enter')) { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); return; } }
-					if (menu.style.display !== 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) {
-						const max = items.length - 1;
-						if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(max, activeIndex + 1)); }
-						else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, activeIndex - 1)); }
-						else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelNextAdd = true; inputEl.value=''; hide(); }
-						return;
-					}
-					if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelNextAdd = true; inputEl.value=''; hide(); return; }
-					if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addFromInput(); }
-				});
-				window.addEventListener('resize', updateMenuPosition);
-				window.addEventListener('scroll', updateMenuPosition, true);
-			})();
-
-			// Fallback basic behaviors
-			inputEl.addEventListener('blur', () => {
-				if (_cancelNextAdd) { _cancelNextAdd = false; return; }
-				if ((inputEl.value||'').trim()) addFromInput();
+			if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
+			const widget = window.TagTypeahead.create({
+				inputEl,
+				chipsEl: chipsWrap,
+				jsonInput,
+				addBtn,
+				initial: (opts.initial && Array.isArray(opts.initial)) ? opts.initial : [],
+				ensureLoaded: () => loadTodoCategoryHints(),
+				getHints: () => todoCategoryHints,
+				applyBadge: (el, name) => { try { window.BlogHelpers && window.BlogHelpers.applyCategoryBadge(el, name); } catch(_){} }
 			});
-			sync();
-			return { getList: () => list };
+			return widget;
 		}
 
 		// Use the global RichText implementation only (no fallbacks). Let it fail loudly if missing.
@@ -532,8 +331,32 @@
 			const stage = editForm.querySelector('[data-todo-detail-edit-stage]').value || '';
 			const due = editForm.querySelector('[data-todo-detail-edit-due]').value;
 			const description = editForm.querySelector('[data-todo-detail-edit-description]').value;
+			// Prefer canonical/original values captured at render time to avoid
+			// false positives when the list no longer contains this item (filters/refresh)
 			const originalItem = state.items.find(item => item._id === todoId);
-			const hasChanges = !originalItem || title !== (originalItem.title || '') || category !== (originalItem.category || '') || stage !== (originalItem.stage || '') || due !== (originalItem.due_date ? (originalItem.due_date.slice ? originalItem.due_date.slice(0, 10) : originalItem.due_date) : '') || description !== (originalItem.description || '');
+			const origTitle = (editForm.dataset.origTitle != null) ? editForm.dataset.origTitle : ((originalItem && (originalItem.title || '')) || '');
+			const origCategory = (editForm.dataset.origCategory != null)
+				? editForm.dataset.origCategory
+				: (originalItem
+					? (Array.isArray(originalItem.category)
+						? (originalItem.category.join(', ') || '')
+						: (originalItem.category || ''))
+					: '');
+			const origStage = (editForm.dataset.origStage != null) ? editForm.dataset.origStage : ((originalItem && (originalItem.stage || '')) || '');
+			const origDue = (editForm.dataset.origDue != null)
+				? editForm.dataset.origDue
+				: (originalItem
+					? (originalItem.due_date
+						? (originalItem.due_date.slice ? originalItem.due_date.slice(0, 10) : originalItem.due_date)
+						: '')
+					: '');
+			const origDescription = (editForm.dataset.origDescription != null) ? editForm.dataset.origDescription : ((originalItem && (originalItem.description || '')) || '');
+
+			const hasChanges = (title !== origTitle)
+				|| (category !== origCategory)
+				|| (stage !== origStage)
+				|| (due !== origDue)
+				|| (description !== origDescription);
 			if (hasChanges || isEditing) {
 				todoEditStateCache[todoId] = {
 					isEditing,
@@ -641,10 +464,8 @@
 				if (it.stage === 'done') node.classList.add('done');
 				node.querySelector('.todo-title').textContent = it.title;
 				const cat = node.querySelector('.todo-category');
-				if (it.category) {
-					cat.textContent = it.category;
-					cat.classList.remove('d-none');
-					try { if (window.BlogHelpers && window.BlogHelpers.applyCategoryBadge) window.BlogHelpers.applyCategoryBadge(cat, it.category); } catch (e) { console.error('todo.js: applyCategoryBadge failed in hydrate', e); throw e; }
+				if (cat) {
+					try { renderStaticCategoryBadges(cat, it.category); } catch (e) { console.error('todo.js: renderStaticCategoryBadges failed', e); }
 				}
 				const due = node.querySelector('.todo-due');
 				if (it.due_date) {
@@ -720,11 +541,11 @@
 			async function persistTodo(fd) {
 				const id = idInput.value.trim();
 				const payload = Object.fromEntries(fd.entries());
-				// convert categories JSON to category string
+				// convert categories JSON to category array
 				if (payload.categories) {
 					try {
 						const arr = JSON.parse(payload.categories || '[]');
-						if (Array.isArray(arr) && arr.length) payload.category = arr.join(', ');
+						if (Array.isArray(arr)) payload.category = arr;
 					} catch (e) { console.error('todo.js: parsing payload.categories failed in persistTodo', e); throw e; }
 					delete payload.categories;
 				}
@@ -958,9 +779,10 @@
 				const catEl = detailModalEl.querySelector('[data-todo-detail-category]');
 				if (catEl) {
 					if (item.category) {
-						catEl.textContent = item.category;
+						catEl.textContent = Array.isArray(item.category) ? item.category.join(', ') : item.category;
 						catEl.classList.remove('d-none');
-						window.BlogHelpers.applyCategoryBadge(catEl, item.category);
+						const firstCat = Array.isArray(item.category) ? item.category[0] : item.category;
+						window.BlogHelpers.applyCategoryBadge(catEl, firstCat);
 					} else {
 						catEl.classList.add('d-none');
 					}
@@ -1056,6 +878,20 @@
 				// Populate edit form (kept hidden until user clicks Edit)
 				const editForm = detailModalEl.querySelector('[data-todo-detail-edit-form]');
 				if (editForm) {
+					// Capture canonical/original values from server item for reliable change detection
+					const origTitle = item.title || '';
+					const origCatsArr = Array.isArray(item.category)
+						? item.category.slice()
+						: ((typeof item.category === 'string' && item.category.trim()) ? item.category.split(',').map(s => s.trim()).filter(Boolean) : []);
+					const origCategory = (origCatsArr || []).join(', ');
+					const origStage = item.stage || 'wondering';
+					const origDue = item.due_date ? date10(item.due_date) : '';
+					const origDescription = item.description || '';
+					editForm.dataset.origTitle = origTitle;
+					editForm.dataset.origCategory = origCategory;
+					editForm.dataset.origStage = origStage;
+					editForm.dataset.origDue = origDue;
+					editForm.dataset.origDescription = origDescription;
 					// If we have a cached unsaved edit state for this item, restore it.
 					const cached = item._id && todoEditStateCache[item._id] ? todoEditStateCache[item._id] : null;
 					if (cached) {
@@ -1179,12 +1015,12 @@
 										if (patch.categories) {
 											try {
 												const arr = JSON.parse(patch.categories || '[]');
-												if (Array.isArray(arr) && arr.length) patch.category = arr.join(', ');
+												if (Array.isArray(arr)) patch.category = arr;
 											} catch (_) {}
 											delete patch.categories;
 										}
 										if (patch.due_date === '') patch.due_date = null;
-										if (patch.category === '') patch.category = null;
+										if (Array.isArray(patch.category) && patch.category.length === 0) patch.category = null;
 										await App.utils.fetchJSONUnified(`/api/todo/${todoId}`, {
 											method: 'PATCH',
 											headers: {
@@ -1360,12 +1196,12 @@
 					if (patch.categories) {
 						try {
 							const arr = JSON.parse(patch.categories || '[]');
-							if (Array.isArray(arr) && arr.length) patch.category = arr.join(', ');
+							if (Array.isArray(arr)) patch.category = arr;
 						} catch (_) {}
 						delete patch.categories;
 					}
 					if (patch.due_date === '') patch.due_date = null;
-					if (patch.category === '') patch.category = null;
+					if (Array.isArray(patch.category) && patch.category.length === 0) patch.category = null;
 					try {
 						await App.utils.fetchJSONUnified(`/api/todo/${todoId}`, {
 							method: 'PATCH',

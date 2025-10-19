@@ -21,7 +21,10 @@
 
   function currentPage() {
     const tbl = qs('[data-transactions-table]');
-  return parseInt(tbl.getAttribute('data-current-page') || '1', 10);
+    // If there's no full transactions table on the page (e.g., on dashboard),
+    // default to page 1 and let downstream loaders no-op safely.
+    if (!tbl) return 1;
+    return parseInt(tbl.getAttribute('data-current-page') || '1', 10);
   }
 
   function flash(msg, type) { (typeof window.flash === 'function' ? window.flash(msg, type) : console.log(type || 'info', msg)); }
@@ -87,7 +90,18 @@
       if (kind) url.searchParams.set('kind', kind);
       const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
       const data = await res.json();
-      dataList.innerHTML = (data.items || []).map(n => `<option value="${n}"></option>`).join('');
+      // If user typed something, bias options by starts-with first
+      const q = (formEl?.related_person?.value || '').trim().toLowerCase();
+      const items = Array.isArray(data.items) ? data.items : [];
+      let ordered = items;
+      if (q) {
+        const starts = items.filter(n => (n || '').toLowerCase().startsWith(q));
+        const contains = items.filter(n => (n || '').toLowerCase().includes(q) && !starts.includes(n));
+        ordered = starts.concat(contains);
+      }
+      // Limit to a reasonable count to keep the dropdown usable
+      const limited = ordered.slice(0, 50);
+      dataList.innerHTML = limited.map(n => `<option value="${n}"></option>`).join('');
     } catch {
       if (dataList) App.utils.tools.del_child(dataList);
     }
@@ -203,6 +217,8 @@
     safeAdd(currencySelect, 'change', updateCurrencySymbol);
     safeAdd(typeSelect, 'change', () => { filterCategoriesForType(typeSelect ? typeSelect.value : 'income'); refreshCounterparties(); });
     safeAdd(categorySelect, 'change', refreshCounterparties);
+  // Improve UX: refresh counterparties as user types a name
+  safeAdd(formEl?.related_person, 'input', () => { if (loanKind(categorySelect.value) !== undefined) refreshCounterparties(); });
     safeAdd(formEl, 'submit', handleSubmit);
 
     // Open create (may live outside modal)
@@ -269,6 +285,26 @@
   allOptions = (categorySelect ? Array.from(categorySelect.querySelectorAll('option, optgroup')).map((opt) => opt.cloneNode(true)) : []);
   typeSelect = formEl.querySelector('[name="type"]');
   dataList = qs('#tx_person_options');
+
+  // Suggestion menu for Related Person (no chips, keep plain text)
+  try {
+    const rpInput = formEl?.querySelector('input[name="related_person"][list="tx_person_options"]') || null;
+    if (rpInput && window.TagTypeahead) {
+      let latest = [];
+      const getKind = ()=> loanKind(categorySelect?.value);
+      const ensureLoaded = async ()=>{ try{ const url = new URL(window.location.origin + '/api/loans/counterparties'); const kind = getKind(); if (typeof kind !== 'undefined' && kind) url.searchParams.set('kind', kind); const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } }); const data = await res.json(); latest = Array.isArray(data.items) ? data.items : []; } catch(_){ latest = []; } };
+      const getHints = ()=>{
+        const q = (rpInput.value || '').trim().toLowerCase();
+        if (!q) return latest;
+        const starts = latest.filter(n => (n||'').toLowerCase().startsWith(q));
+        const contains = latest.filter(n => (n||'').toLowerCase().includes(q) && !starts.includes(n));
+        return starts.concat(contains);
+      };
+      const widget = window.TagTypeahead.create({ inputEl: rpInput, ensureLoaded, getHints, mode: 'suggest', maxVisible: 8 });
+      // Refresh suggestions when category changes (loan vs non-loan)
+      if (categorySelect) categorySelect.addEventListener('change', ()=> widget.focusToShow());
+    }
+  } catch(e){ console.warn('transactions.js: Related Person suggest init failed', e); }
 
     bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
   // Assume all required elements are present; allow errors to surface if not

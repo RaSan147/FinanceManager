@@ -48,7 +48,8 @@ def init_loans_blueprint(mongo):
     def api_loan_counterparties():
         from flask import request
         kind = request.args.get('kind')
-        names = Loan.list_open_counterparties(current_user.id, mongo.db, kind=kind)
+        # Prefer ranking by outstanding amount so the most relevant names appear first
+        names = Loan.list_open_counterparties_ranked(current_user.id, mongo.db, kind=kind)
         return jsonify({'items': names})
 
     @bp.route('/api/loans/<loan_id>/close', methods=['POST'])

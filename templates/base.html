@@ -259,6 +259,7 @@
 	<script src="{{ url_for('static', filename='js/richtext.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/dynamic_app.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/blog_helpers.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/tag_typeahead.js') }}" defer></script>
 
 	<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
@@ -274,7 +275,6 @@
 	- Keyed request dedupe + short-lived cache: App.utils.fetchJSONUnified(url,{dedupe:true}).
 	- Guard helpers: App.utils.Guard.submit(form, handler) & Guard.click(btn, handler) auto-wrap with single-flight.
 	- Lightweight EventBus: App.utils.EventBus.on/emit for cross-module events (foundation for SPA nav updates).
-	- SPA groundwork: enableSPALinkInterception() (not yet auto-enabled) can turn internal links with data-spa into partial loads.
 	- transactions.js, goals.js (patch/update flows) and todo.js now use this helper (or direct dataset.submitting) to prevent duplicate requests.
 	- Each feature script sets a global guard (e.g., window.__todoModuleLoaded) to avoid double IIFE execution if the script tag is accidentally included twice.
 	- For future forms/buttons, wrap async handlers in withSingleFlight or manually set dataset.submitting.

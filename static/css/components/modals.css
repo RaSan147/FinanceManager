@@ -16,6 +16,11 @@
 	position: relative; 
 	color: var(--text-primary); 
 } 
+.modal-header,
+.modal-footer {
+	/* Ensure header/footer don’t flex-grow when we make modal-content a flex column */
+	flex: 0 0 auto;
+}
 .modal-header {
 	background: linear-gradient(135deg, var(--header-grad-1), var(--header-grad-2));
 	border-bottom: 1px solid rgba(var(--accent-primary-bright-rgb), .25);
@@ -32,6 +37,18 @@ body.dark-mode .modal-header {
 
 .modal-footer {
 	border-top: 1px solid var(--border-color);
+}
+
+/* Keep modal footer visible while body scrolls */
+.modal-dialog.modal-dialog-scrollable .modal-footer {
+	position: sticky;
+	bottom: 0;
+	background-color: var(--bg-secondary);
+	z-index: 1; /* above body content */
+}
+/* Reserve space so sticky footer doesn’t cover the last part of content */
+.modal-dialog.modal-dialog-scrollable .modal-footer {
+	min-height: var(--modal-footer-height, 56px);
 }
 
 .modal-content input,
@@ -66,6 +83,48 @@ body.dark-mode .modal-header {
 body.dark-mode .modal-content {
 	box-shadow: 0 18px 46px rgba(0, 0, 0, .6), 0 6px 18px rgba(0, 0, 0, .4);
 }
+
+/* Allow the modal body to scroll while keeping Bootstrap’s default centering */
+/* Match Bootstrap's scrollable modal sizing to handle all modes (view/edit) */
+.modal-dialog.modal-dialog-scrollable {
+	height: calc(100% - (var(--bs-modal-margin, 1.75rem) * 2));
+}
+.modal-dialog.modal-dialog-scrollable .modal-content {
+	max-height: 100%;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+.modal-dialog.modal-dialog-scrollable .modal-body {
+	/* This is the scroll container */
+	flex: 1 1 auto; /* safe with Bootstrap defaults */
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	min-height: 0; /* critical for flex children to allow scrolling in edit modes */
+}
+
+/* Optional: subtle divider effect when content scrolls under footer */
+/* keep a clean border at the top of footer */
+.modal-dialog.modal-dialog-scrollable .modal-footer { border-top: 1px solid var(--border-color); }
+/* Ensure header/footer don't steal space when body should scroll */
+.modal-dialog.modal-dialog-scrollable .modal-header,
+.modal-dialog.modal-dialog-scrollable .modal-footer { flex-shrink: 0; }
+
+/* Forms wrapping body/footer (create modals): make the form a flex column so body can scroll */
+.modal-dialog.modal-dialog-scrollable .modal-content > form {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: 100%;
+}
+.modal-dialog.modal-dialog-scrollable .modal-content > form .modal-body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	min-height: 0;
+}
+.modal-dialog.modal-dialog-scrollable .modal-content > form .modal-footer { flex-shrink: 0; }
 
 .modal .input-group-text {
 	background-color: var(--bg-tertiary);
