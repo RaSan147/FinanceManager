@@ -281,6 +281,48 @@
             Guard,
             EventBus,
             enableSPALinkInterception,
+            // Small UI helpers shared across modules
+            ui: {
+                /** Create a spinner + placeholder skeleton loader element. */
+                createLoader(opts) {
+                    const options = Object.assign({ lines: 6 }, opts || {});
+                    const wrap = document.createElement('div');
+                    wrap.className = 'app-loader text-center py-3';
+                    const makeLine = (w, h, extra) => {
+                        const div = document.createElement('div');
+                        div.className = `placeholder col-12 ${extra || ''}`;
+                        div.style.height = (h || 14) + 'px';
+                        if (w) div.style.maxWidth = w;
+                        return div;
+                    };
+                    const spinnerRow = document.createElement('div');
+                    spinnerRow.className = 'd-flex justify-content-center mb-2';
+                    const spinner = document.createElement('div');
+                    spinner.className = 'spinner-border text-primary';
+                    spinner.setAttribute('role', 'status');
+                    spinner.setAttribute('aria-hidden', 'true');
+                    spinnerRow.appendChild(spinner);
+                    wrap.appendChild(spinnerRow);
+
+                    const glow = document.createElement('div');
+                    glow.className = 'placeholder-glow';
+                    const widths = ['80%','95%','90%','85%','92%','88%'];
+                    for (let i = 0; i < options.lines; i++) {
+                        const w = widths[i % widths.length];
+                        const h = i % 3 === 0 ? 18 : (i % 3 === 1 ? 14 : 12);
+                        const extra = i % 3 === 2 ? 'mb-3' : 'mb-2';
+                        glow.appendChild(makeLine(w, h, extra));
+                    }
+                    wrap.appendChild(glow);
+                    return wrap;
+                },
+                /** Clear container and insert a loader skeleton. */
+                showLoader(container, opts) {
+                    if (!container) return;
+                    while (container.firstChild) container.removeChild(container.lastChild);
+                    container.appendChild(this.createLoader(opts));
+                }
+            },
             // lightweight tools inspired by script_global.js
             tools: {
                 del_child(elm) {
@@ -318,7 +360,7 @@
     // When DOM is ready, run module inits and start lightweight recurring tasks
     document.addEventListener('DOMContentLoaded', () => {
         // Debug: confirm app_core ran
-        try { console.debug('app_core: DOMContentLoaded - initializing App'); console.log('app_core: DOMContentLoaded - initializing App'); } catch (_) {}
+        try { console.debug('app_core: DOMContentLoaded - initializing App'); } catch (_) {}
         App.init();
 
         const refreshRel = () => {
@@ -332,5 +374,5 @@
     });
 
     window.App = App;
-    try { console.debug('app_core: window.App assigned'); console.log('app_core: window.App assigned'); } catch (_) {}
+    try { console.debug('app_core: window.App assigned'); } catch (_) {}
 })();

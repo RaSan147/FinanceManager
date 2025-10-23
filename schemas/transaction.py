@@ -20,7 +20,7 @@ class TransactionCreate(BaseModel):
     type: Literal["income", "expense"]
     # Category (enum from predefined list) but enforce upper length safety (120 chars)
     category: str = Field(..., min_length=1, max_length=120)
-    description: str = Field(..., min_length=3, max_length=300)
+    description: str = Field(..., min_length=3, max_length=512)
     # Accept raw date string (YYYY-MM-DD) via alias 'date'; parsed in service.
     date_input: Optional[str] = Field(default=None, alias='date')
     related_person: Optional[str] = Field(default=None, max_length=120)
@@ -81,7 +81,7 @@ class TransactionPatch(BaseModel):
     currency: Optional[str] = None
     type: Optional[Literal["income", "expense"]] = None
     category: Optional[str] = Field(default=None, min_length=1, max_length=120)
-    description: Optional[str] = Field(default=None, min_length=3, max_length=300)
+    description: Optional[str] = Field(default=None, min_length=3, max_length=512)
     # Accept date, datetime, or ISO date string; normalize to date
     date: Optional[date | datetime | str] = None
     related_person: Optional[str] = Field(default=None, max_length=120)

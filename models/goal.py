@@ -275,7 +275,9 @@ class Goal:
     def get_active_goals(user_id: str, db, skip: int = 0, N: int = -1, batch_size: int = -1, sort_mode: str | None = None, projection: Dict[str, int] | None = None) -> List[GoalInDB]:
         """List non-completed goals with deterministic ordering.
 
-        Defaults to ai_priority desc, target_date asc, created_at desc.
+        Defaults to the same ordering used by the goals listing (newest first) unless
+        the user has a persisted preference. This keeps active-goals ordering
+        consistent with the goals page and API endpoints.
         """
         sort_map: dict[str, list[tuple[str, int]]] = {
             'created_desc': [('created_at', -1)],
@@ -284,16 +286,16 @@ class Goal:
             'target_date_desc': [('target_date', -1), ('created_at', -1)],
             'priority': [('ai_priority', -1), ('target_date', 1), ('created_at', -1)],
         }
-    # Resolve sort_mode: prefer explicit param, then per-user `sort_modes.goals` via User.get_sorting, then default
+        # Resolve sort_mode: prefer explicit param, then per-user `sort_modes.goals` via User.get_sorting, then default
         if not sort_mode:
             try:
                 user_obj = User.get_by_id(user_id, db)
                 sort_mode = user_obj.get_sort_mode('goals') if user_obj else None
             except Exception:
                 sort_mode = None
-        if not sort_mode:
-            sort_mode = 'priority'
-        mongo_sort = sort_map.get((sort_mode or 'priority').lower(), sort_map['priority'])
+        # Default to same page-style default (newest first) when no explicit/user preference
+        # Use the same default as full goals listing for consistency
+        mongo_sort = sort_map.get((sort_mode or 'created_desc').lower(), sort_map['created_desc'])
 
         # Default projection excludes large `ai_plan` field unless caller provided a projection
         if projection is None:
@@ -406,6 +408,9 @@ class Goal:
             # Sort in Python to avoid index requirements
             goals_list = [GoalInDB(**g) for g in goals_cursor]
 
+        # IMPORTANT: Never mutate caller-provided list order (it's the response order)
+        working_list: List[GoalInDB] = list(goals_list)
+
         if sort_by == 'algorithmic':
             def _algorithmic_sort_key(goalindb: GoalInDB):
                 # Time metrics
@@ -476,12 +481,12 @@ class Goal:
                     (goalindb.created_at or _now),
                 )
 
-            goals_list.sort(key=_algorithmic_sort_key, reverse=True)
+            working_list.sort(key=_algorithmic_sort_key, reverse=True)
         else:
-            goals_list.sort(key=lambda g: getattr(g, sort_by) or getattr(g, 'created_at') or now_utc())
+            working_list.sort(key=lambda g: getattr(g, sort_by) or getattr(g, 'created_at') or now_utc())
 
         allocations: Dict[str, float] = {}
-        for g in goals_list:
+        for g in working_list:
             gid = str(g.id)
             target = float(g.target_amount or 0)
             g_ccy = (g.currency or base_ccy).upper()
@@ -695,6 +700,77 @@ class Goal:
             })
 
         return compact
+
+    @staticmethod
+    def prepare_goals_for_view(user_id: str, db, *, include_completed: bool = False, page: int = 1, per_page: int = 5, sort_mode: str | None = None, projection: Dict[str, int] | None = None, cache_id: str | None = None) -> dict:
+        """Centralized helper to fetch goals, compute progress and allocations for display.
+
+        Returns a dict with keys: items (list of goal dicts), total, page, per_page, sort
+        Each goal dict is model_dump(by_alias=True) augmented with 'progress' and optionally 'allocated_amount' and 'has_ai_plan'.
+
+        This helper intentionally avoids creating a cache session; caller may pass cache_id to reuse an existing session.
+        """
+        # Resolve projection
+        if projection is None:
+            projection = {'ai_plan': 0}
+
+        # Resolve sort_mode: prefer explicit, then user's saved preference, then sensible defaults
+        resolved_sort = sort_mode
+        if not resolved_sort:
+            try:
+                user_obj = User.get_by_id(user_id, db)
+                resolved_sort = user_obj.get_sort_mode('goals') if user_obj else None
+            except Exception:
+                resolved_sort = None
+        if not resolved_sort:
+            resolved_sort = 'created_desc'
+
+        # Compute skip/limit when including completed vs active
+        skip = (page - 1) * per_page if page and per_page else 0
+
+        # Fetch goal models using appropriate method to honor completed flag
+        if include_completed:
+            goal_models = Goal.get_user_goals(user_id, db, skip=skip, limit=per_page, sort_mode=resolved_sort, projection=projection)
+            total = db.goals.count_documents({'user_id': user_id})
+        else:
+            # When listing active goals, use get_active_goals which filters is_completed=False
+            # get_active_goals expects skip and N (N=limit)
+            N = per_page if per_page else -1
+            goal_models = Goal.get_active_goals(user_id, db, skip=skip, N=N, sort_mode=resolved_sort, projection=projection)
+            total = db.goals.count_documents({'user_id': user_id, 'is_completed': False})
+
+        # Determine user's base currency for conversions
+        user_doc = db.users.find_one({'_id': ObjectId(user_id)})
+        user_default_code = (user_doc or {}).get('default_currency', 'USD')
+
+        # Compute allocations using the provided goal models to avoid re-querying
+        allocations = Goal.compute_allocations(user_id, db, cache_id=cache_id, goals_list=goal_models)
+
+        # Pre-fetch list of ids with offloaded ai_plan to set has_ai_plan flag
+        page_goal_ids = [ObjectId(g.id) for g in goal_models]
+        existing_plan_ids = set()
+        if page_goal_ids:
+            existing_plan_ids = set(doc['_id'] for doc in db.goals.find({
+                '_id': {'$in': page_goal_ids},
+                'ai_plan': {'$exists': True, '$ne': None}
+            }, {'_id': 1}))
+
+        items = []
+        for gm in goal_models:
+            alloc_amt = allocations.get(gm.id, None)
+            progress = Goal.calculate_goal_progress(gm, {}, override_current_amount=alloc_amt, base_currency_code=user_default_code) if gm else {}
+            # Note: callers commonly pass a monthly_summary; when not available here progress may be less detailed.
+            gdict = gm.model_dump(by_alias=True)
+            td = gdict.get('target_date')
+            if isinstance(td, datetime):
+                gdict['target_date'] = td.isoformat()
+            gdict['progress'] = progress
+            if alloc_amt is not None:
+                gdict['allocated_amount'] = alloc_amt
+            gdict['has_ai_plan'] = (ObjectId(gm.id) in existing_plan_ids) or bool(gdict.get('ai_plan_paste_url'))
+            items.append(gdict)
+
+        return {'items': items, 'total': total, 'page': page, 'per_page': per_page, 'sort': resolved_sort}
 
 
 

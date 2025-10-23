@@ -7,6 +7,8 @@
 (function () {
   if (window.BlogHelpers) return;
 
+  // ===== UTILITY FUNCTIONS =====
+
   /**
    * Returns a debounced wrapper for `func`.
    * @param {Function} func
@@ -45,6 +47,8 @@
     return stringHash(name) % n;
   }
 
+  // ===== BADGE HELPERS =====
+
   /**
    * Apply category/tag styling to a badge-like element.
    * Adds classes: 'badge tag-badge tag-color-N' and removes common bg/text background classes
@@ -77,6 +81,8 @@
     if (!el.getAttribute('title')) el.setAttribute('title', s.replace(/_/g, ' '));
   }
 
+  // ===== PLACEHOLDER AND UPLOAD HELPERS =====
+
   /**
    * Insert a lightweight uploading placeholder at the current cursor position
    * of a textarea/input and move the cursor after it.
@@ -98,6 +104,8 @@
     }
     return id;
   }
+
+  // ===== NAVIGATION WARNINGS =====
 
   /**
    * Install navigation guards that prompt the user when `hasUnsavedFn()` is true.
@@ -186,8 +194,7 @@
     return cleanup;
   }
 
-  // NOTE: This module does not provide a RichText renderer. Consumers must
-  // provide `window.RichText` or pass a formatter to `renderComments`.
+  // ===== INLINE IMAGE UPLOADER =====
 
   /**
    * Attach a simple inline image uploader for a textarea/input.
@@ -258,6 +265,8 @@
     });
   }
 
+  // ===== COMMENT RENDERING =====
+
   /**
    * Render comments into a container element.
    * opts: { item, deleteEndpointPrefix, thumbTransform, markdownToggleSelector, formatter, onDeleted }
@@ -284,12 +293,14 @@
         const images = (c.images || [])
           .map((u, i) => {
             const t = thumb(u);
-            return `<div class='mt-2'><img src='${t}' data-viewer-thumb data-viewer-group='comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i + 1}' style='max-width:140px;max-height:140px;height:auto;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;object-fit:cover;'/></div>`;
+            return `<div class='mt-2'>
+              <img src='${t}' data-viewer-thumb data-viewer-group='comment-${item._id}' data-viewer-src='${u}' alt='comment image ${i + 1}' style='max-width:140px;max-height:140px;height:auto;border:1px solid var(--border-color);border-radius:4px;cursor:pointer;object-fit:cover;'/>
+            </div>`;
           })
           .join('');
 
         const formattedText = fmt(c.body || '');
-            return `
+        return `
         <div class='blog-comment'>
           <div class='body'>
             <div class='content' data-markdown-container>${formattedText}</div>
@@ -297,7 +308,10 @@
             <div class='meta d-flex align-items-center'>
               <div class='datetime text-muted'>${globalThis.SiteDate.toDateTimeString(c.created_at)}</div>
               <div class='ms-auto'>
-                <button class='btn btn-sm btn-outline-danger action-btn' data-comment-del='${c._id}' title='Delete'><i class='fa-solid fa-trash' aria-hidden='true'></i><span class='d-none d-sm-inline ms-1'>Delete</span></button>
+                <button class='btn btn-sm btn-outline-danger action-btn' data-comment-del='${c._id}' title='Delete'>
+                  <i class='fa-solid fa-trash' aria-hidden='true'></i>
+                  <span class='d-none d-sm-inline ms-1'>Delete</span>
+                </button>
               </div>
             </div>
           </div>
@@ -321,7 +335,8 @@
     );
   }
 
-  // Public API
+  // ===== PUBLIC API =====
+
   window.BlogHelpers = {
     debounce,
     setupNavigationWarnings,
@@ -342,6 +357,8 @@
  */
 (function(){
   if (!window.BlogHelpers) return;
+
+  // ===== CATEGORY UTILITIES =====
 
   // Normalize categories input (null | JSON string of array | array) -> array of trimmed strings
   function normalizeCatsInput(v) {
@@ -412,6 +429,8 @@
     container.classList.remove('d-none');
   }
 
+  // ===== CATEGORY WIDGET =====
+
   // Generic TagTypeahead-based category widget builder
   function setupCategoryWidget(rootEl, opts) {
     const chipsWrap = rootEl.querySelector(opts.chipsSelector);
@@ -420,8 +439,8 @@
     const addBtn = rootEl.querySelector(opts.addBtnSelector || '[data-blog-create-add-btn]')
       || rootEl.querySelector('[data-todo-detail-add-btn]')
       || rootEl.querySelector('[data-diary-detail-add-btn]');
-    if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
-    const widget = window.TagTypeahead.create({
+  if (!window.TagTypeahead) throw new Error('TagTypeahead not loaded');
+  const widget = window.TagTypeahead.create({
       inputEl,
       chipsEl: chipsWrap,
       jsonInput,
@@ -434,6 +453,8 @@
     return widget;
   }
 
+  // ===== FILTER TYPEAHEAD =====
+
   // Lightweight filter input typeahead with dropdown
   function setupFilterTypeahead(inputEl, options) {
     if (!inputEl) return null;
@@ -442,8 +463,9 @@
     const getHints = options && options.getHints ? options.getHints : (() => []);
     const ensureLoaded = options && options.ensureLoaded ? options.ensureLoaded : (() => Promise.resolve());
     const limit = (options && options.limit) || 8;
-    const parent = inputEl.parentElement;
-    if (parent && !parent.classList.contains('position-relative')) parent.classList.add('position-relative');
+
+    // Always attach menu to body to avoid clipping/overflow issues in complex layouts
+    const parent = document.body;
     const menu = document.createElement('div');
     menu.className = 'dropdown-menu show';
     menu.style.position = 'absolute';
@@ -451,34 +473,39 @@
     menu.style.maxHeight = '240px';
     menu.style.overflowY = 'auto';
     menu.style.display = 'none';
-    menu.style.zIndex = String((options && options.zIndex) || 1051);
-    (parent || document.body).appendChild(menu);
+    menu.style.zIndex = String((options && options.zIndex) || 1061);
+    document.body.appendChild(menu);
+
     let activeIndex = -1;
     let items = [];
+
     function updateMenuPosition() {
       try {
         const rect = inputEl.getBoundingClientRect();
-        const parentRect = (parent || document.body).getBoundingClientRect();
-        const top = rect.top - parentRect.top + inputEl.offsetHeight + 2 + (parent ? parent.scrollTop : 0);
-        const left = rect.left - parentRect.left + (parent ? parent.scrollLeft : 0);
+        const top = rect.top + (window.scrollY || window.pageYOffset || 0) + inputEl.offsetHeight + 2;
+        const left = rect.left + (window.scrollX || window.pageXOffset || 0);
         menu.style.top = `${top}px`;
         menu.style.left = `${left}px`;
         menu.style.minWidth = Math.max(inputEl.offsetWidth, 160) + 'px';
       } catch (_) {}
     }
+
     function hide() { menu.style.display = 'none'; activeIndex = -1; }
     function show() { if (items.length) menu.style.display = ''; }
+
     function setActive(idx) {
       activeIndex = idx;
       const nodes = menu.querySelectorAll('.dropdown-item');
       nodes.forEach((n, i) => n.classList.toggle('active', i === activeIndex));
     }
+
     function pick(idx) {
       if (idx < 0 || idx >= items.length) return;
       inputEl.value = items[idx];
       hide();
       if (typeof options.onPick === 'function') options.onPick(items[idx]);
     }
+
     function filterHints(q) {
       const ql = (q || '').trim().toLowerCase();
       const all = getHints() || [];
@@ -494,6 +521,7 @@
       const out = starts.concat(contains.filter(n => !starts.includes(n)));
       return out.slice(0, limit);
     }
+
     function renderList(list) {
       items = Array.isArray(list) ? list.slice() : [];
       if (!items.length) { hide(); return; }
@@ -505,16 +533,20 @@
       updateMenuPosition();
       show();
     }
+
     inputEl.addEventListener('input', () => {
       const list = filterHints(inputEl.value || '');
       renderList(list);
     });
+
     inputEl.addEventListener('focus', () => {
       Promise.resolve().then(() => ensureLoaded()).finally(() => {
         renderList(filterHints(inputEl.value || ''));
       });
     });
+
     inputEl.addEventListener('blur', () => { setTimeout(hide, 120); });
+
     inputEl.addEventListener('keydown', (e) => {
       if (menu.style.display === 'none') return;
       const max = items.length - 1;
@@ -523,8 +555,10 @@
       else if (e.key === 'Enter') { if (activeIndex >= 0) { e.preventDefault(); pick(activeIndex); } }
       else if (e.key === 'Escape') { hide(); }
     });
+
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
+
     const onDocMouseDownFilter = (e) => { try { if (!menu.contains(e.target) && e.target !== inputEl) hide(); } catch (_) {} };
     const onFocusOutFilter = (e) => {
       const rel = e.relatedTarget;
@@ -534,6 +568,7 @@
         }, 0);
       }
     };
+
     document.addEventListener('mousedown', onDocMouseDownFilter);
     inputEl.addEventListener('focusout', onFocusOutFilter);
 
@@ -542,11 +577,15 @@
     return api;
   }
 
+  // ===== THUMB TRANSFORM =====
+
   // Optional ImageKit thumb transform passthrough
   function thumb(url, w, h, smart) {
     try { if (window.ImageUploader && window.ImageUploader.thumbTransform) return window.ImageUploader.thumbTransform(url, w, h, !!smart); } catch(_){}
     return url;
   }
+
+  // ===== EXTENDED PUBLIC API =====
 
   Object.assign(window.BlogHelpers, {
     normalizeCatsInput,

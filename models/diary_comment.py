@@ -37,7 +37,7 @@ class DiaryComment:
         return DiaryCommentInDB(**{**doc, '_id': res.inserted_id})
 
     @staticmethod
-    def list_for(db, diary_id: str, user_id: str, *, limit: int = 300):
+    def list_for(db, diary_id: str, user_id: str, *, limit: int = 512):
         cur = db.diary_comments.find({'diary_id': diary_id, 'user_id': user_id}).sort([('created_at', 1)]).limit(limit)
         return [DiaryCommentInDB(**d) for d in cur]
 

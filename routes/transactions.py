@@ -23,8 +23,10 @@ def init_transactions_blueprint(mongo):
     def transactions():
         page = request.args.get('page', 1, type=int)
         per_page = 10
-        txs = Transaction.get_user_transactions(current_user.id, mongo.db, page, per_page)
-        total_transactions = Transaction.count_user_transactions(current_user.id, mongo.db)
+        # Server-side rendering of the transactions list is disabled.
+        # The client will fetch transaction data from the API endpoints.
+        txs = []
+        total_transactions = 0
         user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
         from utils.request_metrics import summary as metrics_summary
         return render_template('transactions.html',

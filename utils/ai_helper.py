@@ -204,6 +204,7 @@ def _analysis_prompt(user: User) -> str:
         "- Maintain a professional but encouraging tone.\n\n"
         "- Avoid duplicating tables/transactions that are already shown elsewhere in the main report."
         "- Do not include any scripts/css files or external links. Bootstrap 5.3.8 is already loaded in the DOM.\n"
+        "- For progress visuals, prefer the custom web component <new-progress value='N' height='H' show-label='true|false'></new-progress> (0≤N≤100). It centers the label over the full bar.\n"
 
         f"\n\nUser Context: \n {json.dumps(financial_context, indent=2, default=default_serializer)}\n\n"
 
@@ -218,10 +219,8 @@ def _analysis_prompt(user: User) -> str:
         "  <div class='card mb-3'>\n"
         "    <div class='card-body'>\n"
         "      <h5 class='card-title mb-3'>Savings & Cashflow</h5>\n"
-        "      <p class='small mb-2'>This month you saved <strong>[X%]</strong> of your income.</p>\n"
-        "      <div class='progress mb-2' style='height:6px;'>\n"
-        "        <div class='progress-bar bg-success' style='width:[X%];'></div>\n"
-        "      </div>\n"
+    "      <p class='small mb-2'>This month you saved <strong>[X%]</strong> of your income.</p>\n"
+    "      <new-progress value='[X]' height='6' show-label='false'></new-progress>\n"
         "      <p class='small text-muted mb-0'>[Encouraging note on whether savings trend is positive or needs attention]</p>\n"
         "    </div>\n"
         "  </div>\n"
@@ -243,10 +242,8 @@ def _analysis_prompt(user: User) -> str:
         "    <div class='card-body'>\n"
         "      <h5 class='card-title mb-3'>Your Goals</h5>\n"
         "      <div class='mb-2'>\n"
-        "        <p class='small mb-1'><strong>[Goal Name]</strong></p>\n"
-        "        <div class='progress' style='height:6px;'>\n"
-        "          <div class='progress-bar' role='progressbar' style='width:[X%];'></div>\n"
-        "        </div>\n"
+    "        <p class='small mb-1'><strong>[Goal Name]</strong></p>\n"
+    "        <new-progress value='[X]' height='6'></new-progress>\n"
         "        <p class='small text-muted mb-0'>[Current vs Target Amount]</p>\n"
         "      </div>\n"
         "    </div>\n"
@@ -417,6 +414,7 @@ OUTPUT RULES (follow exactly):
   `<div class="goal-plan card p-3"> ... </div>`
   No outer html/body tags, no extra text, no JSON metadata, no scripts, no comments.
 * Use Bootstrap components and utility classes only (cards, rows, cols, badges, lists, small buttons). Assume Bootstrap is already loaded in the DOM.
+* A custom sitewide progress element <new-progress value='N' height='H' show-label='true|false'></new-progress> is available and preferred if you include any small progress visuals (optional). It always centers the label over the full bar (0≤N≤100). Keep heights small (6–10px) in compact areas.
 * Use headings only `h4`, `h5`, or `h6`.
 * Keep inline CSS minimal and non-invasive (tiny layout helpers like `style="min-width:0"` are allowed). Do NOT override theme colors or include external CSS/scripts.
 * Do NOT include any machine-readable JSON blocks, `data-*` attributes, or hidden metadata.
@@ -560,7 +558,7 @@ def get_purchase_advice(
         f"Last 3 months summary: {last_3_months_summary}\n"
         f"Lifetime summary: {lifetime_summary}\n\n"
         f"Active goals (max 5): {goals_repr}\n\n"
-        "Return STRICT JSON ONLY (NO extra text, NO markdown, NO comments): {\n"
+        "Return STRICT JSON ONLY (NO extra text, NO markdown, NO comments). For progress visuals (ONLY IF NEEDED), prefer the custom web component <new-progress value='N' height='H' show-label='true|false'></new-progress> (0≤N≤100).: {\n"
         '  "recommendation": "yes|no|maybe\",\n'
         '  "reason": "Clear concise rationale (<220 chars).\",\n'
         '  "alternatives": ["short alt 1", "short alt 2"],\n'

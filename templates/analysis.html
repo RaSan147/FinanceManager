@@ -84,39 +84,15 @@
             </div>
         </div>
 
-        <!-- Goal progress section -->
+        <!-- Goal progress section (populated by client widget) -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h4 class="card-title mb-0">Goal Progress</h4>
             </div>
             <div class="card-body">
-                {% if goals %}
-                    {% for goal in goals %}
-                    <div class="mb-4">
-                        <h5>{{ goal.description }}</h5>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>
-                                Progress: {{ currency_symbol }}{{ "{:,.2f}".format(goal.progress.current_amount) }} of {{ currency_symbol }}{{ "{:,.2f}".format(goal.progress.target_amount) }}
-                            </span>
-                            <span>{{ goal.progress.progress_percent }}%</span>
-                        </div>
-                        <div class="progress mb-2">
-                            <div class="progress-bar" role="progressbar" style="width: {{ goal.progress.progress_percent }}%">
-                                {{ goal.progress.progress_percent }}%
-                            </div>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <small>Started: {{ goal.created_at.strftime('%Y-%m-%d') }}</small>
-                            <small>Target: {{ goal.target_date.strftime('%Y-%m-%d') }}</small>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="text-center py-4">
-                        <p class="text-muted">No active goals to analyze.</p>
-                        <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-glassy">Set a Goal</a>
-                    </div>
-                {% endif %}
+                <div data-active-goals-widget data-mode="analysis" data-per-page="5">
+                    <!-- Filled by static/js/active_goals_widget.js -->
+                </div>
             </div>
         </div>
     </div>

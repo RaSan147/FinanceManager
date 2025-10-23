@@ -17,7 +17,8 @@ class Goal {
         const p = g.progress || {};
         const percent = Number(p.progress_percent || 0);
         const percentWidth = Math.max(0, Math.min(100, percent));
-        const barClass = percent >= 75 ? 'bg-success' : percent >= 40 ? 'bg-warning' : 'bg-danger';
+    // Determine semantic status (optional) – not used for text color now, fill is purely color via CSS.
+    const barClass = percent >= 75 ? 'is-high' : percent >= 40 ? 'is-mid' : 'is-low';
         const saved = p.current_amount ?? g.current_amount ?? 0;
         const target = g.target_amount || 0;
         const due = safeDateString(g.target_date);
@@ -63,14 +64,12 @@ class Goal {
             }, `Overdue ${p.overdue_months} mo`));
         }
 
-        const progBar = createEl('div', {
-            class: 'progress-bar ' + barClass,
-            style: `width: ${percentWidth}%`
-        }, `${percent.toFixed(1)}%`);
-        right.appendChild(createEl('div', {
-            class: 'progress mb-1',
-            style: 'height: 20px'
-        }, progBar));
+        const newProg = createEl('new-progress', {
+            class: 'mb-1',
+            value: String(percentWidth),
+            height: '20'
+        });
+        right.appendChild(newProg);
 
         const smallWrap = createEl('div', {
             class: 'small text-muted'
@@ -466,6 +465,8 @@ class GoalsModule {
         }
 
         try {
+            // Show a lightweight loader skeleton while fetching (shared util)
+            App.utils.ui.showLoader(root);
             const data = await fetchJSON(url);
             this.state.page = data.page;
             this.state.perPage = data.per_page;
@@ -484,8 +485,8 @@ class GoalsModule {
             }
         } catch (e) {
             root.innerHTML = '<div class="text-danger">Failed to load goals</div>';
+                }
         }
-    }
 
     static renderGoals(items) {
         const {

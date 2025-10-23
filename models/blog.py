@@ -84,6 +84,12 @@ class Blog:
         if not upd_raw:
             return existing
         upd_raw["updated_at"] = now_utc()
+        # Maintain pinned_at timestamp when pinned flag changes
+        if "pinned" in upd_raw and upd_raw["pinned"] != existing.get("pinned"):
+            if upd_raw["pinned"] is True:
+                upd_raw["pinned_at"] = now_utc()
+            else:
+                upd_raw["pinned_at"] = None
         set_fields = {k: v for k, v in upd_raw.items() if v is not None}
         unset_fields = {k: "" for k, v in upd_raw.items() if v is None}
         ops: Dict[str, Any] = {}
@@ -127,13 +133,18 @@ class Blog:
             filt = {"$and": [base] + conditions}
         else:
             filt = base
-        sort_map: Dict[str, List[tuple]] = {
+        # Base (non-pinned) sort definitions. We will prepend pinned keys
+        # centrally so the pinned-first behavior is applied uniformly without
+        # repeating literals or conditional logic.
+        base_sort_map: Dict[str, List[tuple]] = {
             "created_desc": [("created_at", -1)],
             "created_asc": [("created_at", 1)],
             "updated_desc": [("updated_at", -1)],
             "updated_asc": [("updated_at", 1)],
             "title": [("title", 1)],
         }
+        # Prepend pinned keys to every sort so pinned items appear first.
+        sort_map: Dict[str, List[tuple]] = {k: [("pinned", -1), ("pinned_at", -1)] + v for k, v in base_sort_map.items()}
         mongo_sort = sort_map.get(sort, sort_map["created_desc"])
         total = col.count_documents(filt)
         cur = col.find(filt).sort(mongo_sort).skip(skip).limit(limit)

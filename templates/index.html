@@ -8,26 +8,26 @@
         <!-- Monthly summary: totals for the selected month -->
         <div class="card mb-4" data-monthly-summary>
             <div class="card-header bg-primary text-white">
-                <h5 class="card-title mb-0" data-ms-title>Monthly Summary - {{ summary.month }} ({{ currency_code }})</h5>
+                <h5 class="card-title mb-0" data-ms-title>Monthly Summary</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Income</h6>
-                            <h4 class="mb-0 text-success" data-ms-income>{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_income) }}</h4>
+                            <h4 class="mb-0 text-success" data-ms-income>—</h4>
                         </div>
                     </div>
                     <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Expenses</h6>
-                            <h4 class="mb-0 text-danger" data-ms-expenses>{{ currency_symbol }}{{ "{:,.2f}".format(summary.total_expenses) }}</h4>
+                            <h4 class="mb-0 text-danger" data-ms-expenses>—</h4>
                         </div>
                     </div>
                     <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Savings</h6>
-                            <h4 class="mb-0 text-info" data-ms-savings>{{ currency_symbol }}{{ "{:,.2f}".format(summary.savings) }}</h4>
+                            <h4 class="mb-0 text-info" data-ms-savings>—</h4>
                         </div>
                     </div>
                 </div>
@@ -44,24 +44,24 @@
                     <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--income mb-3">
                             <h6 class="mb-1">Total Income</h6>
-                            <h4 class="mb-0 text-success" data-lt-income>{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_income) }}</h4>
+                            <h4 class="mb-0 text-success" data-lt-income>—</h4>
                         </div>
                     </div>
                     <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--expenses mb-3">
                             <h6 class="mb-1">Total Expenses</h6>
-                            <h4 class="mb-0 text-danger" data-lt-expenses>{{ currency_symbol }}{{ "{:,.2f}".format(balance.total_expenses) }}</h4>
+                            <h4 class="mb-0 text-danger" data-lt-expenses>—</h4>
                         </div>
                     </div>
                     <div class="col-sm-6 col-md-4 mx-auto">
                         <div class="stat-bubble stat-bubble--savings mb-3">
                             <h6 class="mb-1">Current Balance</h6>
-                            <h4 class="mb-0 text-info" data-lt-balance>{{ currency_symbol }}{{ "{:,.2f}".format(balance.current_balance) }}</h4>
+                            <h4 class="mb-0 text-info" data-lt-balance>—</h4>
                         </div>
                     </div>
                 </div>
                 <div class="text-center">
-                    <small class="text-muted" data-lt-count>Based on {{ balance.total_transactions }} transactions</small>
+                    <small class="text-muted" data-lt-count>Based on — transactions</small>
                 </div>
             </div>
         </div>
@@ -78,7 +78,6 @@
                 </div>
             </div>
             <div class="card-body">
-                {% if transactions %}
                 <div class="table-responsive">
                     <table class="table table-hover transactions-table">
                         <thead>
@@ -90,33 +89,13 @@
                             </tr>
                         </thead>
                         <tbody data-recent-transactions-body>
-                            {% for t in transactions %}
-                            <tr>
-                                <td data-label="Date">{{ t.date.strftime('%Y-%m-%d') }}</td>
-                                <td data-label="Description">{{ t.description }}</td>
-                                {% if tx_categories is mapping %}
-                                    {% set labels = tx_categories.get(t.type, {}).get(t.category, {}) %}
-                                    <td data-label="Category">{{ labels.get('en', t.category) }}</td>
-                                {% else %}
-                                    <td data-label="Category">{{ t.category }}</td>
-                                {% endif %}
-                                <td data-label="Amount" class="{{ 'text-success' if t.type == 'income' else 'text-danger' }}">
-                                    {{ '+' if t.type == 'income' else '-' }}{{ currency_symbol }}{{ "{:,.2f}".format(t.amount) }}
-                                </td>
-                            </tr>
-                            {% endfor %}
+                            <!-- Filled by JS via /api/dashboard -->
                         </tbody>
                     </table>
                 </div>
                 <div class="text-end">
                     <a href="{{ url_for('transactions_routes.transactions') }}" class="btn btn-glassy">View All</a>
                 </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <p class="text-muted">No transactions yet.</p>
-                    <button type="button" class="btn btn-glassy" data-open-transaction-modal>Add Your First Transaction</button>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -134,27 +113,8 @@
                 </div>
             </div>
             <div class="card-body">
-                <div data-active-goals>
-                    {% if goals %}
-                        {% for goal in goals %}
-                        <div class="mb-3 goal-item">
-                            <h6>{{ goal.description }}</h6>
-                            <div class="d-flex justify-content-between mb-1">
-                                {% set gsym = currency_symbols.get(goal.currency|default(currency_code), currency_symbol) %}
-                                <small>Target: {{ gsym }}{{ "{:,.2f}".format(goal.target_amount) }}</small>
-                                <small>{{ goal.target_date.strftime('%Y-%m-%d') }}</small>
-                            </div>
-                            <div class="progress">
-                                <div class="progress-bar" role="progressbar" style="width: {{ goal.progress.progress_percent }}%">{{ goal.progress.progress_percent }}%</div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                    <div class="text-center py-4">
-                        <p class="text-muted">No active goals.</p>
-                        <a href="{{ url_for('goals_bp.goals') }}" class="btn btn-primary">Set a Goal</a>
-                    </div>
-                    {% endif %}
+                <div data-active-goals-widget data-mode="dashboard" data-per-page="5">
+                    <!-- Filled by static/js/active_goals_widget.js -->
                 </div>
             </div>
         </div>
@@ -179,9 +139,7 @@
             </div>
         </div>
 
-        <div class="alert alert-info {% if days_until_income is none %}d-none{% endif %}" data-income-countdown>
-            {% if days_until_income is not none %}Next income in {{ days_until_income }} day{{ 's' if days_until_income != 1 else '' }}.{% endif %}
-        </div>
+        <div class="alert alert-info d-none" data-income-countdown></div>
     </div>
 </div>
 {% endblock %}

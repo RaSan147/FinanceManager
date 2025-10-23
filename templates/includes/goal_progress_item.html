@@ -1,0 +1,31 @@
+{#
+  Renders a goal progress block. Expects `goal` in context.
+  Uses `currency_symbols`, `currency_symbol`, and `currency_code` from global context.
+#}
+{% set g = goal %}
+{% set g_currency = (g.currency | default(currency_code)) | upper %}
+{% set gsym = currency_symbols.get(g_currency, currency_symbol) %}
+{% set progress = g.progress if g.progress is defined else {} %}
+{% set current = (progress.current_amount | default(0.0)) | float %}
+{% set target = (progress.target_amount | default(g.target_amount | default(0))) | float %}
+{% set pct_raw = (progress.progress_percent | default(0.0)) | float %}
+{% set pct = (pct_raw if pct_raw is not none else 0.0) | round(1) %}
+<div class="mb-4 goal-item">
+    <h6 class="mb-1">{{ g.description }}</h6>
+    <div class="d-flex justify-content-between mb-1 small text-muted">
+        <div>
+            <strong>Progress:</strong>
+            {{ gsym }}{{ "{:,.2f}".format(current) }} of {{ gsym }}{{ "{:,.2f}".format(target) }}
+            {% if progress.required_monthly is defined %}
+                <span class="ms-2">Req/mo: {{ gsym }}{{ "{:,.2f}".format(progress.required_monthly | default(0.0)) }}</span>
+            {% endif %}
+        </div>
+        {# remove outside percentage; overlay inside bar will show percent #}
+        <div aria-hidden="true"></div>
+    </div>
+    <new-progress value="{{ pct }}" height="18"></new-progress>
+    <div class="d-flex justify-content-between mt-2 small text-muted">
+        <div>Started: {{ (g.created_at[:10] if g.created_at is string else (g.created_at.strftime('%Y-%m-%d') if g.created_at is defined else '')) }}</div>
+        <div>Target: {{ (g.target_date[:10] if g.target_date is string else (g.target_date.strftime('%Y-%m-%d') if g.target_date is defined else '')) }}</div>
+    </div>
+</div>

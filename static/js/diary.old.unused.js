@@ -131,7 +131,8 @@
     listEl.addEventListener('click', e => {
       const item = e.target.closest('.diary-item');
       if (!item) return;
-      if (e.target.closest('.btn-delete')) return; // delete is handled per-item
+      // Ignore clicks originating from dropdowns or other interactive controls
+      if (e.target.closest('.btn-delete') || e.target.closest('.dropdown') || e.target.closest('select')) return;
       const id = item.dataset.id;
       if (id) openDetailModal(id);
     });
@@ -141,6 +142,8 @@
       if (state.q) url += `&q=${encodeURIComponent(state.q)}`;
       if (state.category) url += `&category=${encodeURIComponent(state.category)}`;
       if (state.sortExplicit && state.sort) url += `&sort=${encodeURIComponent(state.sort)}`;
+      // Show loader while fetching entries
+      try { if (listEl && App?.utils?.ui?.showLoader) App.utils.ui.showLoader(listEl); } catch(_) {}
       try {
         const data = await App.utils.fetchJSONUnified(url);
         state.items = data.items || [];
@@ -172,6 +175,44 @@
       const cat = node.querySelector('.diary-category');
   BlogHelpers.renderCategoryBadges(cat, it.category);
       const cEl = node.querySelector('.diary-content-trunc'); if (cEl) cEl.textContent = truncateText(it.content || '');
+      // Pin visual
+      if (it.pinned) node.classList.add('pinned'); else node.classList.remove('pinned');
+      const pinBtn = node.querySelector('.btn-pin');
+      if (pinBtn) {
+        pinBtn.classList.toggle('btn-warning', !!it.pinned);
+        pinBtn.classList.toggle('btn-outline-warning', !it.pinned);
+        pinBtn.title = it.pinned ? 'Unpin' : 'Pin';
+        // update label text inside the dropdown item (for accessibility and clarity)
+        const lbl = pinBtn.querySelector('.pin-label') || pinBtn.querySelector('.pinLabel') || pinBtn.querySelector('span');
+        if (lbl) lbl.textContent = it.pinned ? 'Unpin' : 'Pin';
+        pinBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const previouslyPinned = !!it.pinned;
+          // Toggle local visual state only (no client-side reorder)
+          it.pinned = !previouslyPinned;
+          try { node.classList.toggle('pinned', !!it.pinned); } catch (_) {}
+          pinBtn.classList.toggle('btn-warning', !!it.pinned);
+          pinBtn.classList.toggle('btn-outline-warning', !it.pinned);
+          pinBtn.title = it.pinned ? 'Unpin' : 'Pin';
+          if (lbl) lbl.textContent = it.pinned ? 'Unpin' : 'Pin';
+          // Close menu (if in dropdown)
+          const dd = pinBtn.closest('.dropdown'); if (dd) { const inst = bootstrap && bootstrap.Dropdown ? bootstrap.Dropdown.getOrCreateInstance(dd.querySelector('[data-bs-toggle]')) : null; try { inst && inst.hide && inst.hide(); } catch (_) {} }
+          try {
+            await App.utils.fetchJSONUnified(`/api/diary/${it._id}/pin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned: it.pinned }) });
+            await apiList(true);
+          } catch (err) {
+            // revert on failure
+            it.pinned = previouslyPinned;
+            try { node.classList.toggle('pinned', !!it.pinned); } catch (_) {}
+            pinBtn.classList.toggle('btn-warning', !!it.pinned);
+            pinBtn.classList.toggle('btn-outline-warning', !it.pinned);
+            pinBtn.title = it.pinned ? 'Unpin' : 'Pin';
+            window.flash && window.flash('Pin toggle failed', 'danger');
+            // ensure canonical list
+            apiList(true);
+          }
+        });
+      }
       const delBtn = node.querySelector('.btn-delete'); if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteEntry(it._id); });
     }
 
@@ -884,4 +925,12 @@
 
     // Initial load
     apiList();
+
+    // Expose a minimal public API for page-level refresh without rebinding events
+    try {
+      if (!window.DiaryModule) window.DiaryModule = {};
+      window.DiaryModule.refresh = function () {
+        try { if (typeof apiList === 'function') return apiList(true); } catch (_) {}
+      };
+    } catch (_) {}
   })();

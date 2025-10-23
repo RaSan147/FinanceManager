@@ -24,44 +24,9 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
     @bp.route('/goals', endpoint='goals')
     @login_required
     def goals():  # type: ignore[override]
-        page = int(request.args.get('page', 1))
-        per_page = 5
-        skip = (page - 1) * per_page
-        total_goals = mongo.db.goals.count_documents({'user_id': current_user.id})
-        # Prefer user's persisted goals sort when rendering the initial goals page
-        user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
-        # New schema: sort_modes dict with key 'goals'
-        sort_param = ''
-        if user_doc:
-            sort_param = (user_doc.get('sort_modes') or {}).get('goals') or ''
-        if not sort_param:
-            sort_param = 'created_desc'
-        # Pass resolved sort_param directly to Goal.get_user_goals (no DB-side attribute hack)
-        # only need lightweight fields for listing; exclude ai_plan to save bandwidth
-        proj = {'ai_plan': 0}
-        goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page, sort_mode=sort_param, projection=proj)
-
-        # Use a per-request transaction cache so monthly summary and allocations
-        # reuse a single in-memory transaction list instead of scanning DB repeatedly.
-        from utils.finance_calculator import create_cache_session, drop_cache_session
-        cache_id = create_cache_session(current_user.id, mongo.db)
-        try:
-            monthly_summary = calculate_monthly_summary(current_user.id, mongo.db, cache_id=cache_id)
-            user_doc = User.get_by_id(current_user.id, mongo.db)
-            user_default_code = user_doc.default_currency
-            allocations = Goal.compute_allocations(current_user.id, mongo.db, cache_id=cache_id)
-        finally:
-            try:
-                drop_cache_session(cache_id)
-            except Exception:
-                pass
-        goals_with_progress = []
-        for gm in goal_models:
-            alloc_amt = allocations.get(gm.id, None)
-            goals_with_progress.append((gm, Goal.calculate_goal_progress(gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code)))
-        total_pages = (total_goals + per_page - 1) // per_page
+        # Server-side page shell only; data is fetched via /api/goals/list by frontend JS.
         from utils.request_metrics import summary as metrics_summary
-        return render_template('goals.html', goals=goals_with_progress, page=page, total_pages=total_pages, perf_metrics=metrics_summary())
+        return render_template('goals.html', perf_metrics=metrics_summary())
 
     @bp.route('/goals/add', methods=['POST'], endpoint='add_goal')
     @login_required
@@ -174,6 +139,7 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
             sort_param = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else ''
         if not sort_param:
             sort_param = 'created_desc'
+        # List both completed and incomplete goals for the full goals page API; respect sort preference
         total = mongo.db.goals.count_documents({'user_id': current_user.id})
         proj = {'ai_plan': 0}
         goal_models = Goal.get_user_goals(current_user.id, mongo.db, skip, per_page, sort_mode=sort_param or 'created_desc', projection=proj)
@@ -209,8 +175,80 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
                 gdict['target_date'] = td.isoformat()
             gdict['progress'] = progress
             gdict['has_ai_plan'] = (ObjectId(gm.id) in existing_plan_ids) or bool(gdict.get('ai_plan_paste_url'))
+            # Do not leak internal user_id in API responses
+            gdict.pop('user_id', None)
             items.append(gdict)
         return jsonify({'items': items, 'total': total, 'page': page, 'per_page': per_page, 'sort': sort_param or 'created_desc'})
+
+    @bp.route('/api/goals/trimmed', endpoint='api_goals_trimmed')
+    @login_required
+    def api_goals_trimmed():  # type: ignore[override]
+        """Return a trimmed, widget-friendly list of goals.
+
+        Query params:
+        - per_page (int)
+        - mode: 'dashboard' or 'analysis' (affects which fields the client might display)
+        - page (int)
+        """
+        per_page = request.args.get('per_page', 5, type=int)
+        per_page = min(max(per_page, 1), 50)
+        page = request.args.get('page', 1, type=int)
+        mode = (request.args.get('mode') or 'dashboard').lower()
+
+        # Prefer user's persisted sort unless client provided 'sort'
+        sort_param = (request.args.get('sort') or '').lower().strip()
+        allowed = User.SORT_MODE_OPTIONS['goals']
+        allowed_sorts = set(allowed) | {''}
+        if sort_param not in allowed_sorts:
+            sort_param = ''
+        if not sort_param:
+            user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
+            sort_param = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else ''
+        if not sort_param:
+            sort_param = 'created_desc'
+
+        from utils.finance_calculator import create_cache_session, drop_cache_session
+        cache_id = create_cache_session(current_user.id, mongo.db)
+        try:
+            prep = Goal.prepare_goals_for_view(current_user.id, mongo.db, include_completed=False, page=page, per_page=per_page, sort_mode=sort_param, projection={'ai_plan': 0}, cache_id=cache_id)
+        finally:
+            try:
+                drop_cache_session(cache_id)
+            except Exception:
+                pass
+
+        # Map to trimmed fields expected by widget
+        trimmed_items = []
+        for g in prep.get('items', []):
+            ti = {
+                'id': g.get('_id') or g.get('id') or g.get('Id') or str(g.get('id') or ''),
+                'description': g.get('description', ''),
+                'target_amount': g.get('target_amount', 0),
+                'currency': (g.get('currency') or '').upper(),
+                'target_date': g.get('target_date'),
+                'created_at': g.get('created_at'),
+                'progress': g.get('progress', {}),
+                'allocated_amount': g.get('allocated_amount'),
+            }
+            # Ensure date strings where needed
+            td = ti.get('target_date')
+            if hasattr(td, 'isoformat'):
+                try:
+                    ti['target_date'] = td.isoformat()
+                except Exception:
+                    pass
+            ca = ti.get('created_at')
+            if hasattr(ca, 'isoformat'):
+                try:
+                    ti['created_at'] = ca.isoformat()
+                except Exception:
+                    pass
+            # remove user id if present on internal dict to avoid leaking
+            if isinstance(g, dict):
+                g.pop('user_id', None)
+            trimmed_items.append(ti)
+
+        return jsonify({'items': trimmed_items, 'total': prep.get('total', 0), 'page': prep.get('page', 1), 'per_page': prep.get('per_page', per_page), 'sort': prep.get('sort', sort_param)})
 
     @bp.route('/api/goals', methods=['POST'], endpoint='api_goal_create')
     @login_required
@@ -232,7 +270,9 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
             return jsonify({'errors': ve.errors()}), 400
         goal = Goal.create(goal_data, mongo.db)
         Goal.enhance_goal_background(goal, mongo.db, ai_engine)
-        return jsonify({'item': goal.model_dump(by_alias=True)})
+        out = goal.model_dump(by_alias=True)
+        out.pop('user_id', None)
+        return jsonify({'item': out})
 
     @bp.route('/api/goals/<goal_id>', methods=['PATCH'], endpoint='api_goal_update')
     @login_required
@@ -253,7 +293,9 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
             reval_started = True
         except Exception:
             reval_started = False
-        return jsonify({'item': goal.model_dump(by_alias=True), 'revalidation_started': reval_started})
+        out = goal.model_dump(by_alias=True)
+        out.pop('user_id', None)
+        return jsonify({'item': out, 'revalidation_started': reval_started})
 
     @bp.route('/api/goals/<goal_id>/complete', methods=['POST'], endpoint='api_goal_complete')
     @login_required
@@ -262,7 +304,9 @@ def init_goals_blueprint(mongo, ai_engine, pastebin_client):
         goal = Goal.update(goal_id, current_user.id, upd, mongo.db)
         if not goal:
             return jsonify({'error': 'Not found'}), 404
-        return jsonify({'item': goal.model_dump(by_alias=True)})
+        out = goal.model_dump(by_alias=True)
+        out.pop('user_id', None)
+        return jsonify({'item': out})
 
     @bp.route('/api/goals/<goal_id>', methods=['DELETE'], endpoint='api_goal_delete')
     @login_required

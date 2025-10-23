@@ -2,6 +2,8 @@
 	// Prevent re-initialization
 	if (window.TagTypeahead) return;
 
+
+
 	// --- Utility Functions (Stateless) ---
 
 	/** Dedupes an array of strings. */
@@ -85,6 +87,7 @@
 
 	/** Default filtering logic for the typeahead. */
 	function defaultFilter(hints, q, max) {
+
 		const ql = (q || '').trim().toLowerCase();
 		if (!hints || !hints.length) return [];
 		if (!ql) return hints.slice(0, max);
@@ -113,6 +116,7 @@
 	 */
 	class TagWidget {
 		constructor(opts) {
+			
 			this.opts = opts;
 			this.inputEl = opts.inputEl;
 			this.chipsEl = opts.chipsEl;
@@ -150,8 +154,12 @@
 
 		/** Creates the dropdown menu element and appends it to the DOM. */
 		_createMenu() {
-			const parent = this.inputEl.parentElement;
-			if (parent && !parent.classList.contains('position-relative')) {
+			
+			// If inside a Bootstrap modal, append to body to avoid clipping/overflow issues
+			const inModal = !!(this.inputEl.closest && this.inputEl.closest('.modal'));
+			const parent = inModal ? document.body : (this.inputEl.parentElement || document.body);
+			this._menuParentIsBody = parent === document.body;
+			if (!this._menuParentIsBody && !parent.classList.contains('position-relative')) {
 				parent.classList.add('position-relative');
 			}
 			this.menu = document.createElement('div');
@@ -161,12 +169,13 @@
 			this.menu.style.maxHeight = '240px';
 			this.menu.style.overflowY = 'auto';
 			this.menu.style.display = 'none';
-			this.menu.style.zIndex = this.zIndex;
-			(parent || document.body).appendChild(this.menu);
+			this.menu.style.zIndex = this.zIndex; // default 1061; above modal content
+			parent.appendChild(this.menu);
 		}
 
 		/** Binds all necessary event listeners. */
 		_bindEvents() {
+			
 			this.inputEl.addEventListener('keydown', this._onKeyDown);
 			this.inputEl.addEventListener('input', this._onInput);
 			this.inputEl.addEventListener('focus', this._onFocus);
@@ -189,9 +198,23 @@
 			}
 		}
 
+		// Helper to check whether the input is actually visible/laid out
+		_isInputVisible() {
+			try {
+				if (!this.inputEl || !this.inputEl.isConnected) return false;
+				const rects = this.inputEl.getClientRects();
+				if (!rects || rects.length === 0) return false;
+				const cs = window.getComputedStyle(this.inputEl);
+				if (!cs) return true;
+				if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+				return true;
+			} catch (_) { return true; }
+		}
+
 		// --- Event Handlers (using arrow functions to bind `this`) ---
 
 		_onKeyDown = (e) => {
+			
 			// Handle Enter key in dropdown
 			if (this.menu.style.display !== 'none' && e.key === 'Enter') {
 				if (this.activeIndex >= 0) {
@@ -236,20 +259,24 @@
 		};
 
 		_onInput = () => {
+			
 			const hints = (this.opts.getHints && this.opts.getHints()) || [];
 			const arr = defaultFilter(hints, this.inputEl.value || '', this.maxVisible);
 			this.renderList(arr);
 		};
 
 		_onFocus = () => {
+			
 			this.ensureSuggestions();
 		};
 
 		_onClick = () => {
+			
 			this.ensureSuggestions();
 		};
 
 		_onBlur = () => {
+			
 			if (this._cancelNextAdd) {
 				this._cancelNextAdd = false;
 				return;
@@ -263,6 +290,7 @@
 		};
 
 		_onFocusOut = (e) => {
+			
 			// Handle focus moving into the dropdown menu
 			const rel = e.relatedTarget;
 			if (!rel || !this.menu.contains(rel)) {
@@ -275,6 +303,7 @@
 		};
 
 		_onDocMouseDown = (e) => {
+			
 			// Hide if clicking outside the input and the menu
 			try {
 				if (!this.menu.contains(e.target) && e.target !== this.inputEl) {
@@ -284,15 +313,18 @@
 		};
 
 		_onChipsRemove = () => {
+			
 			// This is only bound in 'tags' mode
 			this.sync();
 		};
 
 		_onResizeScroll = () => {
+			
 			this.updateMenuPosition();
 		};
 
 		_onAddBtnClick = (e) => {
+			
 			// This is only bound in 'tags' mode
 			e.preventDefault();
 			this.addFromInput();
@@ -303,12 +335,20 @@
 		/** Updates the dropdown's position relative to the input. */
 		updateMenuPosition() {
 			if (this.destroyed) return;
+			
 			try {
+				if (!this._isInputVisible()) return;
 				const rect = this.inputEl.getBoundingClientRect();
-				const parent = this.inputEl.parentElement || document.body;
-				const parentRect = parent.getBoundingClientRect();
-				const top = rect.top - parentRect.top + this.inputEl.offsetHeight + 2 + parent.scrollTop;
-				const left = rect.left - parentRect.left + parent.scrollLeft;
+				let top, left;
+				if (this._menuParentIsBody) {
+					top = rect.top + (window.scrollY || window.pageYOffset || 0) + this.inputEl.offsetHeight + 2;
+					left = rect.left + (window.scrollX || window.pageXOffset || 0);
+				} else {
+					const parent = this.inputEl.parentElement || document.body;
+					const parentRect = parent.getBoundingClientRect();
+					top = rect.top - parentRect.top + this.inputEl.offsetHeight + 2 + (parent.scrollTop || 0);
+					left = rect.left - parentRect.left + (parent.scrollLeft || 0);
+				}
 
 				this.menu.style.top = top + 'px';
 				this.menu.style.left = left + 'px';
@@ -318,19 +358,23 @@
 
 		/** Hides the dropdown. */
 		hide() {
+			
 			this.menu.style.display = 'none';
 			this.activeIndex = -1;
 		}
 
 		/** Shows the dropdown if it has items. */
 		show() {
-			if (this.items.length) {
+			
+			if (this.items.length && document.activeElement === this.inputEl && this._isInputVisible()) {
 				this.menu.style.display = '';
+				
 			}
 		}
 
 		/** Sets the new active (highlighted) item in the dropdown. */
 		setActive(idx) {
+			
 			this.activeIndex = idx;
 			const nodes = this.menu.querySelectorAll('.dropdown-item');
 			nodes.forEach((n, i) => n.classList.toggle('active', i === this.activeIndex));
@@ -338,6 +382,7 @@
 
 		/** Selects an item from the dropdown. */
 		pick(idx) {
+			
 			if (idx < 0 || idx >= this.items.length) return;
 			const name = this.items[idx];
 
@@ -362,6 +407,7 @@
 
 		/** Renders the list of suggestion items into the dropdown. */
 		renderList(arr) {
+			// dbg('renderList', { count: (arr||[]).length });
 			this.items = arr;
 			if (!this.items.length) {
 				this.hide();
@@ -386,6 +432,7 @@
 
 		/** Synchronizes the internal list to the JSON input and re-renders chips (tags mode only). */
 		sync() {
+			// dbg('sync', { listCount: this.list?.length || 0 });
 			if (this.mode === 'tags') {
 				if (this.jsonInput) this.jsonInput.value = JSON.stringify(this.list);
 				if (this.chipsEl) renderChips(this.chipsEl, this.list, this.opts.applyBadge);
@@ -394,7 +441,9 @@
 
 		/** Ensures suggestions are loaded (if async) and then renders them. */
 		ensureSuggestions() {
+			// dbg('ensureSuggestions');
 			const getAndRender = () => {
+				// dbg('ensureSuggestions.getAndRender');
 				const hints = (this.opts.getHints && this.opts.getHints()) || [];
 				const arr = defaultFilter(hints, this.inputEl.value || '', this.maxVisible);
 				this.renderList(arr);
@@ -412,6 +461,7 @@
 
 		/** Adds tags from the input box (tags mode) or just hides (suggest mode). */
 		addFromInput() {
+			// dbg('addFromInput');
 			if (this.mode === 'tags') {
 				const raw = (this.inputEl.value || '').trim();
 				if (!raw) return;
@@ -448,14 +498,19 @@
 
 		/** Focuses the input and shows suggestions. */
 		focusToShow() {
-			try {
-				this.inputEl.focus();
-				this.ensureSuggestions();
-			} catch (_) { }
+			// dbg('focusToShow');
+			try { this.inputEl.focus(); } catch(_) {}
+			const tryShow = () => {
+				// dbg('focusToShow.tryShow', { visible: this._isInputVisible(), active: document.activeElement === this.inputEl });
+				if (this._isInputVisible()) { this.ensureSuggestions(); }
+				else { requestAnimationFrame(tryShow); }
+			};
+			requestAnimationFrame(tryShow);
 		}
 
 		/** Destroys the widget and cleans up all event listeners. */
 		destroy() {
+			// dbg('destroy');
 			if (this.destroyed) return;
 			this.destroyed = true;
 

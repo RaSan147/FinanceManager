@@ -39,6 +39,18 @@ def init_diary_blueprint(mongo):
         items, total = Diary.list(current_user.id, mongo.db, q=q, category=category, skip=skip, limit=per_page, sort=sort)
         return jsonify({'items': [i.model_dump(by_alias=True) for i in items], 'total': total, 'page': page, 'per_page': per_page, 'sort': sort})
 
+    @bp.route('/api/diary/<entry_id>/pin', methods=['POST'], endpoint='api_diary_toggle_pin')
+    @login_required
+    def api_diary_toggle_pin(entry_id):  # type: ignore[override]
+        data = request.get_json(force=True, silent=True) or {}
+        pinned = bool(data.get('pinned', True))
+        from models.diary import DiaryUpdate
+        patch = DiaryUpdate(pinned=pinned)
+        upd = Diary.update(entry_id, current_user.id, patch, mongo.db)
+        if not upd:
+            return jsonify({'error': 'Not found'}), 404
+        return jsonify({'item': upd.model_dump(by_alias=True)})
+
     @bp.route('/api/diary', methods=['POST'], endpoint='api_diary_create')
     @login_required
     def api_diary_create():  # type: ignore[override]

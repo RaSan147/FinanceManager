@@ -116,6 +116,10 @@ body.dark-mode .stage-done { background: rgba(25, 135, 84, .18); color: #a3cfbb;
   border-left: 4px solid var(--bs-warning);
 }
 
+.todo-item.pinned { border-right: 4px solid var(--bs-warning) !important; }
+.todo-item { border-left: none; }
+.todo-item .btn-pin i { transform: rotate(20deg); }
+
 .todo-filters .form-select,
 .todo-filters .form-control {
   font-size: .85rem;
@@ -497,66 +501,12 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border {
   gap: .6rem;
 }
 
-.todo-comments-list {
-  display: flex;
-  flex-direction: column;
-  gap: .6rem;
-}
-
-.todo-comment {
-  display: flex;
-  gap: 0.75rem;
-  padding: 0.5rem;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.todo-comment:hover {
-  background-color: var(--bg-tertiary);
-}
-
 #todoDetailModal .modal-body h5,
 #todoDetailModal .modal-body h6 {
   font-size: 1.1rem;
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 0.25rem;
-}
-
-.todo-comment .body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.todo-comment .body .content {
-  margin-top: .25rem;
-  font-size: .95rem;
-  line-height: 1.45;
-  color: var(--text-primary);
-}
-
-.todo-comment .meta {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.todo-comment .meta .datetime {
-  color: var(--text-hint);
-}
-
-.todo-comment .meta .ms-auto {
-  margin-left: auto;
-}
-
-.todo-comment .meta .btn {
-  --bs-btn-padding-y: .1rem;
-  --bs-btn-padding-x: .3rem;
-  --bs-btn-font-size: .75rem;
 }
 
 [data-todo-paste-hint] {
@@ -593,34 +543,8 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border {
   cursor: pointer;
 }
 
-/* Comment action buttons (edit/delete/reply) */
-.todo-comment .actions {
-  display: flex;
-  gap: .4rem;
-  align-items: center;
-  margin-left: 8px;
-}
-
-.todo-comment .actions .btn {
-  padding: .26rem .44rem;
-  font-size: .8rem;
-  border-radius: 6px;
-  min-width: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.todo-comment .actions .btn i {
-  font-size: .95rem;
-}
-
 /* Make action buttons icon-only on narrow screens */
 @media (max-width:575.98px) {
-  .todo-comment .actions .btn span {
-    display: none !important;
-  }
-
   .todo-detail-actions .btn span {
     display: none !important;
   }
@@ -681,15 +605,6 @@ body.dark-mode #todoDetailModal [data-todo-comments] .border {
   #todoDetailModal .todo-detail-description-wrap {
     max-height: 30vh;
   }
-
-  .todo-comment {
-    padding: .45rem;
-  }
-
-  .todo-comment .meta .datetime {
-    display: block;
-    margin-left: 0;
-  }
 }
 
 /* Dark mode tweaks */
@@ -698,12 +613,6 @@ body.dark-mode #todoDetailModal .todo-detail-description-wrap {
   border-color: rgba(255, 255, 255, 0.04);
 }
 
-body.dark-mode .todo-comment {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: rgba(255, 255, 255, 0.04);
-}
-
-/* Small action-btn helper to match misc.action-btn */
 .action-btn {
   padding: .28rem .48rem;
   font-size: .88rem;
@@ -712,6 +621,20 @@ body.dark-mode .todo-comment {
   gap: .35rem;
 }
 
+/* circular icon button for three-dot menu */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .action-btn i {
   font-size: 1rem;
 }
+
+/* Dropdown toggle without caret */
+.dropdown-toggle-no-caret::after { display: none !important; }

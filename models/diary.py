@@ -15,15 +15,18 @@ from utils.timezone_utils import now_utc, ensure_utc
 from models.blog import Blog
 
 DIARY_CATEGORY_MAX = 64
-DIARY_CONTENT_MAX = 20000  # generous
+DIARY_CONTENT_MAX = 32000  # generous
 DIARY_COMMENT_MAX = 4000
 
 class DiaryBase(BaseModel):
     user_id: str
-    title: Optional[str] = Field(default=None, max_length=300)
+    title: Optional[str] = Field(default=None, max_length=512)
     content: str = Field(default='', max_length=DIARY_CONTENT_MAX)
     # category is now a list of tag strings. Keep Optional to allow None.
     category: Optional[list[str]] = Field(default=None)
+    # Pinning support
+    pinned: bool = False
+    pinned_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
@@ -75,10 +78,11 @@ class DiaryCreate(DiaryBase):
     pass
 
 class DiaryUpdate(BaseModel):
-    title: Optional[str] = Field(default=None, max_length=300)
+    title: Optional[str] = Field(default=None, max_length=512)
     content: Optional[str] = Field(default=None, max_length=DIARY_CONTENT_MAX)
     # Update can accept None, list[str], or comma-joined string for backward compatibility
     category: Optional[list[str]] = Field(default=None)
+    pinned: Optional[bool] = None
 
     @field_validator('title')
     @classmethod

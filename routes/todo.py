@@ -59,6 +59,17 @@ def init_todo_blueprint(mongo):
             'sort': sort,
         })
 
+    @bp.route('/api/todo/<todo_id>/pin', methods=['POST'], endpoint='api_todo_toggle_pin')
+    @login_required
+    def api_todo_toggle_pin(todo_id):  # type: ignore[override]
+        data = request.get_json(force=True, silent=True) or {}
+        pinned = bool(data.get('pinned', True))
+        patch = TodoUpdate(pinned=pinned)
+        upd = Todo.update(todo_id, current_user.id, patch, mongo.db)
+        if not upd:
+            return jsonify({'error': 'Not found'}), 404
+        return jsonify({'item': upd.model_dump(by_alias=True)})
+
     @bp.route('/api/todo', methods=['POST'], endpoint='api_todo_create')
     @login_required
     def api_todo_create():  # type: ignore[override]

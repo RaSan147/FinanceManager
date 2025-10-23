@@ -58,6 +58,7 @@
             <li><button class="dropdown-item" data-sort="updated_desc">Recently Updated</button></li>
             <li><button class="dropdown-item" data-sort="updated_asc">Least Updated</button></li>
             <li><button class="dropdown-item" data-sort="due_date">Due Date</button></li>
+            
           </ul>
         </div>
 
@@ -113,9 +114,25 @@
       </div>
 
       <div class="d-flex flex-column gap-1 ms-2">
-        <button class="btn btn-outline-danger btn-delete" title="Delete" aria-label="Delete to-do task">
-          <i class="fa-solid fa-trash" aria-hidden="true"></i>
-        </button>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary dropdown-toggle-no-caret btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="More" onclick="event.stopPropagation()">
+            <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <button class="dropdown-item btn-pin" type="button">
+                <i class="fa-solid fa-thumbtack me-2" aria-hidden="true"></i>
+                <span class="pin-label">Pin</span>
+              </button>
+            </li>
+            <li>
+              <button class="dropdown-item text-danger btn-delete" type="button">
+                <i class="fa-solid fa-trash me-2" aria-hidden="true"></i>
+                <span>Delete</span>
+              </button>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>

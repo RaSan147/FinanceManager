@@ -254,6 +254,18 @@
         });
       });
     }
+
+    // Global safety: always move any modal to <body> when shown to avoid z-index/stacking-context issues
+    if (!window.__modalsAppendToBodyBound) {
+      window.__modalsAppendToBodyBound = true;
+      document.addEventListener('show.bs.modal', (ev) => {
+        const el = ev.target;
+        if (!el || !el.classList || !el.classList.contains('modal')) return;
+        if (el.parentElement !== document.body) {
+          try { document.body.appendChild(el); } catch(_) {}
+        }
+      });
+    }
   });
 
   // Keyboard shortcuts (Alt+T, Alt+G)

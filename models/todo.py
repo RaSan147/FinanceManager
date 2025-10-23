@@ -44,13 +44,16 @@ TODO_STAGE_HISTORY_MAX = 50
 
 class TodoBase(BaseModel):
     user_id: str
-    title: str = Field(..., min_length=1, max_length=200)
-    description: str = Field(default="", max_length=5000)
+    title: str = Field(..., min_length=1, max_length=512)
+    description: str = Field(default="", max_length=32000)
     # Category tags: store as list of strings (like Diary)
     category: Optional[list[str]] = Field(default=None)
     stage: Literal[
         "wondering", "planning", "in_progress", "paused", "gave_up", "done"
     ] = Field(default=DEFAULT_TODO_STAGE)
+    # Pinning support
+    pinned: bool = False
+    pinned_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
     # Stage history (embedded, newest appended; trimmed server-side)
@@ -137,6 +140,7 @@ class TodoUpdate(BaseModel):
         "wondering", "planning", "in_progress", "paused", "gave_up", "done"
     ]] = None
     due_date: Optional[datetime | str] = None
+    pinned: Optional[bool] = None
 
     @field_validator("title")
     @classmethod
@@ -269,6 +273,12 @@ class Todo:
             return TodoInDB(**existing)
         now = now_utc()
         upd_raw["updated_at"] = now
+        # Maintain pinned_at timestamp when pinned flag changes
+        if "pinned" in upd_raw and upd_raw["pinned"] != existing.get("pinned"):
+            if upd_raw["pinned"] is True:
+                upd_raw["pinned_at"] = now
+            else:
+                upd_raw["pinned_at"] = None
         stage_changed = False
         if "stage" in upd_raw and upd_raw["stage"] != existing.get("stage"):
             stage_changed = True

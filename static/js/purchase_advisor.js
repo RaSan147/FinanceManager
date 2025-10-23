@@ -21,6 +21,11 @@ class PurchaseAdvisor {
 
     static async loadVisualizationData() {
         try {
+            // Optional: show loader in goal impact container while charts/data load
+            try {
+                const gi = document.getElementById('goal-impact-container');
+                if (gi && App?.utils?.ui?.showLoader) App.utils.ui.showLoader(gi, { lines: 2 });
+            } catch(_) {}
             const response = await fetch('/api/ai/visualization-data');
             if (!response.ok) throw new Error('Failed to load visualization data');
             
@@ -71,6 +76,11 @@ class PurchaseAdvisor {
             const spinner = document.getElementById('spinner');
             submitBtn.disabled = true;
             spinner.classList.remove('d-none');
+            // Show loader in feedback area while awaiting advice
+            try {
+                const fb = document.getElementById('ai-feedback');
+                if (fb && App?.utils?.ui?.showLoader) App.utils.ui.showLoader(fb, { lines: 3 });
+            } catch(_) {}
 
             try {
                 // Collect tags from TagTypeahead hidden JSON
@@ -195,6 +205,11 @@ class PurchaseAdvisor {
         const page = this.currentPage || 1;
         const pageSize = 5;
         try {
+            // Show loader in the history list while loading
+            try {
+                const cont = document.getElementById('recommendation-history');
+                if (cont && App?.utils?.ui?.showLoader) App.utils.ui.showLoader(cont, { lines: 3 });
+            } catch(_) {}
             const response = await fetch(`/api/ai/advice-history?page=${page}&page_size=${pageSize}`);
             if (!response.ok) throw new Error('Failed to load history');
             const result = await response.json();

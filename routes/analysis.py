@@ -22,23 +22,10 @@ def init_analysis_blueprint(mongo, ai_engine):
             user_doc = mongo.db.users.find_one({'_id': ObjectId(current_user.id)})
             user_goal_sort = (user_doc.get('sort_modes') or {}).get('goals') if user_doc else None
 
-            proj = {'ai_plan': 0}
-            goal_models = Goal.get_active_goals(current_user.id, mongo.db, sort_mode=user_goal_sort, projection=proj)
-            # Compute allocations using the same cache session to avoid re-reading all transactions
-            allocations = GoalAllocator.compute_allocations(current_user.id, mongo.db, cache_id=cache_id)
-            user_default_code = (user_doc or {}).get('default_currency', current_app.config['DEFAULT_CURRENCY'])
-
-            goals = []
-            for gm in goal_models:
-                alloc_amt = allocations.get(gm.id, None)
-                progress = Goal.calculate_goal_progress(
-                    gm, monthly_summary, override_current_amount=alloc_amt, base_currency_code=user_default_code
-                )
-                gd = gm.model_dump(by_alias=True)
-                gd['progress'] = progress
-                if alloc_amt is not None:
-                    gd['allocated_amount'] = alloc_amt
-                goals.append(gd)
+            # Use centralized helper to prepare goals for view (honors user sort preference)
+            # Reuse the same cache session so allocations and progress can use cached txs
+            prep = Goal.prepare_goals_for_view(current_user.id, mongo.db, include_completed=False, page=1, per_page=100, sort_mode=user_goal_sort, projection={'ai_plan': 0}, cache_id=cache_id)
+            goals = prep['items']
 
             user = user_doc
             ai_analysis = user.get('ai_analysis') if user else None

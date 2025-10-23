@@ -110,11 +110,11 @@
     font-size: 1rem;
   }
 
-  .goals-list .list-group-item .progress {
+  .goals-list .list-group-item .new-progress {
     height: 16px !important;
   }
 
-  .goals-list .list-group-item .progress-bar {
+  .goals-list .list-group-item .new-progress__fill {
     font-size: .85rem;
   }
 

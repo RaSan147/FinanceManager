@@ -1,0 +1,53 @@
+/* new-progress component (namespaced to avoid conflicts with other progress bars) */
+.new-progress {
+  position: relative;
+  height: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .35), rgba(0, 0, 0, .06)) padding-box, var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .08);
+}
+
+.new-progress__fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(135deg, rgba(var(--accent-primary-rgb), .9), rgba(var(--accent-primary-bright-rgb), .85));
+  transition: width .35s ease;
+}
+
+.new-progress__label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  text-align: center;
+  pointer-events: none;
+  font-weight: 600;
+  color: rgba(0,0,0,0.85);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.28), 0 -1px 0 rgba(0,0,0,0.12);
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .new-progress,
+body.dark-mode .new-progress {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(0, 0, 0, .25));
+  border-color: rgba(148, 163, 184, .25);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, .35);
+}
+
+[data-theme="dark"] .new-progress__fill,
+body.dark-mode .new-progress__fill {
+  background: linear-gradient(135deg, rgba(var(--accent-primary-brighter-rgb), .9), rgba(var(--accent-primary-bright-rgb), .85));
+}
+
+[data-theme="dark"] .new-progress__label,
+body.dark-mode .new-progress__label {
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+}
+
+/* Size variants (optional utility) */
+.new-progress--sm { height: 16px; }
+.new-progress--lg { height: 24px; }

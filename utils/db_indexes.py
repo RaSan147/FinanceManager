@@ -103,6 +103,8 @@ def ensure_indexes(db: Any) -> None:
     _safe_create_index(todo, [("user_id", ASCENDING), ("stage", ASCENDING), ("created_at", DESCENDING)], name="todo_user_stage_created_desc")
     _safe_create_index(todo, [("user_id", ASCENDING), ("category", ASCENDING), ("created_at", DESCENDING)], name="todo_user_category_created_desc")
     _safe_create_index(todo, [("user_id", ASCENDING), ("due_date", ASCENDING)], name="todo_user_due_date_asc")
+    # Support pinned-first queries: prefix with user_id then pinned desc, then pinned_at desc to keep newest pinned first
+    _safe_create_index(todo, [("user_id", ASCENDING), ("pinned", DESCENDING), ("pinned_at", DESCENDING), ("created_at", DESCENDING)], name="todo_user_pinned_desc")
 
     todo_cats = db.todo_categories
     _safe_create_index(todo_cats, [("user_id", ASCENDING), ("name", ASCENDING)], name="todo_cat_user_name", unique=True)
@@ -114,6 +116,8 @@ def ensure_indexes(db: Any) -> None:
         _safe_create_index(diary, [("user_id", ASCENDING), ("updated_at", DESCENDING)], name="diary_user_updated_desc")
         _safe_create_index(diary, [("user_id", ASCENDING), ("category", ASCENDING), ("created_at", DESCENDING)], name="diary_user_category_created_desc")
         # Text-like search (regex) aided by compound prefix index on user_id; Mongo can't index arbitrary regex but this helps filtering by user fast.
+        # Support pinned-first queries for diary as well
+        _safe_create_index(diary, [("user_id", ASCENDING), ("pinned", DESCENDING), ("pinned_at", DESCENDING), ("created_at", DESCENDING)], name="diary_user_pinned_desc")
     except Exception as _e:
         print(f"[db-indexes] Warning creating diary indexes: {_e}")
 

@@ -53,6 +53,7 @@
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/tables.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/toggle_switch.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/progress.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/new-progress.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/forms.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/buttons.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/alerts.css') }}">
@@ -68,6 +69,7 @@
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/accordion.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/ai-shared.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/image_viewer.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/components/blog_comments.css') }}">
 
 	<!-- Page-scoped overrides -->
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/analysis.css') }}">
@@ -82,6 +84,15 @@
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/RaSan147/fabkp@2f5670e/css/all.min.css">
 
 	{% block extra_css %}{% endblock %}
+		<style>
+		/* Active goals widget card tweaks */
+		.goal-compact-card.card { border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+		.goal-compact-card .card-body { padding: 0.6rem; }
+		@media (max-width: 575.98px) {
+			.goal-compact-card .fs-6 { font-size: 1rem; }
+			.goal-compact-card h6.small { font-size: .9rem; }
+		}
+		</style>
 
 	<!-- Favicons & PWA manifest -->
 	<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
@@ -111,7 +122,7 @@
 	{% include "includes/dark_mode_toggle.html" %}
 </head>
 
-<body class="{{ 'dark-mode' if session.get('dark_mode') else '' }}">
+<body class="{{ 'dark-mode' if session.get('dark_mode') else '' }}" data-page="{{ request.endpoint }}">
 	<main>
 		<nav class="navbar navbar-expand-lg glassy-nav">
 			<div class="container">
@@ -250,6 +261,8 @@
 	     Load date_parser first, then core utilities, then other app scripts. -->
 	<script src="{{ url_for('static', filename='js/date_parser.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/app_core.js') }}" defer></script>
+	<!-- Page runtime: lightweight per-page entrypoint loader (safe no-op if page module missing) -->
+	<script type="module" src="{{ url_for('static', filename='js/core/page_runtime.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/currency.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/transaction_model.js') }}" defer></script>
@@ -258,15 +271,13 @@
 	<script src="{{ url_for('static', filename='js/image_uploader.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/richtext.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/dynamic_app.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/newprogress.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/blog_helpers.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/tag_typeahead.js') }}" defer></script>
 
 	<script src="{{ url_for('static', filename='js/goals.js') }}" defer></script>
-	<script src="{{ url_for('static', filename='js/loans.js') }}" defer></script>
-	<script src="{{ url_for('static', filename='js/todo.js') }}" defer></script>
-	<script src="{{ url_for('static', filename='js/diary.js') }}" defer></script>
-	<script src="{{ url_for('static', filename='js/transactions.js') }}" defer></script>
 	<script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
+	<script src="{{ url_for('static', filename='js/progress_overlay.js') }}" defer></script>
 	{#
 	Dev/AI Reference:
 	Duplicate form submissions & double event bindings were previously observed (rapid clicks / double script includes).

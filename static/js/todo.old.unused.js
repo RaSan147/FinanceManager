@@ -25,7 +25,7 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 	if (window.__todoModuleLoaded) return;
 	window.__todoModuleLoaded = true;
 	try {
-		console.log('todo.js loaded');
+		/* removed noisy console.log */
 	} catch (e) { console.error('todo.js: console.log failed at module load', e); throw e; }
 
 	// Early, robust delegated click for the Filter toggle so it works even if init is delayed
@@ -47,34 +47,31 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 		const _init = () => {
 			if (_initStarted) {
 			try {
-					if (window && window.TODO_DEBUG) console.log('todo.js: init already started');
+					if (window && window.TODO_DEBUG) console.debug('todo.js: init already started');
 			} catch (_) {}
 			return;
 		}
 		_initStarted = true;
 			try {
-				if (window && window.TODO_DEBUG) {
-					console.debug('todo.js: _init starting');
-					console.log('todo.js: _init starting');
-				}
+				if (window && window.TODO_DEBUG) { console.debug('todo.js: _init starting'); }
 			} catch (e) { console.error('todo.js: debug logging failed in _init', e); throw e; }
 
 		// Instrument event listener registration and invocation for extensive logging.
-		// This is idempotent and scoped to runtime (only applied once).
-		if (!window.__todoListenerPatchApplied) {
+		// Apply ONLY when explicit debug flag is enabled to avoid noisy logs in normal use.
+		if (window && window.TODO_DEBUG && !window.__todoListenerPatchApplied) {
 			(function () {
 				const ET = (typeof EventTarget !== 'undefined') ? EventTarget.prototype : null;
 				if (!ET) return;
 				const _add = ET.addEventListener;
 				const _remove = ET.removeEventListener;
 				ET.addEventListener = function (type, listener, options) {
-					try { console.debug('todo.js: addEventListener called', { target: this, type, listenerName: listener && (listener.name || '<anon>') }); } catch (e) {}
+					try { if (window && window.TODO_DEBUG) console.debug('todo.js: addEventListener called', { target: this, type, listenerName: listener && (listener.name || '<anon>') }); } catch (e) {}
 					if (!listener) return _add.call(this, type, listener, options);
 					// If already wrapped, reuse the wrapped function
 					if (listener._todoWrapped) return _add.call(this, type, listener._todoWrapped, options);
 					const orig = listener;
 					const wrapped = function (...args) {
-						try { console.debug('todo.js: listener invoked', { type, target: this, listenerName: orig.name || '<anon>', args }); } catch (e) {}
+						try { if (window && window.TODO_DEBUG) console.debug('todo.js: listener invoked', { type, target: this, listenerName: orig.name || '<anon>', args }); } catch (e) {}
 						try {
 							return orig.apply(this, args);
 						} catch (err) {
@@ -89,7 +86,7 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 
 				ET.removeEventListener = function (type, listener, options) {
 					const wrapped = listener && listener._todoWrapped ? listener._todoWrapped : listener;
-					try { console.debug('todo.js: removeEventListener called', { target: this, type, listenerName: listener && (listener.name || '<anon>') }); } catch (e) {}
+					try { if (window && window.TODO_DEBUG) console.debug('todo.js: removeEventListener called', { target: this, type, listenerName: listener && (listener.name || '<anon>') }); } catch (e) {}
 					return _remove.call(this, type, wrapped, options);
 				};
 			})();
@@ -327,6 +324,8 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 			if (state.viewStage !== 'all') url += `&stage=${encodeURIComponent(state.viewStage)}`;
 			if (state.q) url += `&q=${encodeURIComponent(state.q)}`;
 			if (state.category) url += `&category=${encodeURIComponent(state.category)}`;
+			// Show loader while fetching
+			try { if (listEl && App?.utils?.ui?.showLoader) App.utils.ui.showLoader(listEl); } catch(_) {}
 			let data;
 			try {
 				// Intentionally omit dedupe so we always get fresh data after mutations.
@@ -395,6 +394,8 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 				if (!node.classList.contains('todo-item')) node.classList.add('todo-item');
 				node.classList.add(it.stage);
 				if (it.stage === 'done') node.classList.add('done');
+				// Pin visual
+				node.classList.toggle('pinned', !!it.pinned);
 				node.querySelector('.todo-title').textContent = it.title;
 				const cat = node.querySelector('.todo-category');
 				if (cat) {
@@ -423,6 +424,51 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 				if (sel) {
 					sel.value = it.stage;
 					sel.addEventListener('change', () => quickStage(it._id, sel.value, node));
+				}
+
+				// Pin toggle
+				const pinBtn = node.querySelector('.btn-pin');
+				if (pinBtn) {
+						// Initialize visual state
+						pinBtn.classList.toggle('btn-warning', !!it.pinned);
+						pinBtn.classList.toggle('btn-outline-warning', !it.pinned);
+						pinBtn.title = it.pinned ? 'Unpin' : 'Pin';
+						// update label text inside the dropdown item
+						const lbl = pinBtn.querySelector('.pin-label') || pinBtn.querySelector('.pinLabel') || pinBtn.querySelector('span');
+						if (lbl) lbl.textContent = it.pinned ? 'Unpin' : 'Pin';
+					pinBtn.addEventListener('click', async (e) => {
+						e.stopPropagation();
+						const currentlyPinned = !!it.pinned;
+						// Toggle local state and visuals (no client-side reordering)
+						it.pinned = !currentlyPinned;
+						try { node.classList.toggle('pinned', !!it.pinned); } catch (_) {}
+						pinBtn.classList.toggle('btn-warning', !!it.pinned);
+						pinBtn.classList.toggle('btn-outline-warning', !it.pinned);
+						pinBtn.title = it.pinned ? 'Unpin' : 'Pin';
+						if (lbl) lbl.textContent = it.pinned ? 'Unpin' : 'Pin';
+						// Close dropdown that contains the action if any
+						const dd = pinBtn.closest('.dropdown'); if (dd) { const inst = bootstrap && bootstrap.Dropdown ? bootstrap.Dropdown.getOrCreateInstance(dd.querySelector('[data-bs-toggle]')) : null; try { inst && inst.hide && inst.hide(); } catch (_) {} }
+						try {
+							await App.utils.fetchJSONUnified(`/api/todo/${it._id}/pin`, {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ pinned: it.pinned })
+							});
+							// refresh list to get server canonical ordering
+							await apiList(true);
+						} catch (err) {
+							// revert local change on failure
+							it.pinned = currentlyPinned;
+							try { node.classList.toggle('pinned', !!it.pinned); } catch (_) {}
+							pinBtn.classList.toggle('btn-warning', !!it.pinned);
+							pinBtn.classList.toggle('btn-outline-warning', !it.pinned);
+							pinBtn.title = it.pinned ? 'Unpin' : 'Pin';
+							if (lbl) lbl.textContent = it.pinned ? 'Unpin' : 'Pin';
+							window.flash && window.flash('Pin toggle failed', 'danger');
+							// ensure canonical list
+							apiList(true);
+						}
+					});
 				}
 
 				bindItemHandlers(node, it);
@@ -548,7 +594,8 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 				}
 				node.addEventListener('click', (e) => {
 					try {
-						if (e.target.closest('.btn-delete') || e.target.closest('select')) return;
+						// Ignore clicks that begin inside interactive controls like dropdowns or selects
+						if (e.target.closest('.btn-delete') || e.target.closest('select') || e.target.closest('.dropdown')) return;
 						console.debug('todo.js: item node clicked - opening detail', { id: data._id });
 						openDetailModal(data._id);
 					} catch (err) {
@@ -1324,12 +1371,7 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 			 */
 			function startInitialFetch() {
 				const startFetch = () => {
-					try {
-						if (window && window.TODO_DEBUG) {
-							console.debug('todo.js: calling apiList()');
-							console.log('todo.js: calling apiList()');
-						}
-					} catch (_) {}
+					try { if (window && window.TODO_DEBUG) { console.debug('todo.js: calling apiList()'); } } catch (_) {}
 					// perform the list fetch (safe even if anchors absent)
 					apiList();
 					// attach handlers defensively
@@ -1485,10 +1527,7 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 		const start = Date.now();
 		const iv = setInterval(() => {
 			if (window && window.TODO_DEBUG) {
-				try {
-					console.debug('todo.js: polling for App.utils...');
-					console.log('todo.js: polling for App.utils...');
-				} catch (_) {}
+				try { console.debug('todo.js: polling for App.utils...'); } catch (_) {}
 			}
 			if (window.App && App.utils) {
 				clearInterval(iv);
@@ -1535,4 +1574,18 @@ var TODO_DEBUG = window && window.TODO_DEBUG || false;
 	} catch (e) {
 		console.error('todo.js immediate init failed', e);
 	}
+
+	// Expose a minimal public API for page-level refresh without leaking internals
+	// This lets the new OOP page entry call a safe refresh without rebinding events.
+	try {
+		if (!window.TodoModule) {
+			window.TodoModule = {};
+		}
+		// Refresh the list; prefer a fresh pull to reflect server state after mutations
+		window.TodoModule.refresh = function () {
+			try {
+				if (typeof apiList === 'function') return apiList(true);
+			} catch (_) {}
+		};
+	} catch (_) {}
 })();

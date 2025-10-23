@@ -23,21 +23,8 @@ class ActiveGoalPreview {
     meta.appendChild(createEl('small', {}, safeDateString(this.goal.target_date)));
     container.appendChild(meta);
 
-    const progressWrap = createEl('div', { class: 'progress' });
-    const bar = createEl(
-      'div',
-      {
-        class: 'progress-bar',
-        role: 'progressbar',
-        style: `width:${percent}%`,
-        'aria-valuenow': String(percent),
-        'aria-valuemin': '0',
-        'aria-valuemax': '100'
-      },
-      percent.toFixed(0) + '%'
-    );
-    progressWrap.appendChild(bar);
-    container.appendChild(progressWrap);
+    const progressEl = createEl('new-progress', { value: String(percent), height: '20' });
+    container.appendChild(progressEl);
 
     return container;
   }
@@ -78,15 +65,97 @@ class DashboardTransactionsModule {
     const { qs, fetchJSON } = this.utils;
     if (!qs('[data-dynamic-dashboard]')) return;
     try {
+      // Only show loader on first load; subsequent refreshes do smart updates
+      if (!this._initialized) {
+        try {
+          const rtBody = qs('[data-recent-transactions-body]');
+          if (rtBody) this.showTbodyLoader(rtBody, 4);
+        } catch(_) {}
+      }
+
       const data = await fetchJSON('/api/dashboard');
-      this.renderMonthlySummary(data.monthly_summary, data.currency);
-      this.renderLifetimeSummary(data.lifetime, data.currency);
-      this.renderRecentTransactions(data.recent_transactions, data.currency);
-      this.renderActiveGoals(data.goals, data.currency);
-      this.renderIncomeCountdown(data.days_until_income);
+      // Build a normalized snapshot of what's relevant for diffing
+      const nextSnap = this._buildSnapshot(data);
+
+      // If first time, render everything
+      if (!this._initialized || !this._snapshot) {
+        this.renderMonthlySummary(data.monthly_summary, data.currency);
+        this.renderLifetimeSummary(data.lifetime, data.currency);
+        this.renderRecentTransactions(data.recent_transactions, data.currency);
+        this.renderActiveGoals(data.goals, data.currency);
+        this.renderIncomeCountdown(data.days_until_income);
+        this._snapshot = nextSnap;
+        this._initialized = true;
+        return;
+      }
+
+      // If currency changed, force re-render of all sections that depend on symbol/code
+      const currencyChanged = (this._snapshot.currency?.code !== nextSnap.currency?.code)
+        || (this._snapshot.currency?.symbol !== nextSnap.currency?.symbol);
+
+      if (currencyChanged || !this._equal(this._snapshot.monthly, nextSnap.monthly)) {
+        this.renderMonthlySummary(data.monthly_summary, data.currency);
+      }
+
+      if (currencyChanged || !this._equal(this._snapshot.lifetime, nextSnap.lifetime)) {
+        this.renderLifetimeSummary(data.lifetime, data.currency);
+      }
+
+      if (currencyChanged || !this._equal(this._snapshot.recentTx, nextSnap.recentTx)) {
+        // No loader on in-page refresh; just patch table body
+        this.renderRecentTransactions(data.recent_transactions, data.currency);
+      }
+
+      if (this._snapshot.daysUntilIncome !== nextSnap.daysUntilIncome) {
+        this.renderIncomeCountdown(data.days_until_income);
+      }
+
+      // Active goals are handled by a dedicated widget; safe to ignore if not present
+      // this.renderActiveGoals(data.goals, data.currency);
+
+      // Commit new snapshot
+      this._snapshot = nextSnap;
     } catch (err) {
       console.warn('Dashboard refresh failed', err);
     }
+  }
+
+  // === Snapshot helpers for smart diffing ===
+  static _buildSnapshot(apiData) {
+    try {
+      return {
+        monthly: this._pick(apiData?.monthly_summary, ['month', 'total_income', 'total_expenses', 'savings']),
+        lifetime: this._pick(apiData?.lifetime, ['total_income', 'total_expenses', 'current_balance', 'total_transactions']),
+        recentTx: this._normalizeRecentTx(apiData?.recent_transactions || []),
+        daysUntilIncome: apiData?.days_until_income ?? null,
+        currency: this._pick(apiData?.currency, ['code', 'symbol'])
+      };
+    } catch(_) {
+      return { monthly:null, lifetime:null, recentTx:[], daysUntilIncome:null, currency:null };
+    }
+  }
+
+  static _normalizeRecentTx(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map((t) => ({
+      id: t._id || t.id || '',
+      date: t.date, // assume ISO string; important for UI ordering
+      description: t.description || '',
+      type: t.type || '',
+      category: t.category || '',
+      amount: Number(t.amount ?? 0)
+    }));
+  }
+
+  static _pick(obj, keys) {
+    const out = {};
+    if (!obj) return out;
+    for (const k of keys) out[k] = obj[k];
+    return out;
+  }
+
+  static _equal(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
   }
 
   static renderMonthlySummary(summary, currency) {
@@ -136,6 +205,21 @@ class DashboardTransactionsModule {
       }
     });
     tbody.appendChild(frag);
+  }
+
+  // Insert a loader row into a table body using the shared UI loader
+  static showTbodyLoader(tbody, colSpan = 4) {
+    try {
+      if (!tbody) return;
+      while (tbody.firstChild) tbody.removeChild(tbody.lastChild);
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = colSpan;
+      const loader = App.utils.ui.createLoader({ lines: 3 });
+      td.appendChild(loader);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    } catch (_) { /* noop */ }
   }
 
   static renderActiveGoals(goals, currency) {
@@ -200,10 +284,17 @@ class DashboardTransactionsModule {
       evt.preventDefault();
       const id = deleteBtn.getAttribute('data-delete-id');
       if (!confirm('Delete this transaction?')) return;
+      // Show a loader in the table body to indicate refresh incoming
+      try {
+        const tbody = this.utils.qs('[data-transactions-body]');
+        if (tbody) this.showTbodyLoader(tbody, 6);
+      } catch (_) {}
       this.deleteTransaction(id)
         .then(() => {
           // flash() may be provided globally by other scripts
           flash('Deleted', 'success');
+          // Notify other modules (e.g., loans) about deletion
+          try { window.dispatchEvent(new CustomEvent('transaction:deleted', { detail: { id } })); } catch(_) {}
           const current = parseInt(tableRoot.getAttribute('data-current-page') || '1', 10);
           this.loadTransactionsPage(current);
         })
@@ -218,6 +309,9 @@ class DashboardTransactionsModule {
     if (!tableRoot) return;
     const perPage = parseInt(tableRoot.getAttribute('data-per-page') || '10', 10);
     try {
+      // Show loader in the table body while fetching
+      const tbody = qs('[data-transactions-body]');
+      if (tbody) this.showTbodyLoader(tbody, 6);
       const raw = await fetchJSON(`/api/transactions/list?page=${page}&per_page=${perPage}`);
       const data = raw && raw.data ? raw.data : raw; // support envelope or plain
       this.renderTransactionsTable(data);
@@ -234,8 +328,28 @@ class DashboardTransactionsModule {
     if (!tbody || !tableRoot) return;
     tableRoot.setAttribute('data-current-page', data.page);
     const symbol = tableRoot.getAttribute('data-currency-symbol') || '';
-    tbody.textContent = '';
 
+    // Build a lightweight incoming snapshot for equality checks
+    const incoming = {
+      page: data.page,
+      per_page: data.per_page,
+      total: data.total,
+      items: Array.isArray(data.items) ? data.items.map(t => ({ id: t._id || t.id || '', amount: Number(t.amount || 0), type: t.type || '', category: t.category || '', date: t.date || '' })) : []
+    };
+
+    const prev = this._txSnapshot || null;
+    let equal = false;
+    try { equal = prev && JSON.stringify(prev) === JSON.stringify(incoming); } catch (_) { equal = false; }
+
+    if (equal) {
+      // Nothing changed: keep DOM as-is but update pagination metadata
+      this.renderPagination(data.page, data.per_page, data.total);
+      this._txSnapshot = incoming;
+      return;
+    }
+
+    // Replace tbody when data changed
+    tbody.textContent = '';
     if (!data.items.length) {
       const tr = createEl('tr');
       tr.appendChild(createEl('td', { colspan: '6', class: 'text-center text-muted' }, 'No transactions'));
@@ -247,6 +361,7 @@ class DashboardTransactionsModule {
       });
       tbody.appendChild(frag);
     }
+    this._txSnapshot = incoming;
     this.renderPagination(data.page, data.per_page, data.total);
   }
 
@@ -286,5 +401,6 @@ class DashboardTransactionsModule {
 App.register(DashboardTransactionsModule);
 
 // Expose for external callers (transactions.js uses this to refresh pagination)
+window.DashboardTransactionsModule = DashboardTransactionsModule;
 window.DashboardTransactionsModule = DashboardTransactionsModule;
 
